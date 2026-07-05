@@ -1,0 +1,13 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   VydeoAI — global stylesheet entrypoint
+   The design system is authored in src/styles/ and imported here in order:
+     tokens → base → components → utilities
+   Philosophy: Apple · Linear · Arc · Raycast — AI-First · Premium
+   ═══════════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import '../styles/tokens.css';
+@import '../styles/base.css';
+@import '../styles/components.css';
+@import '../styles/ui.css';
+@import '../styles/editor.css';
+@import '../styles/utilities.css';
