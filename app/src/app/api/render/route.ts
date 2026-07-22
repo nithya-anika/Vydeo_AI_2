@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createReadStream } from "fs";
 import { unlink } from "fs/promises";
-import { Readable } from "stream";
 import { renderVideo, getEngineType } from "@/lib/transcoder";
 import type { SceneInput, AudioInput, BrandRenderInput } from "@/lib/transcoder";
 
@@ -105,7 +104,26 @@ export async function POST(req: NextRequest) {
       }
 
       const nodeStream = createReadStream(outputPath);
-      const body = Readable.toWeb(nodeStream) as unknown as BodyInit;
+      const body = new (globalThis as any).ReadableStream({
+        start(controller: any) {
+          nodeStream.on("data", (chunk: Buffer | string) => {
+            const buffer =
+              typeof chunk === "string"
+                ? Buffer.from(chunk)
+                : chunk;
+            controller.enqueue(new Uint8Array(buffer));
+          });
+          nodeStream.on("end", () => {
+            controller.close();
+          });
+          nodeStream.on("error", (error) => {
+            controller.error(error);
+          });
+        },
+        cancel() {
+          nodeStream.destroy();
+        },
+      }) as BodyInit;
 
       nodeStream.on("error", (error) => {
         console.error("[render stream]", error);
