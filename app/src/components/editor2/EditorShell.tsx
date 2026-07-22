@@ -62,6 +62,38 @@ function formatTime(s: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
 }
 
+async function srcToDataUrl(src: string): Promise<string> {
+  if (src.startsWith("data:")) {
+    return src;
+  }
+
+  const response = await fetch(src);
+
+  if (!response.ok) {
+    throw new Error(`Could not read media for export (${response.status})`);
+  }
+
+  const blob = await response.blob();
+
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Could not convert media to data URL."));
+      }
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Could not convert media to data URL."));
+    };
+
+    reader.readAsDataURL(blob);
+  });
+}
+
 const PENDING_EDITOR_HANDOFF_KEYS = [
   "vydeoai_pending_video_gen",
   "vydeoai_pending_clip_assign",
