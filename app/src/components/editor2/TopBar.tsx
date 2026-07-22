@@ -154,15 +154,26 @@ export default function TopBar({ projectId }: { projectId?: string }) {
     setExporting(true);
     try {
       const payloadScenes = await Promise.all(scenes.map(buildRenderScene));
+      const payload = {
+        scenes: payloadScenes,
+        aspectRatio,
+        totalDuration: scenes.reduce((s, sc) => s + sc.duration, 0),
+        outputFilename: `${projectName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
+      };
+
+      const estimatedPayloadBytes = new Blob([JSON.stringify(payload)]).size;
+      const MAX_EXPORT_PAYLOAD_BYTES = 3_500_000;
+
+      if (estimatedPayloadBytes > MAX_EXPORT_PAYLOAD_BYTES) {
+        throw new Error(
+          "Export payload is too large for this environment. Please reduce the number of clips or shorten the project before exporting."
+        );
+      }
+
       const res = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scenes: payloadScenes,
-          aspectRatio,
-          totalDuration: scenes.reduce((s, sc) => s + sc.duration, 0),
-          outputFilename: `${projectName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({}));
