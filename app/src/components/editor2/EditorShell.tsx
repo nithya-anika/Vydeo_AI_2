@@ -3906,61 +3906,275 @@ export default function EditorShell({
   }
 
   const buildRenderScene = async (scene: any) => {
-    const clip = scene.clipId ? clips.find((item) => item.id === scene.clipId) : null;
-    let clipData: string | null = null;
-    let clipMime = clip?.file?.type ?? "";
-    let clipExt = clip?.file?.name?.split(".").pop()?.toLowerCase() ?? getExtensionFromUrl(scene.clipSrc ?? "") ?? "";
+  const clip = scene.clipId
+    ? clips.find((item) => item.id === scene.clipId)
+    : null;
 
-    if (clip?.file) {
-      clipData = await fileToDataUrl(clip.file);
-      clipMime = clip.file.type || clipMime;
-      clipExt = clipExt || (clip.file.name.split(".").pop()?.toLowerCase() ?? "");
-    } else if (scene.clipSrc) {
-      const response = await fetch(scene.clipSrc);
-      if (!response.ok) throw new Error(`Could not fetch clip for scene ${scene.label}`);
-      const blob = await response.blob();
-      clipMime = blob.type || clipMime;
-      clipExt = clipExt || (getExtensionFromUrl(scene.clipSrc) ?? "");
-      clipData = await blobToDataUrl(blob);
+  let clipData: string | null = null;
+  let clipMime = "";
+  let clipExt = "";
+
+  // Helper: make sure the generated Data URL actually contains base64 data
+  const validateDataUrl = (
+    dataUrl: string | null,
+    sceneName: string
+  ) => {
+    if (!dataUrl) {
+      throw new Error(
+        `Scene "${sceneName}" has no media data.`
+      );
     }
 
-    if (!clipData && clip?.file) {
-      clipData = await fileToDataUrl(clip.file);
+    const commaIndex = dataUrl.indexOf(",");
+
+    if (commaIndex === -1) {
+      throw new Error(
+        `Scene "${sceneName}" has an invalid media Data URL.`
+      );
     }
 
-    if (!clipData) {
-      throw new Error(`Scene ${scene.label} is missing media. Please add a video or image clip to this scene.`);
+    const header = dataUrl.slice(0, commaIndex);
+    const base64 = dataUrl.slice(commaIndex + 1);
+
+    if (!header.includes(";base64")) {
+      throw new Error(
+        `Scene "${sceneName}" media is not base64 encoded.`
+      );
     }
 
-    return {
-      id: scene.id,
-      label: scene.label,
-      duration: scene.duration,
-      clipType: scene.clipType ?? clip?.type ?? "video",
-      clipMime: clipMime || undefined,
-      clipExt: clipExt || undefined,
-      clipData,
-      playbackSpeed: scene.playbackRate ?? 1,
-      clipTrimStart: scene.clipTrimStart,
-      clipTrimEnd: scene.clipTrimEnd,
-      visualEffect: scene.visualEffect,
-      transition: scene.transition,
-      captions: scene.captions?.map((caption: any) => ({
-        text: caption.text,
-        startTime: caption.startTime,
-        endTime: caption.endTime,
-        fontFamily: caption.fontFamily,
-        fontSize: caption.fontSize,
-        color: caption.color,
-        bgColor: caption.bgColor,
-        bgOpacity: caption.bgOpacity,
-        bold: caption.bold,
-        x: caption.x,
-        y: caption.y,
-        align: caption.align,
-      })) ?? [],
-    };
+    if (!base64.trim()) {
+      throw new Error(
+        `Scene "${sceneName}" media file is empty.`
+      );
+    }
+
+    return dataUrl;
   };
+
+  // ---------------------------------------------------------
+  // 1. Prefer original File object
+  // ---------------------------------------------------------
+
+  if (clip?.file instanceof File) {
+    if (clip.file.size === 0) {
+      throw new Error(
+        `Scene "${scene.label}" contains an empty media file.`
+      );
+    }
+
+    console.log("[Export] Using original file:", {
+      scene: scene.label,
+      name: clip.file.name,
+      type: clip.file.type,
+      size: clip.file.size,
+    });
+
+    clipMime =
+      clip.file.type ||
+      (scene.clipType === "image"
+        ? "image/jpeg"
+        : "video/mp4");
+
+    clipExt =
+      clip.file.name
+        .split(".")
+        .pop()
+        ?.toLowerCase() ||
+      (scene.clipType === "image"
+        ? "jpg"
+        : "mp4");
+
+    clipData = await fileToDataUrl(
+      clip.file
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 2. Otherwise fetch scene.clipSrc
+  // ---------------------------------------------------------
+
+  else if (scene.clipSrc) {
+    console.log(
+      "[Export] Fetching scene media:",
+      {
+        scene: scene.label,
+        src: scene.clipSrc.slice(0, 100),
+      }
+    );
+
+    const response = await fetch(
+      scene.clipSrc
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Could not fetch media for scene "${scene.label}". HTTP ${response.status}`
+      );
+    }
+
+    const blob =
+      await response.blob();
+
+    if (blob.size === 0) {
+      throw new Error(
+        `Scene "${scene.label}" returned an empty media file.`
+      );
+    }
+
+    console.log(
+      "[Export] Media fetched:",
+      {
+        scene: scene.label,
+        size: blob.size,
+        type: blob.type,
+      }
+    );
+
+    clipMime =
+      blob.type ||
+      (scene.clipType === "image"
+        ? "image/jpeg"
+        : "video/mp4");
+
+    clipExt =
+      getExtensionFromUrl(
+        scene.clipSrc
+      ) ||
+      (clipMime.includes("image")
+        ? "jpg"
+        : clipMime.includes("webm")
+          ? "webm"
+          : "mp4");
+
+    clipData =
+      await blobToDataUrl(blob);
+  }
+
+  // ---------------------------------------------------------
+  // 3. No media found
+  // ---------------------------------------------------------
+
+  else {
+    throw new Error(
+      `Scene "${scene.label}" is missing media. Please add a video or image clip.`
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 4. Validate REAL base64 payload
+  // ---------------------------------------------------------
+
+  clipData = validateDataUrl(
+    clipData,
+    scene.label
+  );
+
+  console.log(
+    "[Export] Scene ready:",
+    {
+      scene: scene.label,
+
+      clipType:
+        scene.clipType ??
+        clip?.type ??
+        "video",
+
+      clipMime,
+
+      clipExt,
+
+      dataUrlLength:
+        clipData.length,
+
+      dataPrefix:
+        clipData.slice(0, 50),
+    }
+  );
+
+  // ---------------------------------------------------------
+  // 5. Return render scene
+  // ---------------------------------------------------------
+
+  return {
+    id: scene.id,
+
+    label: scene.label,
+
+    duration:
+      Number(scene.duration) || 1,
+
+    clipType:
+      scene.clipType ??
+      clip?.type ??
+      "video",
+
+    clipMime:
+      clipMime ||
+      undefined,
+
+    clipExt:
+      clipExt ||
+      undefined,
+
+    clipData,
+
+    playbackSpeed:
+      scene.playbackRate ?? 1,
+
+    clipTrimStart:
+      scene.clipTrimStart,
+
+    clipTrimEnd:
+      scene.clipTrimEnd,
+
+    visualEffect:
+      scene.visualEffect,
+
+    transition:
+      scene.transition,
+
+    captions:
+      scene.captions?.map(
+        (caption: any) => ({
+          text:
+            caption.text,
+
+          startTime:
+            caption.startTime,
+
+          endTime:
+            caption.endTime,
+
+          fontFamily:
+            caption.fontFamily,
+
+          fontSize:
+            caption.fontSize,
+
+          color:
+            caption.color,
+
+          bgColor:
+            caption.bgColor,
+
+          bgOpacity:
+            caption.bgOpacity,
+
+          bold:
+            caption.bold,
+
+          x:
+            caption.x,
+
+          y:
+            caption.y,
+
+          align:
+            caption.align,
+        })
+      ) ?? [],
+  };
+};
 
   const handleExport = async () => {
     try {
