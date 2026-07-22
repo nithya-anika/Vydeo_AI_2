@@ -3905,6 +3905,48 @@ export default function EditorShell({
     return blobToDataUrl(file);
   }
 
+  async function compressTextPayload(text: string): Promise<string | null> {
+    if (typeof CompressionStream === "undefined") {
+      return null;
+    }
+
+    try {
+      const stream = new CompressionStream("gzip");
+      const writer = stream.writable.getWriter();
+      const encoder = new TextEncoder();
+
+      await writer.write(encoder.encode(text));
+      await writer.close();
+
+      const chunks: Uint8Array[] = [];
+      const reader = stream.readable.getReader();
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        chunks.push(value ?? new Uint8Array());
+      }
+
+      const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      const buffer = new Uint8Array(totalLength);
+      let offset = 0;
+
+      for (const chunk of chunks) {
+        buffer.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      let binary = "";
+      for (let i = 0; i < buffer.length; i++) {
+        binary += String.fromCharCode(buffer[i]);
+      }
+
+      return btoa(binary);
+    } catch {
+      return null;
+    }
+  }
+
   const buildRenderScene = async (scene: any) => {
   const clip = scene.clipId
     ? clips.find((item) => item.id === scene.clipId)
@@ -3920,32 +3962,36 @@ export default function EditorShell({
     sceneName: string
   ) => {
     if (!dataUrl) {
-      throw new Error(
-        `Scene "${sceneName}" has no media data.`
+      console.warn(
+        `[Export] Scene "${sceneName}" has no media data; rendering will use a placeholder frame.`
       );
+      return null;
     }
 
     const commaIndex = dataUrl.indexOf(",");
 
     if (commaIndex === -1) {
-      throw new Error(
-        `Scene "${sceneName}" has an invalid media Data URL.`
+      console.warn(
+        `[Export] Scene "${sceneName}" has an invalid media Data URL; rendering will use a placeholder frame.`
       );
+      return null;
     }
 
     const header = dataUrl.slice(0, commaIndex);
     const base64 = dataUrl.slice(commaIndex + 1);
 
     if (!header.includes(";base64")) {
-      throw new Error(
-        `Scene "${sceneName}" media is not base64 encoded.`
+      console.warn(
+        `[Export] Scene "${sceneName}" media is not base64 encoded; rendering will use a placeholder frame.`
       );
+      return null;
     }
 
     if (!base64.trim()) {
-      throw new Error(
-        `Scene "${sceneName}" media file is empty.`
+      console.warn(
+        `[Export] Scene "${sceneName}" media file is empty; rendering will use a placeholder frame.`
       );
+      return null;
     }
 
     return dataUrl;
@@ -4013,57 +4059,49 @@ export default function EditorShell({
     );
 
     if (!response.ok) {
-      throw new Error(
-        `Could not fetch media for scene "${scene.label}". HTTP ${response.status}`
+      console.warn(
+        `[Export] Could not fetch media for scene "${scene.label}". HTTP ${response.status}; rendering will use a placeholder frame.`
       );
-    }
+      clipData = null;
+    } else {
+      const blob =
+        await response.blob();
 
-    const blob =
-      await response.blob();
+      if (blob.size === 0) {
+        console.warn(
+          `[Export] Scene "${scene.label}" returned an empty media file; rendering will use a placeholder frame.`
+        );
+        clipData = null;
+      } else {
+        console.log(
+          "[Export] Media fetched:",
+          {
+            scene: scene.label,
+            size: blob.size,
+            type: blob.type,
+          }
+        );
 
-    if (blob.size === 0) {
-      throw new Error(
-        `Scene "${scene.label}" returned an empty media file.`
-      );
-    }
+        clipMime =
+          blob.type ||
+          (scene.clipType === "image"
+            ? "image/jpeg"
+            : "video/mp4");
 
-    console.log(
-      "[Export] Media fetched:",
-      {
-        scene: scene.label,
-        size: blob.size,
-        type: blob.type,
+        clipExt =
+          getExtensionFromUrl(
+            scene.clipSrc
+          ) ||
+          (clipMime.includes("image")
+            ? "jpg"
+            : clipMime.includes("webm")
+              ? "webm"
+              : "mp4");
+
+        clipData =
+          await blobToDataUrl(blob);
       }
-    );
-
-    clipMime =
-      blob.type ||
-      (scene.clipType === "image"
-        ? "image/jpeg"
-        : "video/mp4");
-
-    clipExt =
-      getExtensionFromUrl(
-        scene.clipSrc
-      ) ||
-      (clipMime.includes("image")
-        ? "jpg"
-        : clipMime.includes("webm")
-          ? "webm"
-          : "mp4");
-
-    clipData =
-      await blobToDataUrl(blob);
-  }
-
-  // ---------------------------------------------------------
-  // 3. No media found
-  // ---------------------------------------------------------
-
-  else {
-    throw new Error(
-      `Scene "${scene.label}" is missing media. Please add a video or image clip.`
-    );
+    }
   }
 
   // ---------------------------------------------------------
@@ -4090,10 +4128,10 @@ export default function EditorShell({
       clipExt,
 
       dataUrlLength:
-        clipData.length,
+        clipData?.length ?? 0,
 
       dataPrefix:
-        clipData.slice(0, 50),
+        clipData?.slice(0, 50) ?? "",
     }
   );
 
@@ -4122,7 +4160,12 @@ export default function EditorShell({
       clipExt ||
       undefined,
 
-    clipData,
+    clipSrc:
+      scene.clipSrc ??
+      clip?.src ??
+      undefined,
+
+    clipData: clipData ?? undefined,
 
     playbackSpeed:
       scene.playbackRate ?? 1,
@@ -4198,7 +4241,17 @@ export default function EditorShell({
         outputFilename: `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
       };
 
-      const estimatedPayloadBytes = new Blob([JSON.stringify(payload)]).size;
+      const payloadText = JSON.stringify(payload);
+      const compressedPayload = await compressTextPayload(payloadText);
+      const requestBody = compressedPayload
+        ? JSON.stringify({
+            compressed: true,
+            encoding: "gzip",
+            payload: compressedPayload,
+          })
+        : payloadText;
+
+      const estimatedPayloadBytes = new Blob([requestBody]).size;
       const MAX_EXPORT_PAYLOAD_BYTES = 3_500_000;
 
       if (estimatedPayloadBytes > MAX_EXPORT_PAYLOAD_BYTES) {
@@ -4210,7 +4263,7 @@ export default function EditorShell({
       const res = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: requestBody,
       });
 
       if (!res.ok) {

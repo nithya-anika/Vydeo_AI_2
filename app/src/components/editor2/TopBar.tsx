@@ -101,23 +101,46 @@ export default function TopBar({ projectId }: { projectId?: string }) {
           `[Export] Skipping empty placeholder file for scene "${scene.label}" and falling back to clipSrc.`
         );
       } else {
-        throw new Error(
-          `Scene ${scene.label} has no media because the attached file is empty and no clipSrc fallback is available.`
+        console.warn(
+          `[Export] Scene "${scene.label}" has no media because the attached file is empty and no clipSrc fallback is available; rendering will use a placeholder frame.`
         );
+        clipData = null;
       }
     }
 
     if (!clipData && scene.clipSrc) {
       const response = await fetch(scene.clipSrc);
-      if (!response.ok) throw new Error(`Could not fetch clip for scene ${scene.label}`);
-      const blob = await response.blob();
-      clipMime = blob.type || clipMime;
-      clipExt = clipExt || getExtensionFromUrl(scene.clipSrc) ?? "";
-      clipData = await blobToDataUrl(blob);
+      if (!response.ok) {
+        console.warn(
+          `[Export] Could not fetch clip for scene "${scene.label}"; rendering will use a placeholder frame.`
+        );
+        clipData = null;
+      } else {
+        const blob = await response.blob();
+        if (blob.size === 0) {
+          console.warn(
+            `[Export] Scene "${scene.label}" returned an empty media file; rendering will use a placeholder frame.`
+          );
+          clipData = null;
+        } else {
+          clipMime = blob.type || clipMime;
+          clipExt = clipExt || getExtensionFromUrl(scene.clipSrc) ?? "";
+          clipData = await blobToDataUrl(blob);
+        }
+      }
     }
 
-    if (!clipData) {
-      throw new Error(`Scene ${scene.label} is missing media. Please select a clip or image for this scene.`);
+    if (clipData) {
+      const commaIndex = clipData.indexOf(",");
+      const header = commaIndex >= 0 ? clipData.slice(0, commaIndex) : "";
+      const base64 = commaIndex >= 0 ? clipData.slice(commaIndex + 1) : "";
+
+      if (!header.includes(";base64") || !base64.trim()) {
+        console.warn(
+          `[Export] Scene "${scene.label}" contains an empty media file; rendering will use a placeholder frame.`
+        );
+        clipData = null;
+      }
     }
 
     return {
@@ -127,7 +150,8 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       clipType: scene.clipType ?? clip?.type ?? "video",
       clipMime: clipMime || undefined,
       clipExt: clipExt || undefined,
-      clipData,
+      clipSrc: scene.clipSrc ?? clip?.src ?? undefined,
+      clipData: clipData ?? undefined,
       playbackSpeed: scene.playbackRate ?? 1,
       clipTrimStart: scene.clipTrimStart,
       clipTrimEnd: scene.clipTrimEnd,
@@ -150,6 +174,47 @@ export default function TopBar({ projectId }: { projectId?: string }) {
     };
   };
 
+  async function compressTextPayload(text: string): Promise<string | null> {
+    if (typeof CompressionStream === "undefined") {
+      return null;
+    }
+
+    try {
+      const stream = new CompressionStream("gzip");
+      const writer = stream.writable.getWriter();
+      const encoder = new TextEncoder();
+      await writer.write(encoder.encode(text));
+      await writer.close();
+
+      const chunks: Uint8Array[] = [];
+      const reader = stream.readable.getReader();
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        chunks.push(value ?? new Uint8Array());
+      }
+
+      const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      const buffer = new Uint8Array(totalLength);
+      let offset = 0;
+
+      for (const chunk of chunks) {
+        buffer.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      let binary = "";
+      for (let i = 0; i < buffer.length; i++) {
+        binary += String.fromCharCode(buffer[i]);
+      }
+
+      return btoa(binary);
+    } catch {
+      return null;
+    }
+  }
+
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -161,7 +226,17 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         outputFilename: `${projectName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
       };
 
-      const estimatedPayloadBytes = new Blob([JSON.stringify(payload)]).size;
+      const payloadText = JSON.stringify(payload);
+      const compressedPayload = await compressTextPayload(payloadText);
+      const requestBody = compressedPayload
+        ? JSON.stringify({
+            compressed: true,
+            encoding: "gzip",
+            payload: compressedPayload,
+          })
+        : payloadText;
+
+      const estimatedPayloadBytes = new Blob([requestBody]).size;
       const MAX_EXPORT_PAYLOAD_BYTES = 3_500_000;
 
       if (estimatedPayloadBytes > MAX_EXPORT_PAYLOAD_BYTES) {
@@ -173,7 +248,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       const res = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: requestBody,
       });
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({}));

@@ -269,6 +269,30 @@ function dataUrlExt(
   return "mp4";
 }
 
+async function fetchMediaDataUrl(url: string): Promise<string> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `Could not fetch render media from ${url}. HTTP ${response.status}`
+    );
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+
+  if (buffer.length === 0) {
+    throw new Error(`Remote media URL returned an empty file: ${url}`);
+  }
+
+  const contentType =
+    response.headers.get("content-type") ||
+    (url.match(/\.(png|jpg|jpeg|webp|gif|mp4|webm|mov|m4a)$/i)
+      ? "application/octet-stream"
+      : "application/octet-stream");
+
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
 async function saveBase64(
   dataUrl: string,
   fallbackExt: string,
@@ -1053,9 +1077,49 @@ export async function renderWithFfmpeg(
           ? "jpg"
           : "mp4";
 
+      const mediaDataUrl =
+        scene.clipData ??
+        (scene.clipSrc
+          ? await fetchMediaDataUrl(scene.clipSrc)
+          : null);
+
+      if (!mediaDataUrl) {
+        const placeholder =
+          path.join(
+            tmpDir,
+            `ph-${scene.id}.mp4`
+          );
+
+        tempFiles.push(placeholder);
+
+        await runFfmpeg([
+          "-f",
+          "lavfi",
+          "-i",
+          `color=c=black:s=${W}x${H}:d=${fileDur}`,
+          "-c:v",
+          "libx264",
+          "-t",
+          String(fileDur),
+          "-pix_fmt",
+          "yuv420p",
+          "-y",
+          placeholder,
+        ]);
+
+        scaledFiles.push({
+          file: placeholder,
+          displayDuration: displayDur,
+          xfadeType,
+          xfadeDur,
+        });
+
+        continue;
+      }
+
       const raw =
         await saveBase64(
-          scene.clipData,
+          mediaDataUrl,
           fallbackExt,
           tmpDir
         );
