@@ -107,7 +107,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       }
     }
 
-    if (scene.clipSrc) {
+    if (!clipData && scene.clipSrc) {
       const response = await fetch(scene.clipSrc);
       if (!response.ok) throw new Error(`Could not fetch clip for scene ${scene.label}`);
       const blob = await response.blob();
