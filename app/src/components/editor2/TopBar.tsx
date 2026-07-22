@@ -91,11 +91,23 @@ export default function TopBar({ projectId }: { projectId?: string }) {
     let clipMime = clip?.file?.type ?? "";
     let clipExt = clip?.file?.name?.split(".").pop()?.toLowerCase() ?? getExtensionFromUrl(scene.clipSrc ?? "") ?? "";
 
-    if (clip?.file) {
+    if (clip?.file instanceof File && clip.file.size > 0) {
       clipData = await fileToDataUrl(clip.file);
       clipMime = clip.file.type || clipMime;
       clipExt = clipExt || (clip.file.name.split(".").pop()?.toLowerCase() ?? "");
-    } else if (scene.clipSrc) {
+    } else if (clip?.file instanceof File && clip.file.size === 0) {
+      if (scene.clipSrc) {
+        console.warn(
+          `[Export] Skipping empty placeholder file for scene "${scene.label}" and falling back to clipSrc.`
+        );
+      } else {
+        throw new Error(
+          `Scene ${scene.label} has no media because the attached file is empty and no clipSrc fallback is available.`
+        );
+      }
+    }
+
+    if (scene.clipSrc) {
       const response = await fetch(scene.clipSrc);
       if (!response.ok) throw new Error(`Could not fetch clip for scene ${scene.label}`);
       const blob = await response.blob();
