@@ -3999,7 +3999,7 @@ export default function EditorShell({
   // 2. Otherwise fetch scene.clipSrc or clip.src
   // ---------------------------------------------------------
 
-  if (clipSrc) {
+  if (!clipData && clipSrc) {
     console.log(
       "[Export] Fetching scene media:",
       {
