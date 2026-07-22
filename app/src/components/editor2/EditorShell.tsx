@@ -3818,42 +3818,107 @@ export default function EditorShell({
   }
 
   const handleExport = async () => {
-    setExporting(true);
-    try {
-      const res = await fetch("/api/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scenes: scenes.map((sc) => ({
-            id: sc.id,
-            label: sc.label,
-            duration: sc.duration,
-            playbackSpeed: sc.playbackRate ?? 1,
-            clipType: sc.clipType,
-          })),
-          aspectRatio,
-          totalDuration: scenes.reduce((s, sc) => s + sc.duration, 0),
-          outputFilename: `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.downloadUrl) {
-        toast.error(data.error ?? "Export failed. Please try again.");
-        return;
-      }
-      const a = document.createElement("a");
-      a.href = data.downloadUrl;
-      a.download = data.filename ?? "export.mp4";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      toast.success("Export ready — downloading now.");
-    } catch {
-      toast.error("Export failed — check your connection and try again.");
-    } finally {
-      setExporting(false);
+  setExporting(true);
+
+  try {
+    const store = useEditorStore.getState();
+
+    const exportScenes = await Promise.all(
+      store.scenes.map(async (sc) => {
+        const clip = sc.clipId
+          ? store.clips.find((c) => c.id === sc.clipId)
+          : null;
+
+        const src = sc.clipSrc || clip?.src || null;
+
+        let clipData: string | undefined;
+
+        if (src) {
+          clipData = await srcToDataUrl(src);
+        }
+
+        return {
+          id: sc.id,
+          duration: sc.duration,
+
+          clipData,
+
+          clipType:
+            sc.clipType ??
+            clip?.type ??
+            undefined,
+
+          playbackSpeed: sc.playbackRate ?? 1,
+
+          transition: sc.transition,
+
+          visualEffect:
+            sc.colorGrade ??
+            sc.effects?.[0] ??
+            undefined,
+        };
+      })
+    );
+
+    if (!exportScenes.some((scene) => scene.clipData)) {
+      toast.error("No media found to export.");
+      return;
     }
-  };
+
+    const res = await fetch("/api/render", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify({
+        scenes: exportScenes,
+
+        aspectRatio: store.aspectRatio,
+
+        totalDuration: exportScenes.reduce(
+          (sum, scene) => sum + scene.duration,
+          0
+        ),
+
+        outputFilename:
+          `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.downloadUrl) {
+      throw new Error(
+        data.message ??
+        data.error ??
+        "Export failed."
+      );
+    }
+
+    const a = document.createElement("a");
+
+    a.href = data.downloadUrl;
+    a.download = data.filename ?? "export.mp4";
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    toast.success("Export ready — downloading now.");
+
+  } catch (error) {
+    console.error("[export]", error);
+
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : "Export failed. Please try again."
+    );
+  } finally {
+    setExporting(false);
+  }
+};
 
   const actualLeftWidth = leftCollapsed ? 48 : leftWidth;
   const actualRightWidth = rightCollapsed ? 0 : rightWidth;
