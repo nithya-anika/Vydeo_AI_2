@@ -3855,42 +3855,52 @@ export default function EditorShell({
   try {
     const store = useEditorStore.getState();
 
-    const exportScenes = await Promise.all(
-      store.scenes.map(async (sc) => {
-        const clip = sc.clipId
-          ? store.clips.find((c) => c.id === sc.clipId)
-          : null;
+    if (store.scenes.length !== 1) {
+      toast.error("Direct download currently supports one scene only.");
+      return;
+    }
 
-        const src = sc.clipSrc || clip?.src || null;
+    const scene = store.scenes[0];
 
-        let clipData: string | undefined;
+    const clip = scene.clipId
+      ? store.clips.find((c) => c.id === scene.clipId)
+      : null;
 
-        if (src) {
-          clipData = await srcToDataUrl(src);
-        }
+    const videoUrl = scene.clipSrc || clip?.src;
 
-        return {
-          id: sc.id,
-          duration: sc.duration,
+    if (!videoUrl) {
+      toast.error("Video not found.");
+      return;
+    }
 
-          clipData,
+    const response = await fetch(videoUrl);
 
-          clipType:
-            sc.clipType ??
-            clip?.type ??
-            undefined,
+    if (!response.ok) {
+      throw new Error("Could not load video.");
+    }
 
-          playbackSpeed: sc.playbackRate ?? 1,
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
 
-          transition: sc.transition,
+    const a = document.createElement("a");
+    a.href = url;
+    a.download =
+      `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
 
-          visualEffect:
-            sc.colorGrade ??
-            sc.effects?.[0] ??
-            undefined,
-        };
-      })
-    );
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(url);
+
+    toast.success("Video downloaded successfully.");
+  } catch (error) {
+    console.error("[export]", error);
+    toast.error("Video download failed.");
+  } finally {
+    setExporting(false);
+  }
+};
 
     if (!exportScenes.some((scene) => scene.clipData)) {
       toast.error("No media found to export.");
