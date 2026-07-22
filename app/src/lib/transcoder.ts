@@ -17,6 +17,7 @@ export interface SceneInput {
   id: string;
   duration: number;
   clipData?: string;   // base64 data-url or "data:video/mp4;base64,..."
+  clipSrc?: string;    // remote/public URL that the server can fetch during render
   clipType?: "video" | "image";
   clipMime?: string;
   clipExt?: string;
