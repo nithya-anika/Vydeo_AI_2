@@ -1,5 +1,6 @@
 /**
- * Local FFmpeg rendering — the fallback when GCS_BUCKET is not configured.
+ * Local FFmpeg rendering.
+ * Used when GCS_BUCKET / Cloud Transcoder is not configured.
  */
 
 import { writeFile, mkdir, unlink } from "fs/promises";
@@ -8,7 +9,11 @@ import os from "os";
 import path from "path";
 import { spawn } from "child_process";
 import { v4 as uuidv4 } from "uuid";
-import type { RenderCaption, RenderParams } from "./transcoder";
+
+import type {
+  RenderCaption,
+  RenderParams,
+} from "./transcoder";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -21,7 +26,7 @@ export type FfmpegRenderResult = {
 };
 
 /* -------------------------------------------------------------------------- */
-/* FFmpeg helpers                                                             */
+/* FFmpeg                                                                     */
 /* -------------------------------------------------------------------------- */
 
 function findFfmpeg(): string {
@@ -32,9 +37,9 @@ function findFfmpeg(): string {
     "ffmpeg",
   ];
 
-  for (const p of candidates) {
-    if (existsSync(p)) {
-      return p;
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
     }
   }
 
@@ -42,128 +47,363 @@ function findFfmpeg(): string {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const installer = require("@ffmpeg-installer/ffmpeg");
 
-    if (installer?.path && existsSync(installer.path)) {
+    if (
+      installer?.path &&
+      existsSync(installer.path)
+    ) {
       return installer.path;
     }
   } catch {
-    // Ignore and fall back to PATH ffmpeg.
+    // Fall back to ffmpeg from PATH.
   }
 
   return "ffmpeg";
 }
 
-function runFfmpeg(args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const bin = findFfmpeg();
+function runFfmpeg(
+  args: string[]
+): Promise<void> {
+  return new Promise(
+    (resolve, reject) => {
+      const bin = findFfmpeg();
 
-    const proc = spawn(bin, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let stderr = "";
-
-    proc.stderr?.on("data", (d: Buffer) => {
-      stderr += d.toString();
-    });
-
-    proc.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(
-          new Error(
-            `FFmpeg exited ${code}: ${stderr.slice(-800)}`
-          )
-        );
-      }
-    });
-
-    proc.on("error", (e) => {
-      reject(
-        new Error(`FFmpeg spawn: ${e.message}`)
+      console.log(
+        "[FFmpeg]",
+        bin,
+        args.join(" ")
       );
-    });
-  });
+
+      const proc = spawn(
+        bin,
+        args,
+        {
+          stdio: [
+            "ignore",
+            "pipe",
+            "pipe",
+          ],
+        }
+      );
+
+      let stderr = "";
+
+      proc.stderr?.on(
+        "data",
+        (data: Buffer) => {
+          stderr += data.toString();
+        }
+      );
+
+      proc.on(
+        "close",
+        (code) => {
+          if (code === 0) {
+            resolve();
+            return;
+          }
+
+          console.error(
+            "[FFmpeg Error]",
+            stderr
+          );
+
+          reject(
+            new Error(
+              `FFmpeg exited ${code}: ${stderr.slice(
+                -2000
+              )}`
+            )
+          );
+        }
+      );
+
+      proc.on(
+        "error",
+        (error) => {
+          reject(
+            new Error(
+              `FFmpeg spawn: ${error.message}`
+            )
+          );
+        }
+      );
+    }
+  );
 }
 
 /* -------------------------------------------------------------------------- */
-/* File helpers                                                               */
+/* Data URL helpers                                                           */
 /* -------------------------------------------------------------------------- */
-
-async function saveBase64(
-  dataUrl: string,
-  ext: string,
-  dir: string
-): Promise<string> {
-  const sep = dataUrl.indexOf(",");
-
-  if (sep === -1) {
-    throw new Error("Expected base64 data-url");
-  }
-
-  const buf = Buffer.from(
-    dataUrl.slice(sep + 1),
-    "base64"
-  );
-
-  const actualExt = dataUrlExt(
-    dataUrl,
-    ext
-  );
-
-  const file = path.join(
-    dir,
-    `${uuidv4()}.${actualExt}`
-  );
-
-  await writeFile(file, buf);
-
-  return file;
-}
 
 function dataUrlExt(
   dataUrl: string,
   fallback: string
 ): string {
   const mime =
-    dataUrl.match(/^data:([^;,]+)/)?.[1] ?? "";
+    dataUrl
+      .match(
+        /^data:([^;,]+)/
+      )?.[1]
+      ?.toLowerCase() ?? "";
 
-  if (mime.includes("png")) return "png";
-  if (mime.includes("webp")) return "webp";
-  if (mime.includes("gif")) return "gif";
+  /* Images */
+
+  if (mime === "image/png") {
+    return "png";
+  }
+
+  if (mime === "image/webp") {
+    return "webp";
+  }
+
+  if (mime === "image/gif") {
+    return "gif";
+  }
 
   if (
-    mime.includes("jpeg") ||
-    mime.includes("jpg")
+    mime === "image/jpeg" ||
+    mime === "image/jpg"
   ) {
     return "jpg";
   }
 
-  if (mime.includes("webm")) return "webm";
-  if (mime.includes("mov")) return "mov";
-  if (mime.includes("mp4")) return "mp4";
-  if (mime.includes("mpeg")) return "mpg";
-  if (mime.includes("wav")) return "wav";
-  if (mime.includes("ogg")) return "ogg";
+  /* Videos */
 
-  return fallback;
+  if (mime === "video/mp4") {
+    return "mp4";
+  }
+
+  if (mime === "video/webm") {
+    return "webm";
+  }
+
+  if (
+    mime === "video/quicktime"
+  ) {
+    return "mov";
+  }
+
+  if (mime === "video/mpeg") {
+    return "mpg";
+  }
+
+  /* Audio */
+
+  if (mime === "audio/mpeg") {
+    return "mp3";
+  }
+
+  if (
+    mime === "audio/wav" ||
+    mime === "audio/x-wav"
+  ) {
+    return "wav";
+  }
+
+  if (mime === "audio/ogg") {
+    return "ogg";
+  }
+
+  if (
+    mime === "audio/mp4" ||
+    mime === "audio/x-m4a"
+  ) {
+    return "m4a";
+  }
+
+  /*
+   * Sanitize fallback.
+   * Prevent extensions such as ".15".
+   */
+
+  const cleanFallback = (
+    fallback || ""
+  )
+    .replace(/^\./, "")
+    .toLowerCase();
+
+  const allowed =
+    new Set([
+      "mp4",
+      "mov",
+      "webm",
+      "mpg",
+      "mpeg",
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "gif",
+      "mp3",
+      "wav",
+      "ogg",
+      "m4a",
+    ]);
+
+  if (
+    allowed.has(
+      cleanFallback
+    )
+  ) {
+    return cleanFallback;
+  }
+
+  /* MIME category fallback */
+
+  if (
+    mime.startsWith(
+      "image/"
+    )
+  ) {
+    return "jpg";
+  }
+
+  if (
+    mime.startsWith(
+      "audio/"
+    )
+  ) {
+    return "m4a";
+  }
+
+  return "mp4";
+}
+
+async function saveBase64(
+  dataUrl: string,
+  fallbackExt: string,
+  dir: string
+): Promise<string> {
+  /*
+   * This renderer expects:
+   *
+   * data:video/mp4;base64,...
+   * data:image/jpeg;base64,...
+   */
+
+  if (
+    !dataUrl.startsWith(
+      "data:"
+    )
+  ) {
+    throw new Error(
+      `Invalid media input. Expected base64 data URL but received: ${dataUrl.slice(
+        0,
+        60
+      )}`
+    );
+  }
+
+  const separator =
+    dataUrl.indexOf(",");
+
+  if (
+    separator === -1
+  ) {
+    throw new Error(
+      "Invalid base64 data URL: missing comma."
+    );
+  }
+
+  const header =
+    dataUrl.slice(
+      0,
+      separator
+    );
+
+  if (
+    !header.includes(
+      ";base64"
+    )
+  ) {
+    throw new Error(
+      "Media data URL is not base64 encoded."
+    );
+  }
+
+  const base64 =
+    dataUrl.slice(
+      separator + 1
+    );
+
+  if (!base64) {
+    throw new Error(
+      "Media base64 data is empty."
+    );
+  }
+
+  const buffer =
+    Buffer.from(
+      base64,
+      "base64"
+    );
+
+  if (
+    buffer.length === 0
+  ) {
+    throw new Error(
+      "Decoded media file is empty."
+    );
+  }
+
+  const actualExt =
+    dataUrlExt(
+      dataUrl,
+      fallbackExt
+    );
+
+  const file =
+    path.join(
+      dir,
+      `${uuidv4()}.${actualExt}`
+    );
+
+  await writeFile(
+    file,
+    buffer
+  );
+
+  console.log(
+    "[FFmpeg Media]",
+    {
+      file,
+      extension:
+        actualExt,
+      size:
+        buffer.length,
+      mime:
+        header.slice(
+          0,
+          100
+        ),
+    }
+  );
+
+  return file;
 }
 
 /* -------------------------------------------------------------------------- */
-/* Caption helpers                                                            */
+/* Colors / captions                                                          */
 /* -------------------------------------------------------------------------- */
 
 function normalizeHexColor(
-  value: string | undefined,
+  value:
+    | string
+    | undefined,
   fallback: string
 ): string {
-  const raw = (value ?? "").trim();
+  const raw = (
+    value ?? ""
+  ).trim();
 
-  const hex = raw.startsWith("#")
-    ? raw.slice(1)
-    : raw;
+  const hex =
+    raw.startsWith("#")
+      ? raw.slice(1)
+      : raw;
 
-  return /^[0-9a-f]{6}$/i.test(hex)
+  return /^[0-9a-f]{6}$/i.test(
+    hex
+  )
     ? hex.toUpperCase()
     : fallback;
 }
@@ -172,96 +412,161 @@ function escapeDrawtext(
   value: string
 ): string {
   return value
-    .replace(/\\/g, "\\\\")
-    .replace(/'/g, "\\'")
-    .replace(/:/g, "\\:")
-    .replace(/\[/g, "\\[")
-    .replace(/\]/g, "\\]")
-    .replace(/%/g, "\\%");
+    .replace(
+      /\\/g,
+      "\\\\"
+    )
+    .replace(
+      /'/g,
+      "\\'"
+    )
+    .replace(
+      /:/g,
+      "\\:"
+    )
+    .replace(
+      /\[/g,
+      "\\["
+    )
+    .replace(
+      /\]/g,
+      "\\]"
+    )
+    .replace(
+      /%/g,
+      "\\%"
+    );
 }
 
 function captionToFilter(
-  caption: RenderCaption,
+  caption:
+    RenderCaption,
   width: number,
   height: number
 ): string | null {
-  const text = caption.text?.trim();
+  const text =
+    caption.text?.trim();
 
-  const start = Math.max(
-    0,
-    Number(caption.startTime)
-  );
+  const start =
+    Math.max(
+      0,
+      Number(
+        caption.startTime
+      )
+    );
 
-  const end = Math.max(
-    start + 0.1,
-    Number(caption.endTime)
-  );
+  const end =
+    Math.max(
+      start + 0.1,
+      Number(
+        caption.endTime
+      )
+    );
 
   if (
     !text ||
-    !Number.isFinite(start) ||
-    !Number.isFinite(end)
+    !Number.isFinite(
+      start
+    ) ||
+    !Number.isFinite(
+      end
+    )
   ) {
     return null;
   }
 
-  const fontSize = Math.max(
-    18,
-    Math.min(
-      96,
-      Math.round(caption.fontSize ?? 34)
-    )
-  );
+  const fontSize =
+    Math.max(
+      18,
+      Math.min(
+        96,
+        Math.round(
+          caption.fontSize ??
+            34
+        )
+      )
+    );
 
-  const color = normalizeHexColor(
-    caption.color,
-    "FFFFFF"
-  );
+  const color =
+    normalizeHexColor(
+      caption.color,
+      "FFFFFF"
+    );
 
-  const boxColor = normalizeHexColor(
-    caption.bgColor,
-    "000000"
-  );
+  const boxColor =
+    normalizeHexColor(
+      caption.bgColor,
+      "000000"
+    );
 
-  const boxOpacity = Math.max(
-    0,
-    Math.min(
-      1,
-      caption.bgOpacity ?? 0.48
-    )
-  );
+  const boxOpacity =
+    Math.max(
+      0,
+      Math.min(
+        1,
+        caption.bgOpacity ??
+          0.48
+      )
+    );
 
   const xPct =
     Math.max(
       5,
-      Math.min(95, caption.x ?? 50)
+      Math.min(
+        95,
+        caption.x ?? 50
+      )
     ) / 100;
 
   const yPct =
     Math.max(
       5,
-      Math.min(95, caption.y ?? 84)
+      Math.min(
+        95,
+        caption.y ?? 84
+      )
     ) / 100;
 
-  const yPx = Math.round(
-    height * yPct
-  );
+  const yPx =
+    Math.round(
+      height * yPct
+    );
 
-  const weight = caption.bold
-    ? ":font='Inter:style=Bold'"
-    : "";
+  const weight =
+    caption.bold
+      ? ":font='Inter:style=Bold'"
+      : "";
 
   return [
     "drawtext=",
-    `text='${escapeDrawtext(text)}'`,
+
+    `text='${escapeDrawtext(
+      text
+    )}'`,
+
     weight,
-    `:x='${Math.round(width * xPct)}-text_w/2'`,
+
+    `:x='${Math.round(
+      width * xPct
+    )}-text_w/2'`,
+
     `:y='${yPx}-text_h/2'`,
+
     `:fontsize=${fontSize}`,
+
     `:fontcolor=${color}`,
-    `:box=1:boxcolor=${boxColor}@${boxOpacity.toFixed(2)}:boxborderw=18`,
+
+    `:box=1:boxcolor=${boxColor}@${boxOpacity.toFixed(
+      2
+    )}:boxborderw=18`,
+
     ":line_spacing=6",
-    `:enable='between(t,${start.toFixed(3)},${end.toFixed(3)})'`,
+
+    `:enable='between(t,${start.toFixed(
+      3
+    )},${end.toFixed(
+      3
+    )})'`,
   ].join("");
 }
 
@@ -270,48 +575,75 @@ function captionToFilter(
 /* -------------------------------------------------------------------------- */
 
 export function ratioDimensions(
-  r: string
+  ratio: string
 ): [number, number] {
-  switch (r) {
+  switch (ratio) {
     case "16:9":
-      return [1920, 1080];
+      return [
+        1920,
+        1080,
+      ];
 
     case "1:1":
-      return [1080, 1080];
+      return [
+        1080,
+        1080,
+      ];
 
     case "4:5":
-      return [1080, 1350];
+      return [
+        1080,
+        1350,
+      ];
 
     case "3:4":
-      return [1080, 1440];
+      return [
+        1080,
+        1440,
+      ];
 
     default:
-      return [1080, 1920];
+      return [
+        1080,
+        1920,
+      ];
   }
 }
 
 /* -------------------------------------------------------------------------- */
-/* Effects                                                                    */
+/* Visual effects                                                             */
 /* -------------------------------------------------------------------------- */
 
 export function effectToVfFilter(
   effect: string
 ): string {
-  const e = effect
-    .toLowerCase()
-    .replace(/[\s_-]+/g, "-");
+  const e =
+    effect
+      .toLowerCase()
+      .replace(
+        /[\s_-]+/g,
+        "-"
+      );
 
   if (
-    e.includes("black-and-white") ||
-    e.includes("grayscale") ||
+    e.includes(
+      "black-and-white"
+    ) ||
+    e.includes(
+      "grayscale"
+    ) ||
     e.includes("bw")
   ) {
     return "hue=s=0";
   }
 
   if (
-    e.includes("sepia") ||
-    e.includes("vintage")
+    e.includes(
+      "sepia"
+    ) ||
+    e.includes(
+      "vintage"
+    )
   ) {
     return "colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131";
   }
@@ -330,7 +662,11 @@ export function effectToVfFilter(
     return "colorbalance=rs=-0.1:gs=0:bs=0.2";
   }
 
-  if (e.includes("vignette")) {
+  if (
+    e.includes(
+      "vignette"
+    )
+  ) {
     return "vignette=angle=PI/4:mode=forward";
   }
 
@@ -342,14 +678,18 @@ export function effectToVfFilter(
   }
 
   if (
-    e.includes("sharpen") ||
+    e.includes(
+      "sharpen"
+    ) ||
     e.includes("crisp")
   ) {
     return "unsharp=5:5:1.5:5:5:0.0";
   }
 
   if (
-    e.includes("cinematic") ||
+    e.includes(
+      "cinematic"
+    ) ||
     e.includes("film")
   ) {
     return "curves=preset=strong_contrast,colorbalance=rs=0.05:bs=-0.05";
@@ -363,7 +703,9 @@ export function effectToVfFilter(
   }
 
   if (
-    e.includes("vibrant") ||
+    e.includes(
+      "vibrant"
+    ) ||
     e.includes("pop")
   ) {
     return "eq=saturation=1.4:contrast=1.1";
@@ -387,31 +729,48 @@ export function effectToVfFilter(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Playback speed                                                             */
+/* Audio speed                                                                */
 /* -------------------------------------------------------------------------- */
 
 export function buildAtempoChain(
   speed: number
 ): string {
-  const filters: string[] = [];
+  const filters:
+    string[] = [];
 
-  let r = speed;
+  let rate = speed;
 
-  while (r > 2.0 + 1e-6) {
-    filters.push("atempo=2.0");
-    r /= 2.0;
+  while (
+    rate >
+    2.0 + 1e-6
+  ) {
+    filters.push(
+      "atempo=2.0"
+    );
+
+    rate /= 2;
   }
 
-  while (r < 0.5 - 1e-6) {
-    filters.push("atempo=0.5");
-    r /= 0.5;
+  while (
+    rate <
+    0.5 - 1e-6
+  ) {
+    filters.push(
+      "atempo=0.5"
+    );
+
+    rate /= 0.5;
   }
 
   filters.push(
-    `atempo=${r.toFixed(6)}`
+    `atempo=${rate.toFixed(
+      6
+    )}`
   );
 
-  return filters.join(",");
+  return filters.join(
+    ","
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -423,8 +782,6 @@ export function toXfadeType(
 ): string {
   switch (type) {
     case "fade":
-      return "fade";
-
     case "cinematic-fade":
       return "fade";
 
@@ -464,59 +821,80 @@ export async function renderWithFfmpeg(
   const {
     scenes,
     audio,
-    aspectRatio = "9:16",
+    aspectRatio =
+      "9:16",
     outputFilename,
   } = params;
 
-  const tmpDir = path.join(
-    os.tmpdir(),
-    "ai-video-renders",
-    uuidv4()
-  );
+  const tmpDir =
+    path.join(
+      os.tmpdir(),
+      "ai-video-renders",
+      uuidv4()
+    );
 
-  const outDir = path.join(
-    tmpDir,
-    "output"
-  );
+  const outDir =
+    path.join(
+      tmpDir,
+      "output"
+    );
 
   const outFile =
     outputFilename ??
     `render-${uuidv4()}.mp4`;
 
-  const outPath = path.join(
-    outDir,
-    outFile
+  const outPath =
+    path.join(
+      outDir,
+      outFile
+    );
+
+  await mkdir(
+    tmpDir,
+    {
+      recursive: true,
+    }
   );
 
-  await mkdir(tmpDir, {
-    recursive: true,
-  });
-
-  await mkdir(outDir, {
-    recursive: true,
-  });
+  await mkdir(
+    outDir,
+    {
+      recursive: true,
+    }
+  );
 
   const [W, H] =
-    ratioDimensions(aspectRatio);
+    ratioDimensions(
+      aspectRatio
+    );
 
-  const tempFiles: string[] = [];
+  const tempFiles:
+    string[] = [];
 
   try {
     /* ---------------------------------------------------------------------- */
-    /* Determine whether transitions are needed                               */
+    /* Check transitions                                                      */
     /* ---------------------------------------------------------------------- */
 
-    const useXfade = scenes.some(
-      (s, i) =>
-        i < scenes.length - 1 &&
-        s.transition &&
-        toXfadeType(
-          s.transition.type
-        ) !== ""
-    );
+    const useXfade =
+      scenes.some(
+        (
+          scene,
+          index
+        ) =>
+          index <
+            scenes.length -
+              1 &&
+          scene.transition &&
+          toXfadeType(
+            scene
+              .transition
+              .type
+          ) !== ""
+      );
 
     /* ---------------------------------------------------------------------- */
-    /* Prepare scenes                                                         */
+    /* Prepare clips                                                          */
     /* ---------------------------------------------------------------------- */
 
     const scaledFiles: {
@@ -528,33 +906,42 @@ export async function renderWithFfmpeg(
 
     for (
       let si = 0;
-      si < scenes.length;
+      si <
+      scenes.length;
       si++
     ) {
-      const scene = scenes[si];
+      const scene =
+        scenes[si];
 
       const isLast =
-        si === scenes.length - 1;
+        si ===
+        scenes.length -
+          1;
 
       const speed =
-        scene.playbackSpeed ?? 1;
+        scene.playbackSpeed ??
+        1;
 
-      const transOut =
+      const transition =
         scene.transition;
 
-      const xfadeType = isLast
-        ? ""
-        : transOut
-          ? toXfadeType(
-              transOut.type
-            )
-          : "";
+      const xfadeType =
+        isLast
+          ? ""
+          : transition
+            ? toXfadeType(
+                transition.type
+              )
+            : "";
 
-      const xfadeDur = isLast
-        ? 0
-        : xfadeType
-          ? transOut?.duration ?? 0.5
-          : 0;
+      const xfadeDur =
+        isLast
+          ? 0
+          : xfadeType
+            ? transition
+                ?.duration ??
+              0.5
+            : 0;
 
       const overlapSec =
         useXfade &&
@@ -567,68 +954,129 @@ export async function renderWithFfmpeg(
         scene.duration;
 
       const fileDur =
-        displayDur + overlapSec;
+        displayDur +
+        overlapSec;
 
-      /* Missing clip fallback */
+      /* -------------------------------------------------------------------- */
+      /* Placeholder                                                          */
+      /* -------------------------------------------------------------------- */
 
-      if (!scene.clipData) {
-        const ph = path.join(
-          tmpDir,
-          `ph-${scene.id}.mp4`
+      if (
+        !scene.clipData
+      ) {
+        const placeholder =
+          path.join(
+            tmpDir,
+            `ph-${scene.id}.mp4`
+          );
+
+        tempFiles.push(
+          placeholder
         );
-
-        tempFiles.push(ph);
 
         await runFfmpeg([
           "-f",
           "lavfi",
+
           "-i",
           `color=c=black:s=${W}x${H}:d=${fileDur}`,
+
           "-c:v",
           "libx264",
+
           "-t",
-          String(fileDur),
+          String(
+            fileDur
+          ),
+
           "-pix_fmt",
           "yuv420p",
+
           "-y",
-          ph,
+          placeholder,
         ]);
 
-        scaledFiles.push({
-          file: ph,
-          displayDuration: displayDur,
-          xfadeType,
-          xfadeDur,
-        });
+        scaledFiles.push(
+          {
+            file:
+              placeholder,
+
+            displayDuration:
+              displayDur,
+
+            xfadeType,
+
+            xfadeDur,
+          }
+        );
 
         continue;
       }
 
-      /* Save media */
+      /* -------------------------------------------------------------------- */
+      /* Debug media input                                                    */
+      /* -------------------------------------------------------------------- */
 
-      const ext =
-        scene.clipExt ??
-        (scene.clipType === "image"
+      console.log(
+        "[FFmpeg Scene]",
+        {
+          id: scene.id,
+
+          clipType:
+            scene.clipType,
+
+          clipExt:
+            scene.clipExt,
+
+          dataPrefix:
+            scene.clipData.slice(
+              0,
+              100
+            ),
+        }
+      );
+
+      /*
+       * IMPORTANT:
+       * Do NOT trust scene.clipExt.
+       *
+       * Your previous request produced clipExt = "15",
+       * resulting in uuid.15.
+       *
+       * We instead use clipType as the fallback and let
+       * saveBase64 detect the actual MIME type.
+       */
+
+      const fallbackExt =
+        scene.clipType ===
+        "image"
           ? "jpg"
-          : "mp4");
+          : "mp4";
 
       const raw =
         await saveBase64(
           scene.clipData,
-          ext,
+          fallbackExt,
           tmpDir
         );
 
-      tempFiles.push(raw);
-
-      const scaled = path.join(
-        tmpDir,
-        `sc-${si}-${scene.id}.mp4`
+      tempFiles.push(
+        raw
       );
 
-      tempFiles.push(scaled);
+      const scaled =
+        path.join(
+          tmpDir,
+          `sc-${si}-${scene.id}.mp4`
+        );
 
-      /* Build video filters */
+      tempFiles.push(
+        scaled
+      );
+
+      /* -------------------------------------------------------------------- */
+      /* Filters                                                              */
+      /* -------------------------------------------------------------------- */
 
       const scaleFilter =
         `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
@@ -638,7 +1086,9 @@ export async function renderWithFfmpeg(
         speed !== 1
           ? `setpts=${(
               1 / speed
-            ).toFixed(6)}*PTS`
+            ).toFixed(
+              6
+            )}*PTS`
           : "";
 
       const effectFilter =
@@ -656,14 +1106,18 @@ export async function renderWithFfmpeg(
         .filter(Boolean)
         .join(",");
 
-      /* Image clip */
+      /* -------------------------------------------------------------------- */
+      /* Image                                                                */
+      /* -------------------------------------------------------------------- */
 
       if (
-        scene.clipType === "image"
+        scene.clipType ===
+        "image"
       ) {
         await runFfmpeg([
           "-loop",
           "1",
+
           "-i",
           raw,
 
@@ -674,7 +1128,9 @@ export async function renderWithFfmpeg(
           "libx264",
 
           "-t",
-          String(fileDur),
+          String(
+            fileDur
+          ),
 
           "-pix_fmt",
           "yuv420p",
@@ -683,14 +1139,18 @@ export async function renderWithFfmpeg(
           scaled,
         ]);
       } else {
-        /* Video clip */
+        /* ------------------------------------------------------------------ */
+        /* Video                                                              */
+        /* ------------------------------------------------------------------ */
 
-        const inputArgs: string[] =
-          [];
+        const inputArgs:
+          string[] = [];
 
         if (
-          scene.clipTrimStart != null &&
-          scene.clipTrimStart > 0
+          scene.clipTrimStart !=
+            null &&
+          scene.clipTrimStart >
+            0
         ) {
           inputArgs.push(
             "-ss",
@@ -710,18 +1170,15 @@ export async function renderWithFfmpeg(
 
         inputArgs.push(
           "-t",
-          sourceDur.toFixed(6)
+          sourceDur.toFixed(
+            6
+          )
         );
 
-        const audioArgs =
-          speed !== 1
-            ? [
-                "-af",
-                buildAtempoChain(
-                  speed
-                ),
-              ]
-            : ["-an"];
+        /*
+         * We don't need the original scene audio here.
+         * Final background audio is added later.
+         */
 
         await runFfmpeg([
           ...inputArgs,
@@ -729,7 +1186,7 @@ export async function renderWithFfmpeg(
           "-vf",
           vf,
 
-          ...audioArgs,
+          "-an",
 
           "-c:v",
           "libx264",
@@ -742,17 +1199,22 @@ export async function renderWithFfmpeg(
         ]);
       }
 
-      scaledFiles.push({
-        file: scaled,
-        displayDuration:
-          displayDur,
-        xfadeType,
-        xfadeDur,
-      });
+      scaledFiles.push(
+        {
+          file: scaled,
+
+          displayDuration:
+            displayDur,
+
+          xfadeType,
+
+          xfadeDur,
+        }
+      );
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Concatenate scenes                                                     */
+    /* Concatenate                                                            */
     /* ---------------------------------------------------------------------- */
 
     const concatenated =
@@ -766,11 +1228,13 @@ export async function renderWithFfmpeg(
     );
 
     if (
-      scaledFiles.length === 1
+      scaledFiles.length ===
+      1
     ) {
       await runFfmpeg([
         "-i",
-        scaledFiles[0].file,
+        scaledFiles[0]
+          .file,
 
         "-c",
         "copy",
@@ -778,9 +1242,9 @@ export async function renderWithFfmpeg(
         "-y",
         concatenated,
       ]);
-    } else if (!useXfade) {
-      /* Simple cuts */
-
+    } else if (
+      !useXfade
+    ) {
       const listFile =
         path.join(
           tmpDir,
@@ -793,10 +1257,11 @@ export async function renderWithFfmpeg(
 
       await writeFile(
         listFile,
+
         scaledFiles
           .map(
-            (s) =>
-              `file '${s.file}'`
+            (scene) =>
+              `file '${scene.file}'`
           )
           .join("\n")
       );
@@ -818,63 +1283,76 @@ export async function renderWithFfmpeg(
         concatenated,
       ]);
     } else {
-      /* Xfade transitions */
+      /* -------------------------------------------------------------------- */
+      /* Xfade                                                                */
+      /* -------------------------------------------------------------------- */
 
       const inputArgs =
         scaledFiles.flatMap(
-          (sf) => [
+          (scene) => [
             "-i",
-            sf.file,
+            scene.file,
           ]
         );
 
       const filterParts:
         string[] = [];
 
-      let prevLabel = "[0:v]";
+      let prevLabel =
+        "[0:v]";
+
       let timeAcc = 0;
 
       for (
         let i = 0;
         i <
-        scaledFiles.length - 1;
+        scaledFiles.length -
+          1;
         i++
       ) {
-        const sf =
+        const scene =
           scaledFiles[i];
 
-        const isLastTransition =
+        const lastTransition =
           i ===
-          scaledFiles.length - 2;
+          scaledFiles.length -
+            2;
 
         const outLabel =
-          isLastTransition
+          lastTransition
             ? "[vout]"
             : `[vx${i}]`;
 
         const nextLabel =
           `[${i + 1}:v]`;
 
-        if (sf.xfadeType) {
+        if (
+          scene.xfadeType
+        ) {
           const offset =
             Math.max(
               0,
+
               timeAcc +
-                sf.displayDuration -
-                sf.xfadeDur
+                scene.displayDuration -
+                scene.xfadeDur
             );
 
           filterParts.push(
             `${prevLabel}${nextLabel}` +
-              `xfade=transition=${sf.xfadeType}` +
-              `:duration=${sf.xfadeDur.toFixed(4)}` +
-              `:offset=${offset.toFixed(4)}` +
+              `xfade=transition=${scene.xfadeType}` +
+              `:duration=${scene.xfadeDur.toFixed(
+                4
+              )}` +
+              `:offset=${offset.toFixed(
+                4
+              )}` +
               `${outLabel}`
           );
 
           timeAcc +=
-            sf.displayDuration -
-            sf.xfadeDur;
+            scene.displayDuration -
+            scene.xfadeDur;
         } else {
           filterParts.push(
             `${prevLabel}${nextLabel}` +
@@ -883,17 +1361,20 @@ export async function renderWithFfmpeg(
           );
 
           timeAcc +=
-            sf.displayDuration;
+            scene.displayDuration;
         }
 
-        prevLabel = outLabel;
+        prevLabel =
+          outLabel;
       }
 
       await runFfmpeg([
         ...inputArgs,
 
         "-filter_complex",
-        filterParts.join(";"),
+        filterParts.join(
+          ";"
+        ),
 
         "-map",
         "[vout]",
@@ -910,25 +1391,22 @@ export async function renderWithFfmpeg(
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Add background audio                                                   */
+    /* Background audio                                                       */
     /* ---------------------------------------------------------------------- */
 
     if (audio?.src) {
-      const audioExt =
-        audio.src.includes(
-          "audio/mpeg"
+      console.log(
+        "[FFmpeg Audio]",
+        audio.src.slice(
+          0,
+          100
         )
-          ? "mp3"
-          : audio.src.includes(
-                "audio/wav"
-              )
-            ? "wav"
-            : "m4a";
+      );
 
       const audioFile =
         await saveBase64(
           audio.src,
-          audioExt,
+          "m4a",
           tmpDir
         );
 
@@ -939,20 +1417,26 @@ export async function renderWithFfmpeg(
       const totalDur =
         params.totalDuration ??
         scaledFiles.reduce(
-          (sum, f) =>
+          (
+            sum,
+            scene
+          ) =>
             sum +
-            f.displayDuration,
+            scene.displayDuration,
           0
         );
 
-      const vol =
-        audio.volume ?? 0.7;
+      const volume =
+        audio.volume ??
+        0.7;
 
-      const fi =
-        audio.fadeIn ?? 0.5;
+      const fadeIn =
+        audio.fadeIn ??
+        0.5;
 
-      const fo =
-        audio.fadeOut ?? 1;
+      const fadeOut =
+        audio.fadeOut ??
+        1;
 
       await runFfmpeg([
         "-i",
@@ -962,12 +1446,14 @@ export async function renderWithFfmpeg(
         audioFile,
 
         "-filter_complex",
-        `[1:a]volume=${vol},` +
-          `afade=t=in:st=0:d=${fi},` +
+
+        `[1:a]volume=${volume},` +
+          `afade=t=in:st=0:d=${fadeIn},` +
           `afade=t=out:st=${Math.max(
             0,
-            totalDur - fo
-          )}:d=${fo},` +
+            totalDur -
+              fadeOut
+          )}:d=${fadeOut},` +
           `apad[a]`,
 
         "-map",
@@ -1004,23 +1490,44 @@ export async function renderWithFfmpeg(
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Return finished MP4                                                    */
+    /* Finished                                                               */
     /* ---------------------------------------------------------------------- */
 
+    console.log(
+      "[FFmpeg Render Complete]",
+      {
+        outputPath:
+          outPath,
+        filename:
+          outFile,
+      }
+    );
+
     return {
-      downloadUrl: outPath,
-      filename: outFile,
-      outputPath: outPath,
+      downloadUrl:
+        outPath,
+
+      filename:
+        outFile,
+
+      outputPath:
+        outPath,
     };
   } finally {
     /*
-     * Delete ONLY intermediate files.
+     * Only remove intermediate files.
      *
-     * outPath is intentionally NOT deleted here.
-     * route.ts will stream it and delete it after the stream closes.
+     * Do NOT delete outPath here because route.ts still
+     * needs to stream the finished MP4.
      */
-    for (const f of tempFiles) {
-      unlink(f).catch(() => {});
+
+    for (
+      const file of
+      tempFiles
+    ) {
+      unlink(
+        file
+      ).catch(() => {});
     }
   }
 }
