@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       }
 
       const nodeStream = createReadStream(outputPath);
-      const body = Readable.toWeb(nodeStream);
+      const body = Readable.toWeb(nodeStream) as unknown as BodyInit;
 
       nodeStream.on("error", (error) => {
         console.error("[render stream]", error);
