@@ -3850,58 +3850,40 @@ export default function EditorShell({
   }
 
   const handleExport = async () => {
-  setExporting(true);
-
   try {
-    const store = useEditorStore.getState();
+    setExporting(true);
 
-    if (store.scenes.length !== 1) {
-      toast.error("Direct download currently supports one scene only.");
-      return;
-    }
-
-    const scene = store.scenes[0];
-
-    const clip = scene.clipId
-      ? store.clips.find((c) => c.id === scene.clipId)
-      : null;
-
-    const videoUrl = scene.clipSrc || clip?.src;
+    // Replace this with the URL holding your final video
+    const videoUrl = finalVideoUrl;
 
     if (!videoUrl) {
-      toast.error("Video not found.");
+      toast.error("No video available to download.");
       return;
     }
 
     const response = await fetch(videoUrl);
-
-    if (!response.ok) {
-      throw new Error("Could not load video.");
-    }
-
     const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+
+    const downloadUrl = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
-    a.href = url;
-    a.download =
-      `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
+    a.href = downloadUrl;
+    a.download = `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
 
     document.body.appendChild(a);
     a.click();
-    a.remove();
+    document.body.removeChild(a);
 
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(downloadUrl);
 
     toast.success("Video downloaded successfully.");
   } catch (error) {
-    console.error("[export]", error);
-    toast.error("Video download failed.");
+    console.error("[download]", error);
+    toast.error("Download failed.");
   } finally {
     setExporting(false);
   }
 };
-
     if (!exportScenes.some((scene) => scene.clipData)) {
       toast.error("No media found to export.");
       return;
