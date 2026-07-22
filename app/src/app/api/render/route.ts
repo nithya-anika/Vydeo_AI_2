@@ -42,15 +42,16 @@ export async function POST(req: NextRequest) {
     const result = await renderVideo({ scenes, audio, brand, aspectRatio, totalDuration, outputFilename: filename });
 
     if (result.engine === "local") {
-      if (!result.outputPath) {
+      const outputPath = result.outputPath;
+      if (!outputPath) {
         return NextResponse.json({ error: "Render failed.", message: "Local output path missing." }, { status: 500 });
       }
-      const stream = createReadStream(result.outputPath);
+      const stream = createReadStream(outputPath);
       stream.on("error", (err) => {
         console.error("stream error", err);
       });
       stream.on("close", () => {
-        unlink(result.outputPath).catch(() => {});
+        unlink(outputPath).catch(() => {});
       });
       return new NextResponse(stream, {
         headers: {
