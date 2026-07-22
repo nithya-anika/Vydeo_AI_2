@@ -2,17 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createReadStream } from "fs";
 import { unlink } from "fs/promises";
 import { Readable } from "stream";
-
-import {
-  renderVideo,
-  getEngineType,
-} from "@/lib/transcoder";
-
-import type {
-  SceneInput,
-  AudioInput,
-  BrandRenderInput,
-} from "@/lib/transcoder";
+import { renderVideo, getEngineType } from "@/lib/transcoder";
+import type { SceneInput, AudioInput, BrandRenderInput } from "@/lib/transcoder";
 
 export const maxDuration = 300;
 
@@ -113,8 +104,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Create Node.js file stream
       const nodeStream = createReadStream(outputPath);
+      const body = Readable.toWeb(nodeStream);
 
       nodeStream.on("error", (error) => {
         console.error("[render stream]", error);
@@ -130,12 +121,7 @@ export async function POST(req: NextRequest) {
         });
       });
 
-      // Convert Node.js stream → Web ReadableStream
-      const webStream =
-        Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
-
-      return new NextResponse(webStream, {
-        status: 200,
+      return new NextResponse(body, {
         headers: {
           "Content-Type": "video/mp4",
           "Content-Disposition": `attachment; filename="${result.filename}"`,
