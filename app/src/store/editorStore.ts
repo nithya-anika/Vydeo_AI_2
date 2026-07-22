@@ -228,6 +228,20 @@ const DEFAULT_CAPTION: Omit<Caption, "id" | "startTime" | "endTime" | "text"> = 
 };
 
 const DEFAULT_TRANSITION: Transition = { type: "fade", duration: 0.5 };
+const DEFAULT_BRAND_KIT: BrandKit = {
+  id: "default-brand",
+  name: "Brand Kit",
+  logo: null,
+  primaryColor: "#6366F1",
+  secondaryColor: "#111827",
+  accentColor: "#A78BFA",
+  fontHeading: "Inter",
+  fontBody: "Inter",
+  captionStyle: {},
+  watermark: null,
+  intro: null,
+  outro: null,
+};
 
 function makeDemoScene(order: number): Scene {
   return {
@@ -381,11 +395,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setIsDemoMode: (v) => set({ isDemoMode: v }),
 
   // ── Brand ─────────────────────────────────────────────────────────────────
-  setBrandKit: (kit) => set({ brandKit: kit }),
+  setBrandKit: (kit) => set({ brandKit: kit, isDirty: true }),
   updateBrandKit: (patch) => {
-    const current = get().brandKit;
-    if (!current) return;
-    set({ brandKit: { ...current, ...patch } });
+    const current = get().brandKit ?? {
+      ...DEFAULT_BRAND_KIT,
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : uuidv4(),
+    };
+    set({ brandKit: { ...current, ...patch }, isDirty: true });
   },
 
   // ── Bulk ──────────────────────────────────────────────────────────────────

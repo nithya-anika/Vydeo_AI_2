@@ -206,16 +206,16 @@ const LEFT_TABS: { id: LeftTab; label: string; Icon: React.ElementType }[] = [
 ];
 
 const MUSIC_TRACKS = [
-  { name: "Cinematic Rise", dur: "2:34", genre: "Cinematic", bpm: 92, energy: "High", mood: "Epic" },
-  { name: "Deep Focus", dur: "3:12", genre: "Ambient", bpm: 72, energy: "Low", mood: "Calm" },
-  { name: "Upbeat Drive", dur: "1:58", genre: "Pop", bpm: 128, energy: "High", mood: "Energetic" },
-  { name: "Lo-Fi Chill", dur: "4:01", genre: "Lo-Fi", bpm: 85, energy: "Low", mood: "Relaxed" },
-  { name: "Epic Trailer", dur: "2:20", genre: "Cinematic", bpm: 110, energy: "High", mood: "Intense" },
-  { name: "Luxury Brand", dur: "1:45", genre: "Ambient", bpm: 60, energy: "Low", mood: "Premium" },
-  { name: "Tech Corporate", dur: "2:10", genre: "Electronic", bpm: 120, energy: "Medium", mood: "Professional" },
-  { name: "Summer Vibes", dur: "2:55", genre: "Pop", bpm: 115, energy: "High", mood: "Happy" },
-  { name: "Dark Minimal", dur: "3:30", genre: "Electronic", bpm: 95, energy: "Medium", mood: "Mysterious" },
-  { name: "Acoustic Warm", dur: "2:48", genre: "Acoustic", bpm: 80, energy: "Low", mood: "Friendly" },
+  { name: "Cinematic Rise", dur: "2:34", duration: 154, genre: "Cinematic", bpm: 92, energy: "High", mood: "Epic", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+  { name: "Deep Focus", dur: "3:12", duration: 192, genre: "Ambient", bpm: 72, energy: "Low", mood: "Calm", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+  { name: "Upbeat Drive", dur: "1:58", duration: 118, genre: "Pop", bpm: 128, energy: "High", mood: "Energetic", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
+  { name: "Lo-Fi Chill", dur: "4:01", duration: 241, genre: "Lo-Fi", bpm: 85, energy: "Low", mood: "Relaxed", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+  { name: "Epic Trailer", dur: "2:20", duration: 140, genre: "Cinematic", bpm: 110, energy: "High", mood: "Intense", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
+  { name: "Luxury Brand", dur: "1:45", duration: 105, genre: "Ambient", bpm: 60, energy: "Low", mood: "Premium", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
+  { name: "Tech Corporate", dur: "2:10", duration: 130, genre: "Electronic", bpm: 120, energy: "Medium", mood: "Professional", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
+  { name: "Summer Vibes", dur: "2:55", duration: 175, genre: "Pop", bpm: 115, energy: "High", mood: "Happy", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
+  { name: "Dark Minimal", dur: "3:30", duration: 210, genre: "Electronic", bpm: 95, energy: "Medium", mood: "Mysterious", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3" },
+  { name: "Acoustic Warm", dur: "2:48", duration: 168, genre: "Acoustic", bpm: 80, energy: "Low", mood: "Friendly", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3" },
 ];
 
 const TRANSITIONS_LIST = [
@@ -386,9 +386,9 @@ function MusicStudio({
     addAudioTrack({
       id: crypto.randomUUID(),
       name: t.name,
-      src: "",
-      file: null as unknown as File,
-      duration: 150,
+      src: t.src,
+      file: new File([], `${t.name}.mp3`, { type: "audio/mpeg" }),
+      duration: t.duration,
       volume: 0.8,
       fadeIn: 0.5,
       fadeOut: 1.0,
@@ -749,7 +749,7 @@ function ColorStudio({
 
 function LeftPanelContent({ tab, onOpenInspector }: { tab: LeftTab; onOpenInspector?: () => void }) {
   const {
-    scenes, activeSceneId, clips,
+    scenes, activeSceneId, clips, totalDuration,
     addCaption, updateScene, setInspectorTarget, removeCaption,
     addClip, assignClip, setActiveScene,
     addAudioTrack,
@@ -814,16 +814,23 @@ function LeftPanelContent({ tab, onOpenInspector }: { tab: LeftTab; onOpenInspec
     const file = e.target.files?.[0];
     if (!file) return;
     const src = URL.createObjectURL(file);
-    const audio = document.createElement("audio");
-    audio.preload = "metadata";
-    audio.onloadedmetadata = () => {
+    const trackId = crypto.randomUUID();
+    let added = false;
+    const addTrack = (duration: number) => {
+      if (added) return;
+      added = true;
       addAudioTrack({
-        id: crypto.randomUUID(), name: file.name.replace(/\.[^.]+$/, ""),
-        src, file, duration: audio.duration,
+        id: trackId, name: file.name.replace(/\.[^.]+$/, ""),
+        src, file, duration,
         volume: 0.8, fadeIn: 0.5, fadeOut: 0.5, startTime: 0, muted: false, type: "bgm",
       });
     };
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => addTrack(Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : totalDuration || 60);
+    audio.onerror = () => addTrack(totalDuration || 60);
     audio.src = src;
+    window.setTimeout(() => addTrack(totalDuration || 60), 1500);
     e.target.value = "";
   }
 
@@ -2743,7 +2750,7 @@ function CanvasPreview({
   onCaptionClick?: (sceneId: string, captionId: string) => void;
   transportVideoRef?: { current: HTMLVideoElement | null };
 }) {
-  const { scenes, activeSceneId, aspectRatio } = useEditorStore();
+  const { scenes, activeSceneId, aspectRatio, brandKit } = useEditorStore();
   const activeScene = scenes.find((s) => s.id === activeSceneId) ?? scenes[0];
   const resolvedActiveSceneId = activeScene?.id ?? null;
 
@@ -3118,6 +3125,25 @@ function CanvasPreview({
         >
           {aspectRatio}
         </div>
+
+        {/* Brand logo watermark */}
+        {brandKit?.logo && (
+          <img
+            src={brandKit.logo}
+            alt="Brand logo"
+            style={{
+              position: "absolute",
+              left: 12,
+              top: 12,
+              maxWidth: Math.max(42, previewW * 0.18),
+              maxHeight: Math.max(28, previewH * 0.1),
+              objectFit: "contain",
+              filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.65))",
+              pointerEvents: "none",
+              zIndex: 8,
+            }}
+          />
+        )}
 
         {/* Timecode pill — isolated component so it re-renders each frame without pulling CanvasPreview along */}
         <TimecodePill />
@@ -3849,100 +3875,152 @@ export default function EditorShell({
     e.preventDefault();
   }
 
-  const handleExport = async () => {
-  try {
-    setExporting(true);
-
-    // Replace this with the URL holding your final video
-    const videoUrl = finalVideoUrl;
-
-    if (!videoUrl) {
-      toast.error("No video available to download.");
-      return;
-    }
-
-    const response = await fetch(videoUrl);
-    const blob = await response.blob();
-
-    const downloadUrl = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.download = `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    URL.revokeObjectURL(downloadUrl);
-
-    toast.success("Video downloaded successfully.");
-  } catch (error) {
-    console.error("[download]", error);
-    toast.error("Download failed.");
-  } finally {
-    setExporting(false);
-  }
-};
-    if (!exportScenes.some((scene) => scene.clipData)) {
-      toast.error("No media found to export.");
-      return;
-    }
-
-    const res = await fetch("/api/render", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-
-      body: JSON.stringify({
-        scenes: exportScenes,
-
-        aspectRatio: store.aspectRatio,
-
-        totalDuration: exportScenes.reduce(
-          (sum, scene) => sum + scene.duration,
-          0
-        ),
-
-        outputFilename:
-          `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
-      }),
+  function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result;
+        if (typeof result !== "string") {
+          reject(new Error("Failed to convert media to data URL."));
+        } else {
+          resolve(result);
+        }
+      };
+      reader.onerror = () => reject(new Error("Failed to convert media to data URL."));
+      reader.readAsDataURL(blob);
     });
+  }
 
-    const data = await res.json().catch(() => ({}));
+  function getExtensionFromUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url, window.location.href);
+      const match = parsed.pathname.match(/\.([a-zA-Z0-9]+)$/);
+      return match ? match[1].toLowerCase() : null;
+    } catch {
+      return null;
+    }
+  }
 
-    if (!res.ok || !data.downloadUrl) {
-      throw new Error(
-        data.message ??
-        data.error ??
-        "Export failed."
-      );
+  async function fileToDataUrl(file: File): Promise<string> {
+    return blobToDataUrl(file);
+  }
+
+  const buildRenderScene = async (scene: any) => {
+    const clip = scene.clipId ? clips.find((item) => item.id === scene.clipId) : null;
+    let clipData: string | null = null;
+    let clipMime = clip?.file?.type ?? "";
+    let clipExt = clip?.file?.name?.split(".").pop()?.toLowerCase() ?? getExtensionFromUrl(scene.clipSrc ?? "") ?? "";
+
+    if (clip?.file) {
+      clipData = await fileToDataUrl(clip.file);
+      clipMime = clip.file.type || clipMime;
+      clipExt = clipExt || (clip.file.name.split(".").pop()?.toLowerCase() ?? "");
+    } else if (scene.clipSrc) {
+      const response = await fetch(scene.clipSrc);
+      if (!response.ok) throw new Error(`Could not fetch clip for scene ${scene.label}`);
+      const blob = await response.blob();
+      clipMime = blob.type || clipMime;
+      clipExt = clipExt || (getExtensionFromUrl(scene.clipSrc) ?? "");
+      clipData = await blobToDataUrl(blob);
     }
 
-    const a = document.createElement("a");
+    if (!clipData && clip?.file) {
+      clipData = await fileToDataUrl(clip.file);
+    }
 
-    a.href = data.downloadUrl;
-    a.download = data.filename ?? "export.mp4";
+    if (!clipData) {
+      throw new Error(`Scene ${scene.label} is missing media. Please add a video or image clip to this scene.`);
+    }
 
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    return {
+      id: scene.id,
+      label: scene.label,
+      duration: scene.duration,
+      clipType: scene.clipType ?? clip?.type ?? "video",
+      clipMime: clipMime || undefined,
+      clipExt: clipExt || undefined,
+      clipData,
+      playbackSpeed: scene.playbackRate ?? 1,
+      clipTrimStart: scene.clipTrimStart,
+      clipTrimEnd: scene.clipTrimEnd,
+      visualEffect: scene.visualEffect,
+      transition: scene.transition,
+      captions: scene.captions?.map((caption: any) => ({
+        text: caption.text,
+        startTime: caption.startTime,
+        endTime: caption.endTime,
+        fontFamily: caption.fontFamily,
+        fontSize: caption.fontSize,
+        color: caption.color,
+        bgColor: caption.bgColor,
+        bgOpacity: caption.bgOpacity,
+        bold: caption.bold,
+        x: caption.x,
+        y: caption.y,
+        align: caption.align,
+      })) ?? [],
+    };
+  };
 
-    toast.success("Export ready — downloading now.");
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const payloadScenes = await Promise.all(scenes.map(buildRenderScene));
+      if (!payloadScenes.some((scene) => scene.clipData)) {
+        toast.error("No media found to export.");
+        return;
+      }
 
-  } catch (error) {
-    console.error("[export]", error);
+      const res = await fetch("/api/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenes: payloadScenes,
+          aspectRatio,
+          totalDuration: payloadScenes.reduce((sum, scene) => sum + scene.duration, 0),
+          outputFilename: `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
+        }),
+      });
 
-    toast.error(
-      error instanceof Error
-        ? error.message
-        : "Export failed. Please try again."
-    );
-  } finally {
-    setExporting(false);
-  }
-};
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({}));
+        throw new Error(errorBody.error ?? errorBody.message ?? "Export failed. Please try again.");
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.startsWith("video/")) {
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        toast.success("Export ready — downloading now.");
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!data.downloadUrl) {
+        throw new Error(data.error ?? data.message ?? "Export failed. Please try again.");
+      }
+
+      const a = document.createElement("a");
+      a.href = data.downloadUrl;
+      a.download = data.filename ?? `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success("Export ready — downloading now.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[export]", error);
+      toast.error(message || "Export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const actualLeftWidth = leftCollapsed ? 48 : leftWidth;
   const actualRightWidth = rightCollapsed ? 0 : rightWidth;
