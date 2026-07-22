@@ -3951,17 +3951,13 @@ export default function EditorShell({
     return dataUrl;
   };
 
+  const clipSrc = scene.clipSrc ?? clip?.src ?? null;
+
   // ---------------------------------------------------------
   // 1. Prefer original File object
   // ---------------------------------------------------------
 
-  if (clip?.file instanceof File) {
-    if (clip.file.size === 0) {
-      throw new Error(
-        `Scene "${scene.label}" contains an empty media file.`
-      );
-    }
-
+  if (clip?.file instanceof File && clip.file.size > 0) {
     console.log("[Export] Using original file:", {
       scene: scene.label,
       name: clip.file.name,
@@ -3987,23 +3983,27 @@ export default function EditorShell({
     clipData = await fileToDataUrl(
       clip.file
     );
+  } else if (clip?.file instanceof File && clip.file.size === 0) {
+    console.warn(
+      `[Export] Skipping empty placeholder file for scene "${scene.label}" and falling back to clipSrc/clip.src.`
+    );
   }
 
   // ---------------------------------------------------------
-  // 2. Otherwise fetch scene.clipSrc
+  // 2. Otherwise fetch scene.clipSrc or clip.src
   // ---------------------------------------------------------
 
-  else if (scene.clipSrc) {
+  else if (clipSrc) {
     console.log(
       "[Export] Fetching scene media:",
       {
         scene: scene.label,
-        src: scene.clipSrc.slice(0, 100),
+        src: String(clipSrc).slice(0, 100),
       }
     );
 
     const response = await fetch(
-      scene.clipSrc
+      clipSrc
     );
 
     if (!response.ok) {
