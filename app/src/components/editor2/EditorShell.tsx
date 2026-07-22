@@ -3984,9 +3984,15 @@ export default function EditorShell({
       clip.file
     );
   } else if (clip?.file instanceof File && clip.file.size === 0) {
-    console.warn(
-      `[Export] Skipping empty placeholder file for scene "${scene.label}" and falling back to clipSrc/clip.src.`
-    );
+    if (clipSrc) {
+      console.warn(
+        `[Export] Skipping empty placeholder file for scene "${scene.label}" and falling back to clipSrc/clip.src.`
+      );
+    } else {
+      throw new Error(
+        `Scene "${scene.label}" has no media data because its placeholder file is empty and no clipSrc/clip.src fallback is available.`
+      );
+    }
   }
 
   // ---------------------------------------------------------
