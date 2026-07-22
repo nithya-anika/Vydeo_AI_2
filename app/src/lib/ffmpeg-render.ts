@@ -1,5 +1,5 @@
 /**
- * Local FFmpeg rendering — fallback when GCS_BUCKET is not configured.
+ * Local FFmpeg rendering — the fallback when GCS_BUCKET is not configured.
  */
 
 import { writeFile, mkdir, unlink } from "fs/promises";
@@ -8,11 +8,20 @@ import os from "os";
 import path from "path";
 import { spawn } from "child_process";
 import { v4 as uuidv4 } from "uuid";
-
 import type { RenderCaption, RenderParams } from "./transcoder";
 
 /* -------------------------------------------------------------------------- */
-/* FFmpeg                                                                     */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export type FfmpegRenderResult = {
+  downloadUrl: string;
+  filename: string;
+  outputPath: string;
+};
+
+/* -------------------------------------------------------------------------- */
+/* FFmpeg helpers                                                             */
 /* -------------------------------------------------------------------------- */
 
 function findFfmpeg(): string {
@@ -37,7 +46,7 @@ function findFfmpeg(): string {
       return installer.path;
     }
   } catch {
-    // Ignore and fall back to PATH.
+    // Ignore and fall back to PATH ffmpeg.
   }
 
   return "ffmpeg";
@@ -53,33 +62,32 @@ function runFfmpeg(args: string[]): Promise<void> {
 
     let stderr = "";
 
-    proc.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
+    proc.stderr?.on("data", (d: Buffer) => {
+      stderr += d.toString();
     });
 
     proc.on("close", (code) => {
       if (code === 0) {
         resolve();
-        return;
+      } else {
+        reject(
+          new Error(
+            `FFmpeg exited ${code}: ${stderr.slice(-800)}`
+          )
+        );
       }
-
-      reject(
-        new Error(
-          `FFmpeg exited ${code}: ${stderr.slice(-800)}`
-        )
-      );
     });
 
-    proc.on("error", (error) => {
+    proc.on("error", (e) => {
       reject(
-        new Error(`FFmpeg spawn: ${error.message}`)
+        new Error(`FFmpeg spawn: ${e.message}`)
       );
     });
   });
 }
 
 /* -------------------------------------------------------------------------- */
-/* Base64 files                                                               */
+/* File helpers                                                               */
 /* -------------------------------------------------------------------------- */
 
 async function saveBase64(
@@ -87,25 +95,28 @@ async function saveBase64(
   ext: string,
   dir: string
 ): Promise<string> {
-  const separator = dataUrl.indexOf(",");
+  const sep = dataUrl.indexOf(",");
 
-  if (separator === -1) {
+  if (sep === -1) {
     throw new Error("Expected base64 data-url");
   }
 
-  const buffer = Buffer.from(
-    dataUrl.slice(separator + 1),
+  const buf = Buffer.from(
+    dataUrl.slice(sep + 1),
     "base64"
   );
 
-  const actualExt = dataUrlExt(dataUrl, ext);
+  const actualExt = dataUrlExt(
+    dataUrl,
+    ext
+  );
 
   const file = path.join(
     dir,
     `${uuidv4()}.${actualExt}`
   );
 
-  await writeFile(file, buffer);
+  await writeFile(file, buf);
 
   return file;
 }
@@ -139,7 +150,7 @@ function dataUrlExt(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Colors                                                                     */
+/* Caption helpers                                                            */
 /* -------------------------------------------------------------------------- */
 
 function normalizeHexColor(
@@ -157,11 +168,9 @@ function normalizeHexColor(
     : fallback;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Captions                                                                   */
-/* -------------------------------------------------------------------------- */
-
-function escapeDrawtext(value: string): string {
+function escapeDrawtext(
+  value: string
+): string {
   return value
     .replace(/\\/g, "\\\\")
     .replace(/'/g, "\\'")
@@ -234,7 +243,9 @@ function captionToFilter(
       Math.min(95, caption.y ?? 84)
     ) / 100;
 
-  const yPx = Math.round(height * yPct);
+  const yPx = Math.round(
+    height * yPct
+  );
 
   const weight = caption.bold
     ? ":font='Inter:style=Bold'"
@@ -255,13 +266,13 @@ function captionToFilter(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Aspect ratios                                                              */
+/* Dimensions                                                                 */
 /* -------------------------------------------------------------------------- */
 
 export function ratioDimensions(
-  ratio: string
+  r: string
 ): [number, number] {
-  switch (ratio) {
+  switch (r) {
     case "16:9":
       return [1920, 1080];
 
@@ -376,7 +387,7 @@ export function effectToVfFilter(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Audio speed                                                                */
+/* Playback speed                                                             */
 /* -------------------------------------------------------------------------- */
 
 export function buildAtempoChain(
@@ -384,20 +395,20 @@ export function buildAtempoChain(
 ): string {
   const filters: string[] = [];
 
-  let rate = speed;
+  let r = speed;
 
-  while (rate > 2.0 + 1e-6) {
+  while (r > 2.0 + 1e-6) {
     filters.push("atempo=2.0");
-    rate /= 2.0;
+    r /= 2.0;
   }
 
-  while (rate < 0.5 - 1e-6) {
+  while (r < 0.5 - 1e-6) {
     filters.push("atempo=0.5");
-    rate /= 0.5;
+    r /= 0.5;
   }
 
   filters.push(
-    `atempo=${rate.toFixed(6)}`
+    `atempo=${r.toFixed(6)}`
   );
 
   return filters.join(",");
@@ -412,6 +423,8 @@ export function toXfadeType(
 ): string {
   switch (type) {
     case "fade":
+      return "fade";
+
     case "cinematic-fade":
       return "fade";
 
@@ -439,16 +452,6 @@ export function toXfadeType(
     default:
       return "";
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Render result                                                              */
-/* -------------------------------------------------------------------------- */
-
-export interface FfmpegRenderResult {
-  downloadUrl: string;
-  filename: string;
-  outputPath: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -500,20 +503,20 @@ export async function renderWithFfmpeg(
 
   try {
     /* ---------------------------------------------------------------------- */
-    /* Detect transitions                                                     */
+    /* Determine whether transitions are needed                               */
     /* ---------------------------------------------------------------------- */
 
     const useXfade = scenes.some(
-      (scene, index) =>
-        index < scenes.length - 1 &&
-        scene.transition &&
+      (s, i) =>
+        i < scenes.length - 1 &&
+        s.transition &&
         toXfadeType(
-          scene.transition.type
+          s.transition.type
         ) !== ""
     );
 
     /* ---------------------------------------------------------------------- */
-    /* Prepare clips                                                          */
+    /* Prepare scenes                                                         */
     /* ---------------------------------------------------------------------- */
 
     const scaledFiles: {
@@ -566,18 +569,15 @@ export async function renderWithFfmpeg(
       const fileDur =
         displayDur + overlapSec;
 
-      /* Placeholder */
+      /* Missing clip fallback */
 
       if (!scene.clipData) {
-        const placeholder =
-          path.join(
-            tmpDir,
-            `ph-${scene.id}.mp4`
-          );
-
-        tempFiles.push(
-          placeholder
+        const ph = path.join(
+          tmpDir,
+          `ph-${scene.id}.mp4`
         );
+
+        tempFiles.push(ph);
 
         await runFfmpeg([
           "-f",
@@ -591,13 +591,12 @@ export async function renderWithFfmpeg(
           "-pix_fmt",
           "yuv420p",
           "-y",
-          placeholder,
+          ph,
         ]);
 
         scaledFiles.push({
-          file: placeholder,
-          displayDuration:
-            displayDur,
+          file: ph,
+          displayDuration: displayDur,
           xfadeType,
           xfadeDur,
         });
@@ -605,7 +604,7 @@ export async function renderWithFfmpeg(
         continue;
       }
 
-      /* Save uploaded media */
+      /* Save media */
 
       const ext =
         scene.clipExt ??
@@ -628,6 +627,8 @@ export async function renderWithFfmpeg(
       );
 
       tempFiles.push(scaled);
+
+      /* Build video filters */
 
       const scaleFilter =
         `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
@@ -655,7 +656,7 @@ export async function renderWithFfmpeg(
         .filter(Boolean)
         .join(",");
 
-      /* Image */
+      /* Image clip */
 
       if (
         scene.clipType === "image"
@@ -665,28 +666,30 @@ export async function renderWithFfmpeg(
           "1",
           "-i",
           raw,
+
           "-vf",
           vf,
+
           "-c:v",
           "libx264",
+
           "-t",
           String(fileDur),
+
           "-pix_fmt",
           "yuv420p",
+
           "-y",
           scaled,
         ]);
-      }
+      } else {
+        /* Video clip */
 
-      /* Video */
-
-      else {
         const inputArgs: string[] =
           [];
 
         if (
-          scene.clipTrimStart !=
-            null &&
+          scene.clipTrimStart != null &&
           scene.clipTrimStart > 0
         ) {
           inputArgs.push(
@@ -749,7 +752,7 @@ export async function renderWithFfmpeg(
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Concatenate                                                            */
+    /* Concatenate scenes                                                     */
     /* ---------------------------------------------------------------------- */
 
     const concatenated =
@@ -775,11 +778,9 @@ export async function renderWithFfmpeg(
         "-y",
         concatenated,
       ]);
-    }
+    } else if (!useXfade) {
+      /* Simple cuts */
 
-    /* No transitions */
-
-    else if (!useXfade) {
       const listFile =
         path.join(
           tmpDir,
@@ -794,8 +795,8 @@ export async function renderWithFfmpeg(
         listFile,
         scaledFiles
           .map(
-            (scene) =>
-              `file '${scene.file}'`
+            (s) =>
+              `file '${s.file}'`
           )
           .join("\n")
       );
@@ -816,16 +817,14 @@ export async function renderWithFfmpeg(
         "-y",
         concatenated,
       ]);
-    }
+    } else {
+      /* Xfade transitions */
 
-    /* Transitions */
-
-    else {
       const inputArgs =
         scaledFiles.flatMap(
-          (scene) => [
+          (sf) => [
             "-i",
-            scene.file,
+            sf.file,
           ]
         );
 
@@ -833,7 +832,6 @@ export async function renderWithFfmpeg(
         string[] = [];
 
       let prevLabel = "[0:v]";
-
       let timeAcc = 0;
 
       for (
@@ -842,7 +840,7 @@ export async function renderWithFfmpeg(
         scaledFiles.length - 1;
         i++
       ) {
-        const scene =
+        const sf =
           scaledFiles[i];
 
         const isLastTransition =
@@ -857,26 +855,26 @@ export async function renderWithFfmpeg(
         const nextLabel =
           `[${i + 1}:v]`;
 
-        if (scene.xfadeType) {
+        if (sf.xfadeType) {
           const offset =
             Math.max(
               0,
               timeAcc +
-                scene.displayDuration -
-                scene.xfadeDur
+                sf.displayDuration -
+                sf.xfadeDur
             );
 
           filterParts.push(
             `${prevLabel}${nextLabel}` +
-              `xfade=transition=${scene.xfadeType}` +
-              `:duration=${scene.xfadeDur.toFixed(4)}` +
+              `xfade=transition=${sf.xfadeType}` +
+              `:duration=${sf.xfadeDur.toFixed(4)}` +
               `:offset=${offset.toFixed(4)}` +
               `${outLabel}`
           );
 
           timeAcc +=
-            scene.displayDuration -
-            scene.xfadeDur;
+            sf.displayDuration -
+            sf.xfadeDur;
         } else {
           filterParts.push(
             `${prevLabel}${nextLabel}` +
@@ -885,7 +883,7 @@ export async function renderWithFfmpeg(
           );
 
           timeAcc +=
-            scene.displayDuration;
+            sf.displayDuration;
         }
 
         prevLabel = outLabel;
@@ -912,7 +910,7 @@ export async function renderWithFfmpeg(
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Background music                                                       */
+    /* Add background audio                                                   */
     /* ---------------------------------------------------------------------- */
 
     if (audio?.src) {
@@ -941,19 +939,19 @@ export async function renderWithFfmpeg(
       const totalDur =
         params.totalDuration ??
         scaledFiles.reduce(
-          (sum, scene) =>
+          (sum, f) =>
             sum +
-            scene.displayDuration,
+            f.displayDuration,
           0
         );
 
-      const volume =
+      const vol =
         audio.volume ?? 0.7;
 
-      const fadeIn =
+      const fi =
         audio.fadeIn ?? 0.5;
 
-      const fadeOut =
+      const fo =
         audio.fadeOut ?? 1;
 
       await runFfmpeg([
@@ -964,12 +962,12 @@ export async function renderWithFfmpeg(
         audioFile,
 
         "-filter_complex",
-        `[1:a]volume=${volume},` +
-          `afade=t=in:st=0:d=${fadeIn},` +
+        `[1:a]volume=${vol},` +
+          `afade=t=in:st=0:d=${fi},` +
           `afade=t=out:st=${Math.max(
             0,
-            totalDur - fadeOut
-          )}:d=${fadeOut},` +
+            totalDur - fo
+          )}:d=${fo},` +
           `apad[a]`,
 
         "-map",
@@ -1006,7 +1004,7 @@ export async function renderWithFfmpeg(
     }
 
     /* ---------------------------------------------------------------------- */
-    /* IMPORTANT: outputPath is now part of the declared return type          */
+    /* Return finished MP4                                                    */
     /* ---------------------------------------------------------------------- */
 
     return {
@@ -1016,13 +1014,13 @@ export async function renderWithFfmpeg(
     };
   } finally {
     /*
-     * Delete intermediate files.
+     * Delete ONLY intermediate files.
      *
-     * Do NOT delete outPath here.
-     * Your API route needs it so it can stream the finished MP4.
+     * outPath is intentionally NOT deleted here.
+     * route.ts will stream it and delete it after the stream closes.
      */
-    for (const file of tempFiles) {
-      unlink(file).catch(() => {});
+    for (const f of tempFiles) {
+      unlink(f).catch(() => {});
     }
   }
 }
