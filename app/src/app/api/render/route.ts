@@ -5,11 +5,31 @@ import { renderVideo, getEngineType } from "@/lib/transcoder";
 import type { SceneInput, AudioInput, BrandRenderInput } from "@/lib/transcoder";
 
 export const maxDuration = 300;
+const MAX_RENDER_REQUEST_BYTES = 3_000_000;
 
 export async function POST(req: NextRequest) {
   try {
+    const rawBody = await req.text();
+    const bodySize = Buffer.byteLength(rawBody, "utf8");
+
+    if (bodySize > MAX_RENDER_REQUEST_BYTES) {
+      return NextResponse.json(
+        {
+          error: "Export payload is too large for this environment. Please reduce the number of clips or shorten the project before exporting.",
+        },
+        { status: 413 }
+      );
+    }
+
     // Parse request body
-    const body = await req.json();
+    const body = JSON.parse(rawBody) as {
+      scenes: SceneInput[];
+      audio?: AudioInput;
+      brand?: BrandRenderInput;
+      aspectRatio?: string;
+      totalDuration?: number;
+      outputFilename?: string;
+    };
 
     const {
       scenes,
