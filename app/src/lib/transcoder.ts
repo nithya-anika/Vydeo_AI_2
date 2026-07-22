@@ -18,11 +18,14 @@ export interface SceneInput {
   duration: number;
   clipData?: string;   // base64 data-url or "data:video/mp4;base64,..."
   clipType?: "video" | "image";
+  clipMime?: string;
+  clipExt?: string;
   clipTrimStart?: number;
   clipTrimEnd?: number;
   playbackSpeed?: number;
   visualEffect?: string;
   transition?: { type: string; duration: number };
+  captions?: RenderCaption[];
 }
 
 export interface AudioInput {
@@ -32,9 +35,34 @@ export interface AudioInput {
   fadeOut?: number;
 }
 
+export interface RenderCaption {
+  text: string;
+  startTime: number;
+  endTime: number;
+  fontFamily?: string;
+  fontSize?: number;
+  color?: string;
+  bgColor?: string;
+  bgOpacity?: number;
+  bold?: boolean;
+  x?: number;
+  y?: number;
+  align?: "left" | "center" | "right";
+}
+
+export interface BrandRenderInput {
+  logoData?: string;
+  logoOpacity?: number;
+  logoStart?: number;
+  logoEnd?: number;
+  primaryColor?: string;
+  fontFamily?: string;
+}
+
 export interface RenderParams {
   scenes: SceneInput[];
   audio?: AudioInput;
+  brand?: BrandRenderInput;
   aspectRatio?: string;
   totalDuration?: number;
   outputFilename: string;
@@ -44,6 +72,7 @@ export interface RenderResult {
   downloadUrl: string;
   filename: string;
   engine: "cloud" | "local";
+  outputPath?: string;
 }
 
 // ── Engine detection ──────────────────────────────────────────────────────────

@@ -4,6 +4,36 @@ import { useState } from "react";
 import Link from "next/link";
 import { useEditorStore } from "@/store/editorStore";
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("Failed to convert media to data URL."));
+      } else {
+        resolve(result);
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to convert media to data URL."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function getExtensionFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url, window.location.href);
+    const match = parsed.pathname.match(/\.([a-zA-Z0-9]+)$/);
+    return match ? match[1].toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return blobToDataUrl(file);
+}
+
 function Btn({ children, onClick, title, variant = "ghost", style: s }: {
   children: React.ReactNode; onClick?: () => void; title?: string;
   variant?: "ghost" | "primary" | "secondary"; style?: React.CSSProperties;
@@ -50,25 +80,98 @@ function Svg({ d, size = 13 }: { d: string | string[]; size?: number }) {
 }
 
 export default function TopBar({ projectId }: { projectId?: string }) {
-  const { projectName, isDirty, setProjectName, scenes, audioTracks, aspectRatio } = useEditorStore();
+  const { projectName, isDirty, setProjectName, scenes, audioTracks, aspectRatio, clips } = useEditorStore();
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(projectName);
   const [exporting, setExporting] = useState(false);
 
+  const buildRenderScene = async (scene: any) => {
+    const clip = scene.clipId ? clips.find((item) => item.id === scene.clipId) : null;
+    let clipData: string | null = null;
+    let clipMime = clip?.file?.type ?? "";
+    let clipExt = clip?.file?.name?.split(".").pop()?.toLowerCase() ?? getExtensionFromUrl(scene.clipSrc ?? "") ?? "";
+
+    if (clip?.file) {
+      clipData = await fileToDataUrl(clip.file);
+      clipMime = clip.file.type || clipMime;
+      clipExt = clipExt || (clip.file.name.split(".").pop()?.toLowerCase() ?? "");
+    } else if (scene.clipSrc) {
+      const response = await fetch(scene.clipSrc);
+      if (!response.ok) throw new Error(`Could not fetch clip for scene ${scene.label}`);
+      const blob = await response.blob();
+      clipMime = blob.type || clipMime;
+      clipExt = clipExt || getExtensionFromUrl(scene.clipSrc) ?? "";
+      clipData = await blobToDataUrl(blob);
+    }
+
+    if (!clipData) {
+      throw new Error(`Scene ${scene.label} is missing media. Please select a clip or image for this scene.`);
+    }
+
+    return {
+      id: scene.id,
+      label: scene.label,
+      duration: scene.duration,
+      clipType: scene.clipType ?? clip?.type ?? "video",
+      clipMime: clipMime || undefined,
+      clipExt: clipExt || undefined,
+      clipData,
+      playbackSpeed: scene.playbackRate ?? 1,
+      clipTrimStart: scene.clipTrimStart,
+      clipTrimEnd: scene.clipTrimEnd,
+      visualEffect: scene.visualEffect,
+      transition: scene.transition,
+      captions: scene.captions?.map((caption: any) => ({
+        text: caption.text,
+        startTime: caption.startTime,
+        endTime: caption.endTime,
+        fontFamily: caption.fontFamily,
+        fontSize: caption.fontSize,
+        color: caption.color,
+        bgColor: caption.bgColor,
+        bgOpacity: caption.bgOpacity,
+        bold: caption.bold,
+        x: caption.x,
+        y: caption.y,
+        align: caption.align,
+      })) ?? [],
+    };
+  };
+
   const handleExport = async () => {
     setExporting(true);
     try {
+      const payloadScenes = await Promise.all(scenes.map(buildRenderScene));
       const res = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scenes: scenes.map(sc => ({ id: sc.id, label: sc.label, duration: sc.duration, clipType: sc.clipType })),
+          scenes: payloadScenes,
           aspectRatio,
           totalDuration: scenes.reduce((s, sc) => s + sc.duration, 0),
           outputFilename: `${projectName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
         }),
       });
-      const data = await res.json();
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({}));
+        console.error("Export failed", errorBody);
+        return;
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.startsWith("video/")) {
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${projectName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(a.href);
+          document.body.removeChild(a);
+        }, 1000);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
       if (data.downloadUrl) {
         const a = document.createElement("a");
         a.href = data.downloadUrl; a.download = data.filename ?? "export.mp4";

@@ -229,6 +229,14 @@ describe("Brand Kit — CRUD and Persistence", () => {
     expect(updated.primaryColor).toBe("#C9A96E");
   });
 
+  it("creates a brand kit when uploading a first logo", () => {
+    useEditorStore.getState().updateBrandKit({ logo: "blob:brand-logo" });
+    const kit = useEditorStore.getState().brandKit;
+    expect(kit).not.toBeNull();
+    expect(kit?.logo).toBe("blob:brand-logo");
+    expect(kit?.name).toBe("Brand Kit");
+  });
+
   it("persists to localStorage", () => {
     const kit = {
       id: "bk3", name: "Luxury Brand", logo: null,

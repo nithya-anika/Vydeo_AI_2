@@ -2,11 +2,10 @@
  * Local FFmpeg rendering — the fallback when GCS_BUCKET is not configured.
  */
 import { writeFile, mkdir, unlink } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { existsSync } from "fs";import os from "os";import path from "path";
 import { spawn } from "child_process";
 import { v4 as uuidv4 } from "uuid";
-import type { RenderParams } from "./transcoder";
+import type { RenderCaption, RenderParams } from "./transcoder";
 
 function findFfmpeg(): string {
   const candidates = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg", "ffmpeg"];
@@ -37,9 +36,70 @@ async function saveBase64(dataUrl: string, ext: string, dir: string): Promise<st
   const sep = dataUrl.indexOf(",");
   if (sep === -1) throw new Error("Expected base64 data-url");
   const buf = Buffer.from(dataUrl.slice(sep + 1), "base64");
-  const file = path.join(dir, `${uuidv4()}.${ext}`);
+  const actualExt = dataUrlExt(dataUrl, ext);
+  const file = path.join(dir, `${uuidv4()}.${actualExt}`);
   await writeFile(file, buf);
   return file;
+}
+
+function dataUrlExt(dataUrl: string, fallback: string): string {
+  const mime = dataUrl.match(/^data:([^;,]+)/)?.[1] ?? "";
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("gif")) return "gif";
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  if (mime.includes("webm")) return "webm";
+  if (mime.includes("mov")) return "mov";
+  if (mime.includes("mp4")) return "mp4";
+  if (mime.includes("mpeg")) return "mpg";
+  if (mime.includes("wav")) return "wav";
+  if (mime.includes("ogg")) return "ogg";
+  return fallback;
+}
+
+function normalizeHexColor(value: string | undefined, fallback: string): string {
+  const raw = (value ?? "").trim();
+  const hex = raw.startsWith("#") ? raw.slice(1) : raw;
+  return /^[0-9a-f]{6}$/i.test(hex) ? hex.toUpperCase() : fallback;
+}
+
+function escapeDrawtext(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/:/g, "\\:")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]")
+    .replace(/%/g, "\\%");
+}
+
+function captionToFilter(caption: RenderCaption, width: number, height: number): string | null {
+  const text = caption.text?.trim();
+  const start = Math.max(0, Number(caption.startTime));
+  const end = Math.max(start + 0.1, Number(caption.endTime));
+  if (!text || !Number.isFinite(start) || !Number.isFinite(end)) return null;
+
+  const fontSize = Math.max(18, Math.min(96, Math.round(caption.fontSize ?? 34)));
+  const color = normalizeHexColor(caption.color, "FFFFFF");
+  const boxColor = normalizeHexColor(caption.bgColor, "000000");
+  const boxOpacity = Math.max(0, Math.min(1, caption.bgOpacity ?? 0.48));
+  const xPct = Math.max(5, Math.min(95, caption.x ?? 50)) / 100;
+  const yPct = Math.max(5, Math.min(95, caption.y ?? 84)) / 100;
+  const yPx = Math.round(height * yPct);
+  const weight = caption.bold ? ":font='Inter:style=Bold'" : "";
+
+  return [
+    "drawtext=",
+    `text='${escapeDrawtext(text)}'`,
+    weight,
+    `:x='${Math.round(width * xPct)}-text_w/2'`,
+    `:y='${yPx}-text_h/2'`,
+    `:fontsize=${fontSize}`,
+    `:fontcolor=${color}`,
+    `:box=1:boxcolor=${boxColor}@${boxOpacity.toFixed(2)}:boxborderw=18`,
+    ":line_spacing=6",
+    `:enable='between(t,${start.toFixed(3)},${end.toFixed(3)})'`,
+  ].join("");
 }
 
 export function ratioDimensions(r: string): [number, number] {
@@ -97,8 +157,8 @@ export function toXfadeType(type: string): string {
 
 export async function renderWithFfmpeg(params: RenderParams): Promise<{ downloadUrl: string; filename: string }> {
   const { scenes, audio, aspectRatio = "9:16", outputFilename } = params;
-  const tmpDir  = path.join(process.cwd(), "tmp", "renders", uuidv4());
-  const outDir  = path.join(process.cwd(), "public", "exports");
+  const tmpDir  = path.join(os.tmpdir(), "ai-video-renders", uuidv4());
+  const outDir  = path.join(tmpDir, "output");
   const outFile = outputFilename ?? `render-${uuidv4()}.mp4`;
   const outPath = path.join(outDir, outFile);
 
@@ -149,7 +209,7 @@ export async function renderWithFfmpeg(params: RenderParams): Promise<{ download
         continue;
       }
 
-      const ext = scene.clipType === "image" ? "jpg" : "mp4";
+      const ext = scene.clipExt ?? (scene.clipType === "image" ? "jpg" : "mp4");
       const raw = await saveBase64(scene.clipData, ext, tmpDir);
       tempFiles.push(raw);
 
@@ -265,7 +325,7 @@ export async function renderWithFfmpeg(params: RenderParams): Promise<{ download
       await runFfmpeg(["-i", concatenated, "-c", "copy", "-y", outPath]);
     }
 
-    return { downloadUrl: `/exports/${outFile}`, filename: outFile };
+    return { downloadUrl: outPath, filename: outFile, outputPath: outPath };
   } finally {
     for (const f of tempFiles) unlink(f).catch(() => {});
   }
