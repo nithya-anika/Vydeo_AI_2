@@ -6,6 +6,17 @@ import { renderVideo, getEngineType } from "@/lib/transcoder";
 import type { SceneInput, AudioInput, BrandRenderInput } from "@/lib/transcoder";
 
 export const maxDuration = 300;
+export const dynamic = "force-dynamic";
+
+// Tell Next.js to not parse the body or restrict its size
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "100mb",
+    },
+    responseLimit: "100mb",
+  },
+};
 
 export async function POST(req: NextRequest) {
   try {
