@@ -1368,8 +1368,10 @@ export async function renderWithFfmpeg(
         "0",
         "-i",
         listFile,
-        "-c",
-        "copy",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
         "-y",
         concatenated,
       ]);
@@ -1402,62 +1404,32 @@ export async function renderWithFfmpeg(
       const totalDur =
         params.totalDuration ??
         scaledFiles.reduce(
-          (
-            sum,
-            scene
-          ) =>
-            sum +
-            scene.displayDuration,
-          0
+          (sum, scene) => sum + scene.displayDuration, 0
         );
 
-      const volume =
-        audio.volume ??
-        0.7;
-
-      const fadeIn =
-        audio.fadeIn ??
-        0.5;
-
-      const fadeOut =
-        audio.fadeOut ??
-        1;
+      const volume = audio.volume ?? 0.7;
+      const fadeIn = audio.fadeIn ?? 0.5;
+      const fadeOut = audio.fadeOut ?? 1;
+      const fadeOutStart = Math.max(0, totalDur - fadeOut);
 
       await runFfmpeg([
         "-i",
         concatenated,
-
         "-i",
         audioFile,
-
         "-filter_complex",
-
-        `[1:a]volume=${volume},` +
-          `afade=t=in:st=0:d=${fadeIn},` +
-          `afade=t=out:st=${Math.max(
-            0,
-            totalDur -
-              fadeOut
-          )}:d=${fadeOut},` +
-          `apad[a]`,
-
+        `[1:a]volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeOut}[a]`,
         "-map",
-        "0:v",
-
+        "0:v:0",
         "-map",
         "[a]",
-
         "-c:v",
         "copy",
-
         "-c:a",
         "aac",
-
         "-b:a",
         "192k",
-
         "-shortest",
-
         "-y",
         outPath,
       ]);
@@ -1465,10 +1437,8 @@ export async function renderWithFfmpeg(
       await runFfmpeg([
         "-i",
         concatenated,
-
-        "-c",
+        "-c:v",
         "copy",
-
         "-y",
         outPath,
       ]);
