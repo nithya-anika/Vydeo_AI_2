@@ -115,8 +115,15 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         );
         // Keep clipData null so the payload stays light, server will fetch it!
       } else {
-        const response = await fetch(scene.clipSrc);
-        if (!response.ok) {
+        let response = null;
+        try {
+          response = await fetch(scene.clipSrc);
+        } catch (err) {
+          console.warn(
+            `[Export] Network error fetching clip for scene "${scene.label}":`, err
+          );
+        }
+        if (!response || !response.ok) {
           console.warn(
             `[Export] Could not fetch clip for scene "${scene.label}"; rendering will use a placeholder frame.`
           );
