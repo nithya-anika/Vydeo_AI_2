@@ -4302,15 +4302,8 @@ export default function EditorShell({
         : payloadText;
 
       const estimatedPayloadBytes = new Blob([requestBody]).size;
-      const MAX_EXPORT_PAYLOAD_BYTES = isLocalhost ? 1_000_000_000 : 4_500_000; // 1 GB on localhost, 4.5 MB on cloud
 
       console.log(`[Export] Request body ready. Size: ${(estimatedPayloadBytes / 1024 / 1024).toFixed(2)} MB`);
-
-      if (estimatedPayloadBytes > MAX_EXPORT_PAYLOAD_BYTES) {
-        throw new Error(
-          "Export payload is too large for this environment. Please reduce the number of clips or shorten the project before exporting."
-        );
-      }
 
       setRenderStatus("Rendering on server...");
       console.log("[Export] Sending render request to /api/render...");

@@ -277,13 +277,6 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         : payloadText;
 
       const estimatedPayloadBytes = new Blob([requestBody]).size;
-      const MAX_EXPORT_PAYLOAD_BYTES = isLocalhost ? 1_000_000_000 : 4_500_000; // 1 GB on localhost, 4.5 MB on cloud
-
-      if (estimatedPayloadBytes > MAX_EXPORT_PAYLOAD_BYTES) {
-        throw new Error(
-          "Export payload is too large for this environment. Please reduce the number of clips or shorten the project before exporting."
-        );
-      }
 
       const res = await fetch("/api/render", {
         method: "POST",
