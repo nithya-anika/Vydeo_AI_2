@@ -4064,13 +4064,18 @@ export default function EditorShell({
         }
       );
 
-      const response = await fetch(
-        clipSrc
-      );
-
-      if (!response.ok) {
+      let response = null;
+      try {
+        response = await fetch(clipSrc);
+      } catch (err) {
         console.warn(
-          `[Export] Could not fetch media for scene "${scene.label}". HTTP ${response.status}; rendering will use a placeholder frame.`
+          `[Export] Network error fetching media for scene "${scene.label}":`, err
+        );
+      }
+
+      if (!response || !response.ok) {
+        console.warn(
+          `[Export] Could not fetch media for scene "${scene.label}".${response ? ` HTTP ${response.status}` : ""} Rendering will use a placeholder frame.`
         );
         clipData = null;
       } else {
