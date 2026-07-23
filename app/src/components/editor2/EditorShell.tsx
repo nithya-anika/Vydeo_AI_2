@@ -4125,10 +4125,12 @@ export default function EditorShell({
   // 4. Validate REAL base64 payload
   // ---------------------------------------------------------
 
-  clipData = validateDataUrl(
-    clipData,
-    scene.label
-  );
+  if (clipData !== null) {
+    clipData = validateDataUrl(
+      clipData,
+      scene.label
+    );
+  }
 
   console.log(
     "[Export] Scene ready:",
