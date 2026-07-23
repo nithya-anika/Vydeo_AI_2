@@ -219,90 +219,122 @@ async function generateSignedUrl(gcsPath: string, token: string, bucket: string)
 }
 
 async function renderCloud(params: RenderParams): Promise<RenderResult> {
-  const bucket = process.env.GCS_BUCKET!;
-  const prefix = process.env.GCS_RENDER_PREFIX ?? "renders";
-  const project = process.env.GOOGLE_PROJECT_ID!;
-  const location = process.env.GOOGLE_LOCATION ?? "us-central1";
-  const { v4: uuidv4 } = await import("uuid");
-  const jobId = uuidv4();
+  const apiKey = process.env.SHOTSTACK_API_KEY;
+  if (!apiKey) throw new Error("SHOTSTACK_API_KEY is not configured.");
 
-  const token = await getGcpToken();
-  const uploadedPaths: string[] = [];
+  const { width, height } = getResolution(params.aspectRatio ?? "9:16");
 
-  try {
-    // Upload clips
-    const inputUris: string[] = [];
-    for (let i = 0; i < params.scenes.length; i++) {
-      const scene = params.scenes[i];
-      if (scene.clipData) {
-        const ext = scene.clipType === "image" ? "jpg" : "mp4";
-        const gcsPath = `${prefix}/tmp/${jobId}/clip_${i}.${ext}`;
-        const mimeType = scene.clipType === "image" ? "image/jpeg" : "video/mp4";
-        await uploadToGcs(scene.clipData, gcsPath, mimeType, token, bucket);
-        uploadedPaths.push(gcsPath);
-        inputUris.push(`gs://${bucket}/${gcsPath}`);
-      } else if (scene.clipSrc) {
-        if (scene.clipSrc.startsWith("gs://")) {
-          inputUris.push(scene.clipSrc);
-        } else if (scene.clipSrc.startsWith("http://") || scene.clipSrc.startsWith("https://")) {
-          // Fetch public URL on server side and upload to GCS
-          const fetchRes = await fetch(scene.clipSrc);
-          if (!fetchRes.ok) {
-            throw new Error(`Failed to fetch scene clipSrc: ${scene.clipSrc}. HTTP ${fetchRes.status}`);
-          }
-          const blob = await fetchRes.blob();
-          const buffer = Buffer.from(await blob.arrayBuffer());
-          const base64Data = buffer.toString("base64");
-          
-          const ext = scene.clipExt || (scene.clipType === "image" ? "jpg" : "mp4");
-          const gcsPath = `${prefix}/tmp/${jobId}/clip_${i}.${ext}`;
-          const mimeType = scene.clipMime || (scene.clipType === "image" ? "image/jpeg" : "video/mp4");
-          
-          await uploadToGcs(base64Data, gcsPath, mimeType, token, bucket);
-          uploadedPaths.push(gcsPath);
-          inputUris.push(`gs://${bucket}/${gcsPath}`);
-        } else {
-          inputUris.push(""); // handled by Transcoder color source
-        }
-      } else {
-        // Blank placeholder — use a 1x1 black image (Transcoder will expand)
-        inputUris.push(""); // handled by Transcoder color source
-      }
+  // Map scenes to Shotstack clips
+  let currentTime = 0;
+  const clips = params.scenes.map((scene) => {
+    const start = currentTime;
+    const length = scene.duration;
+    currentTime += length;
+
+    // Determine the media URL to feed to Shotstack
+    let url = "";
+    if (scene.clipSrc && (scene.clipSrc.startsWith("http://") || scene.clipSrc.startsWith("https://"))) {
+      url = scene.clipSrc;
+    } else {
+      throw new Error(`Shotstack requires public HTTP/HTTPS URLs. Scene "${scene.label}" has invalid or missing clipSrc.`);
     }
 
-    // Upload audio
-    let audioGcsUri: string | undefined;
-    if (params.audio?.src) {
-      const audioPath = `${prefix}/tmp/${jobId}/audio.m4a`;
-      await uploadToGcs(params.audio.src, audioPath, "audio/mp4", token, bucket);
-      uploadedPaths.push(audioPath);
-      audioGcsUri = `gs://${bucket}/${audioPath}`;
-    }
+    // Determine if it is a video or image based on clipType or extension
+    const isImage = scene.clipType === "image" || url.match(/\.(jpg|jpeg|png)$/i);
 
-    const [W, H] = aspectRatioToDimensions(params.aspectRatio ?? "9:16");
-    const outputPath = `${prefix}/output/${params.outputFilename}`;
-    const outputUri = `gs://${bucket}/${outputPath}`;
+    return {
+      asset: isImage
+        ? { type: "image", src: url }
+        : { type: "video", src: url },
+      start,
+      length,
+    };
+  });
 
-    const jobName = await createTranscoderJob({
-      project, location, token,
-      inputUris: inputUris.filter(Boolean),
-      outputUri,
-      width: W, height: H,
-      scenes: params.scenes,
-      audioUri: audioGcsUri,
-      audioVolume: params.audio?.volume,
+  const timeline: any = {
+    background: "#000000",
+    tracks: [
+      {
+        clips,
+      },
+    ],
+  };
+
+  // Add background audio if present
+  if (params.audio?.src && (params.audio.src.startsWith("http://") || params.audio.src.startsWith("https://"))) {
+    timeline.tracks.push({
+      clips: [
+        {
+          asset: {
+            type: "audio",
+            src: params.audio.src,
+            volume: params.audio.volume ?? 0.7,
+            effect: "fade", // basic mapping for fade in/out
+          },
+          start: 0,
+          length: params.totalDuration ?? currentTime,
+        },
+      ],
+    });
+  }
+
+  const payload = {
+    timeline,
+    output: {
+      format: "mp4",
+      resolution: width > height ? "hd" : width === height ? "square" : "mobile", // Simple mapping
+      fps: 30,
+    },
+  };
+
+  console.log("[Shotstack] Dispatching render request...");
+
+  const res = await fetch("https://api.shotstack.io/edit/v1/render", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Shotstack render request failed (${res.status}): ${errorText}`);
+  }
+
+  const data = await res.json();
+  const renderId = data.response.id;
+  console.log(`[Shotstack] Render accepted. ID: ${renderId}`);
+
+  // Polling
+  const maxPolls = 120; // 10 minutes (5s intervals)
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    
+    const statusRes = await fetch(`https://api.shotstack.io/edit/v1/render/${renderId}`, {
+      headers: { "x-api-key": apiKey },
     });
 
-    await pollTranscoderJob(jobName, token);
+    if (!statusRes.ok) continue;
+    const statusData = await statusRes.json();
+    const status = statusData.response.status;
 
-    const downloadUrl = await generateSignedUrl(outputPath, token, bucket);
-    return { downloadUrl, filename: params.outputFilename, engine: "cloud" };
-  } finally {
-    // Best-effort cleanup of temp files
-    for (const p of uploadedPaths) {
-      deleteGcsObject(p, token, bucket).catch(() => {});
+    if (status === "done") {
+      console.log(`[Shotstack] Render complete!`);
+      return {
+        downloadUrl: statusData.response.url,
+        filename: params.outputFilename,
+        engine: "cloud",
+      };
+    } else if (status === "failed") {
+      throw new Error(`Shotstack render failed: ${statusData.response.error}`);
+    } else {
+      console.log(`[Shotstack] Polling... Status: ${status}`);
     }
   }
+
+  throw new Error("Shotstack render timed out after 10 minutes.");
 }
 
 // ── Local FFmpeg fallback path ────────────────────────────────────────────────
