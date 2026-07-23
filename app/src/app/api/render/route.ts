@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createReadStream } from "fs";
 import { unlink } from "fs/promises";
+import { gunzipSync } from "zlib";
 import { renderVideo, getEngineType } from "@/lib/transcoder";
 import type { SceneInput, AudioInput, BrandRenderInput } from "@/lib/transcoder";
 
 export const maxDuration = 300;
-const MAX_RENDER_REQUEST_BYTES = 3_000_000;
+const MAX_RENDER_REQUEST_BYTES = process.env.NODE_ENV === "development" ? 1_000_000_000 : 4_500_000;
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,15 +22,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse request body
-    const body = JSON.parse(rawBody) as {
-      scenes: SceneInput[];
+    const envelope = JSON.parse(rawBody) as {
+      compressed?: boolean;
+      encoding?: string;
+      payload?: string;
+      scenes?: SceneInput[];
       audio?: AudioInput;
       brand?: BrandRenderInput;
       aspectRatio?: string;
       totalDuration?: number;
       outputFilename?: string;
     };
+
+    const body = envelope.compressed && envelope.payload
+      ? JSON.parse(
+          gunzipSync(Buffer.from(envelope.payload, "base64")).toString("utf8")
+        ) as {
+          scenes: SceneInput[];
+          audio?: AudioInput;
+          brand?: BrandRenderInput;
+          aspectRatio?: string;
+          totalDuration?: number;
+          outputFilename?: string;
+        }
+      : envelope;
 
     const {
       scenes,
@@ -59,10 +75,6 @@ export async function POST(req: NextRequest) {
     const missing: string[] = [];
 
     scenes.forEach((scene, index) => {
-      if (!scene.clipData) {
-        missing.push(`Scene ${index + 1} media asset`);
-      }
-
       const captions = scene.captions ?? [];
 
       const hasSpeech = captions.some(
@@ -143,7 +155,7 @@ export async function POST(req: NextRequest) {
         cancel() {
           nodeStream.destroy();
         },
-      }) as BodyInit;
+      });
 
       nodeStream.on("error", (error) => {
         console.error("[render stream]", error);
@@ -159,7 +171,7 @@ export async function POST(req: NextRequest) {
         });
       });
 
-      return new NextResponse(body, {
+      return new NextResponse(body as any, {
         headers: {
           "Content-Type": "video/mp4",
           "Content-Disposition": `attachment; filename="${result.filename}"`,

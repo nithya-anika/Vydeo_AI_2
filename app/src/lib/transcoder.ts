@@ -241,6 +241,29 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
         await uploadToGcs(scene.clipData, gcsPath, mimeType, token, bucket);
         uploadedPaths.push(gcsPath);
         inputUris.push(`gs://${bucket}/${gcsPath}`);
+      } else if (scene.clipSrc) {
+        if (scene.clipSrc.startsWith("gs://")) {
+          inputUris.push(scene.clipSrc);
+        } else if (scene.clipSrc.startsWith("http://") || scene.clipSrc.startsWith("https://")) {
+          // Fetch public URL on server side and upload to GCS
+          const fetchRes = await fetch(scene.clipSrc);
+          if (!fetchRes.ok) {
+            throw new Error(`Failed to fetch scene clipSrc: ${scene.clipSrc}. HTTP ${fetchRes.status}`);
+          }
+          const blob = await fetchRes.blob();
+          const buffer = Buffer.from(await blob.arrayBuffer());
+          const base64Data = buffer.toString("base64");
+          
+          const ext = scene.clipExt || (scene.clipType === "image" ? "jpg" : "mp4");
+          const gcsPath = `${prefix}/tmp/${jobId}/clip_${i}.${ext}`;
+          const mimeType = scene.clipMime || (scene.clipType === "image" ? "image/jpeg" : "video/mp4");
+          
+          await uploadToGcs(base64Data, gcsPath, mimeType, token, bucket);
+          uploadedPaths.push(gcsPath);
+          inputUris.push(`gs://${bucket}/${gcsPath}`);
+        } else {
+          inputUris.push(""); // handled by Transcoder color source
+        }
       } else {
         // Blank placeholder — use a 1x1 black image (Transcoder will expand)
         inputUris.push(""); // handled by Transcoder color source
