@@ -1311,22 +1311,53 @@ export async function renderWithFfmpeg(
       ]);
     } else {
       /* -------------------------------------------------------------------- */
-      /* Concat Fallback (Bypassing xfade on Vercel)                          */
+      /* Legacy Crossfade Fallback (Bypassing xfade on Vercel)                */
       /* -------------------------------------------------------------------- */
 
       // Because Vercel's @ffmpeg-installer binary throws "No such filter: 'xfade'",
-      // and standard concat demuxer (-f concat) breaks on trimmed/speed-modified clips,
-      // we gracefully downgrade to in-memory filter_complex concat for all clips.
+      // we must recreate crossfades mathematically using alpha blending and overlaps.
       
       const inputArgs = scaledFiles.flatMap((scene) => ["-i", scene.file]);
+      const filterParts: string[] = [];
       
-      const concatFilter = scaledFiles.map((_, i) => `[${i}:v]`).join("") + 
-        `concat=n=${scaledFiles.length}:v=1:a=0[vout]`;
+      let prevLabel = "[0:v]";
+      let timeAcc = 0;
+
+      for (let i = 0; i < scaledFiles.length - 1; i++) {
+        const scene = scaledFiles[i];
+        const lastTransition = i === scaledFiles.length - 2;
+        const outLabel = lastTransition ? "[vout]" : `[vx${i}]`;
+        const nextLabel = `[${i + 1}:v]`;
+
+        if (scene.xfadeType && scene.xfadeDur > 0) {
+          // Recreate crossfade: Delay the next stream, add alpha fade-in to it, and overlay it on the previous stream.
+          const offset = Math.max(0, timeAcc + scene.displayDuration - scene.xfadeDur);
+          
+          filterParts.push(
+            // Delay next video
+            `${nextLabel}setpts=PTS+${offset.toFixed(4)}/TB[next_delayed]`,
+            // Apply alpha fade-in to next video
+            `[next_delayed]format=yuva420p,fade=t=in:st=${offset.toFixed(4)}:d=${scene.xfadeDur.toFixed(4)}:alpha=1[next_fading]`,
+            // Overlay fading video on top of previous video
+            `${prevLabel}[next_fading]overlay=eof_action=pass${outLabel}`
+          );
+
+          timeAcc += scene.displayDuration - scene.xfadeDur;
+        } else {
+          // Hard cut
+          filterParts.push(
+            `${prevLabel}${nextLabel}concat=n=2:v=1:a=0${outLabel}`
+          );
+          timeAcc += scene.displayDuration;
+        }
+
+        prevLabel = outLabel;
+      }
 
       await runFfmpeg([
         ...inputArgs,
         "-filter_complex",
-        concatFilter,
+        filterParts.join(";"),
         "-map",
         "[vout]",
         "-c:v",
