@@ -222,7 +222,20 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
   const apiKey = process.env.SHOTSTACK_API_KEY;
   if (!apiKey) throw new Error("SHOTSTACK_API_KEY is not configured.");
 
-  const { width, height } = getResolution(params.aspectRatio ?? "9:16");
+  const aspect = params.aspectRatio ?? "9:16";
+  let width = 1080;
+  let height = 1920;
+  
+  if (aspect === "16:9") {
+    width = 1920;
+    height = 1080;
+  } else if (aspect === "1:1") {
+    width = 1080;
+    height = 1080;
+  } else if (aspect === "4:5") {
+    width = 1080;
+    height = 1350;
+  }
 
   // Map scenes to Shotstack clips
   let currentTime = 0;
@@ -236,7 +249,7 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
     if (scene.clipSrc && (scene.clipSrc.startsWith("http://") || scene.clipSrc.startsWith("https://"))) {
       url = scene.clipSrc;
     } else {
-      throw new Error(`Shotstack requires public HTTP/HTTPS URLs. Scene "${scene.label}" has invalid or missing clipSrc.`);
+      throw new Error(`Shotstack requires public HTTP/HTTPS URLs. Scene "${scene.id}" has invalid or missing clipSrc.`);
     }
 
     // Determine if it is a video or image based on clipType or extension
