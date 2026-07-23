@@ -4104,37 +4104,54 @@ export default function EditorShell({
 
           clipData =
             await blobToDataUrl(blob);
-            
-          // --- VERCEL PAYLOAD BYPASS (Direct GCS Upload) ---
-          // If the generated base64 is larger than 1MB, upload it directly to GCS
-          // from the browser to bypass Vercel's strict 4.5MB Serverless request limits.
-          if (clipData && clipData.length > 1_000_000) {
-            console.log(`[Export] Large blob detected for scene "${scene.label}" (${(clipData.length / 1024 / 1024).toFixed(2)} MB). Bypassing payload via direct GCS upload...`);
-            try {
-              const uploadInitRes = await fetch("/api/upload-media", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ filename: `scene_${scene.id}.${clipExt}`, contentType: clipMime }),
-              });
-              if (uploadInitRes.ok) {
-                const { url, gcsPath, token } = await uploadInitRes.json();
-                const uploadRes = await fetch(url, {
-                  method: "POST",
-                  headers: { "Authorization": `Bearer ${token}`, "Content-Type": clipMime, "Content-Length": String(blob.size) },
-                  body: blob,
-                });
-                if (uploadRes.ok) {
-                  console.log(`[Export] Direct GCS upload successful: gs://${gcsPath}`);
-                  scene.clipSrc = `gs://${gcsPath}`; // Server transcoder natively understands gs://
-                  clipData = null; // Clear base64 to keep payload tiny
-                }
-              }
-            } catch (err) {
-              console.warn(`[Export] Direct GCS upload failed for scene "${scene.label}", falling back to base64 payload.`, err);
-            }
-          }
         }
       }
+    }
+  }
+
+  // --- VERCEL PAYLOAD BYPASS (Direct GCS Upload) ---
+  // If the generated base64 is larger than 100KB, upload it directly to GCS
+  // from the browser to bypass Vercel's strict 4.5MB Serverless request limits.
+  // This executes for BOTH local files and fetched blobs.
+  if (clipData && clipData.length > 100_000 && process.env.NODE_ENV !== "development") {
+    console.log(`[Export] Media detected for scene "${scene.label}" (${(clipData.length / 1024 / 1024).toFixed(2)} MB). Bypassing payload via direct GCS upload...`);
+    try {
+      // Create a Blob from the Data URL for clean binary uploading
+      const b64Data = clipData.split(",")[1];
+      const byteCharacters = atob(b64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const uploadBlob = new Blob([byteArray], { type: clipMime });
+
+      const uploadInitRes = await fetch("/api/upload-media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: `scene_${scene.id}.${clipExt}`, contentType: clipMime }),
+      });
+      
+      if (uploadInitRes.ok) {
+        const { url, gcsPath, token } = await uploadInitRes.json();
+        const uploadRes = await fetch(url, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": clipMime, "Content-Length": String(uploadBlob.size) },
+          body: uploadBlob,
+        });
+        if (uploadRes.ok) {
+          console.log(`[Export] Direct GCS upload successful: gs://${gcsPath}`);
+          scene.clipSrc = `gs://${gcsPath}`; // Server transcoder natively understands gs://
+          clipData = null; // Clear base64 to keep payload tiny
+        } else {
+          console.warn(`[Export] GCS upload failed with status ${uploadRes.status}`);
+        }
+      } else {
+        const errJson = await uploadInitRes.json();
+        console.warn(`[Export] GCS upload init failed:`, errJson);
+      }
+    } catch (err) {
+      console.warn(`[Export] Direct GCS upload failed for scene "${scene.label}", falling back to base64 payload.`, err);
     }
   }
 

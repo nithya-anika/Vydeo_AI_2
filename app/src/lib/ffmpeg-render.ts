@@ -1309,65 +1309,26 @@ export async function renderWithFfmpeg(
         "-y",
         concatenated,
       ]);
-    } else if (
-      !useXfade
-    ) {
-      const listFile =
-        path.join(
-          tmpDir,
-          "list.txt"
-        );
-
-      tempFiles.push(
-        listFile
-      );
-
-      await writeFile(
-        listFile,
-
-        scaledFiles
-          .map(
-            (scene) =>
-              `file '${scene.file}'`
-          )
-          .join("\n")
-      );
-
-      await runFfmpeg([
-        "-f",
-        "concat",
-
-        "-safe",
-        "0",
-
-        "-i",
-        listFile,
-
-        "-c",
-        "copy",
-
-        "-y",
-        concatenated,
-      ]);
     } else {
       /* -------------------------------------------------------------------- */
       /* Concat Fallback (Bypassing xfade on Vercel)                          */
       /* -------------------------------------------------------------------- */
 
       // Because Vercel's @ffmpeg-installer binary throws "No such filter: 'xfade'",
-      // we must gracefully downgrade to simple concat for all clips.
-      // This guarantees 100% success on the AWS Lambda environment.
-      const listFile = path.join(tmpDir, "concat_list.txt");
-      const listContent = scaledFiles.map((s) => `file '${s.file}'`).join("\n");
-      writeFileSync(listFile, listContent, "utf8");
+      // and standard concat demuxer (-f concat) breaks on trimmed/speed-modified clips,
+      // we gracefully downgrade to in-memory filter_complex concat for all clips.
+      
+      const inputArgs = scaledFiles.flatMap((scene) => ["-i", scene.file]);
+      
+      const concatFilter = scaledFiles.map((_, i) => `[${i}:v]`).join("") + 
+        `concat=n=${scaledFiles.length}:v=1:a=0[vout]`;
 
       await runFfmpeg([
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        listFile,
+        ...inputArgs,
+        "-filter_complex",
+        concatFilter,
+        "-map",
+        "[vout]",
         "-c:v",
         "libx264",
         "-pix_fmt",
