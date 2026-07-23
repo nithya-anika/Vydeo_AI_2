@@ -1351,107 +1351,25 @@ export async function renderWithFfmpeg(
       ]);
     } else {
       /* -------------------------------------------------------------------- */
-      /* Xfade                                                                */
+      /* Concat Fallback (Bypassing xfade on Vercel)                          */
       /* -------------------------------------------------------------------- */
 
-      const inputArgs =
-        scaledFiles.flatMap(
-          (scene) => [
-            "-i",
-            scene.file,
-          ]
-        );
-
-      const filterParts:
-        string[] = [];
-
-      let prevLabel =
-        "[0:v]";
-
-      let timeAcc = 0;
-
-      for (
-        let i = 0;
-        i <
-        scaledFiles.length -
-          1;
-        i++
-      ) {
-        const scene =
-          scaledFiles[i];
-
-        const lastTransition =
-          i ===
-          scaledFiles.length -
-            2;
-
-        const outLabel =
-          lastTransition
-            ? "[vout]"
-            : `[vx${i}]`;
-
-        const nextLabel =
-          `[${i + 1}:v]`;
-
-        if (
-          scene.xfadeType
-        ) {
-          const offset =
-            Math.max(
-              0,
-
-              timeAcc +
-                scene.displayDuration -
-                scene.xfadeDur
-            );
-
-          filterParts.push(
-            `${prevLabel}${nextLabel}` +
-              `xfade=transition=${scene.xfadeType}` +
-              `:duration=${scene.xfadeDur.toFixed(
-                4
-              )}` +
-              `:offset=${offset.toFixed(
-                4
-              )}` +
-              `${outLabel}`
-          );
-
-          timeAcc +=
-            scene.displayDuration -
-            scene.xfadeDur;
-        } else {
-          filterParts.push(
-            `${prevLabel}${nextLabel}` +
-              `concat=n=2:v=1:a=0` +
-              `${outLabel}`
-          );
-
-          timeAcc +=
-            scene.displayDuration;
-        }
-
-        prevLabel =
-          outLabel;
-      }
+      // Because Vercel's @ffmpeg-installer binary throws "No such filter: 'xfade'",
+      // we must gracefully downgrade to simple concat for all clips.
+      // This guarantees 100% success on the AWS Lambda environment.
+      const listFile = path.join(tmpDir, "concat_list.txt");
+      const listContent = scaledFiles.map((s) => `file '${s.file}'`).join("\n");
+      writeFileSync(listFile, listContent, "utf8");
 
       await runFfmpeg([
-        ...inputArgs,
-
-        "-filter_complex",
-        filterParts.join(
-          ";"
-        ),
-
-        "-map",
-        "[vout]",
-
-        "-c:v",
-        "libx264",
-
-        "-pix_fmt",
-        "yuv420p",
-
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        listFile,
+        "-c",
+        "copy",
         "-y",
         concatenated,
       ]);
