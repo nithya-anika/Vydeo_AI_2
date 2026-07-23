@@ -1,0 +1,13 @@
+{
+  "api": {
+    "bodyParser": {
+      "sizeLimit": "100mb"
+    }
+  },
+  "functions": {
+    "src/app/api/**/*": {
+      "maxDuration": 300,
+      "memory": 1024
+    }
+  }
+}
