@@ -4046,60 +4046,71 @@ export default function EditorShell({
   // ---------------------------------------------------------
 
   if (!clipData && clipSrc) {
-    console.log(
-      "[Export] Fetching scene media:",
-      {
-        scene: scene.label,
-        src: String(clipSrc).slice(0, 100),
-      }
-    );
-
-    const response = await fetch(
-      clipSrc
-    );
-
-    if (!response.ok) {
-      console.warn(
-        `[Export] Could not fetch media for scene "${scene.label}". HTTP ${response.status}; rendering will use a placeholder frame.`
+    if (String(clipSrc).startsWith("http://") || String(clipSrc).startsWith("https://") || String(clipSrc).startsWith("gs://")) {
+      console.log(
+        "[Export] Remote media URL found — skipping browser download, server will fetch directly:",
+        {
+          scene: scene.label,
+          src: String(clipSrc).slice(0, 100),
+        }
       );
-      clipData = null;
+      // Keep clipData null so the payload stays light, server will fetch it!
     } else {
-      const blob =
-        await response.blob();
+      console.log(
+        "[Export] Fetching local blob/media in browser:",
+        {
+          scene: scene.label,
+          src: String(clipSrc).slice(0, 100),
+        }
+      );
 
-      if (blob.size === 0) {
+      const response = await fetch(
+        clipSrc
+      );
+
+      if (!response.ok) {
         console.warn(
-          `[Export] Scene "${scene.label}" returned an empty media file; rendering will use a placeholder frame.`
+          `[Export] Could not fetch media for scene "${scene.label}". HTTP ${response.status}; rendering will use a placeholder frame.`
         );
         clipData = null;
       } else {
-        console.log(
-          "[Export] Media fetched:",
-          {
-            scene: scene.label,
-            size: blob.size,
-            type: blob.type,
-          }
-        );
+        const blob =
+          await response.blob();
 
-        clipMime =
-          blob.type ||
-          (scene.clipType === "image"
-            ? "image/jpeg"
-            : "video/mp4");
+        if (blob.size === 0) {
+          console.warn(
+            `[Export] Scene "${scene.label}" returned an empty media file; rendering will use a placeholder frame.`
+          );
+          clipData = null;
+        } else {
+          console.log(
+            "[Export] Media fetched:",
+            {
+              scene: scene.label,
+              size: blob.size,
+              type: blob.type,
+            }
+          );
 
-        clipExt =
-          getExtensionFromUrl(
-            scene.clipSrc
-          ) ||
-          (clipMime.includes("image")
-            ? "jpg"
-            : clipMime.includes("webm")
-              ? "webm"
-              : "mp4");
+          clipMime =
+            blob.type ||
+            (scene.clipType === "image"
+              ? "image/jpeg"
+              : "video/mp4");
 
-        clipData =
-          await blobToDataUrl(blob);
+          clipExt =
+            getExtensionFromUrl(
+              scene.clipSrc
+            ) ||
+            (clipMime.includes("image")
+              ? "jpg"
+              : clipMime.includes("webm")
+                ? "webm"
+                : "mp4");
+
+          clipData =
+            await blobToDataUrl(blob);
+        }
       }
     }
   }
@@ -4229,20 +4240,56 @@ export default function EditorShell({
     try {
       setExporting(true);
       const payloadScenes = await Promise.all(scenes.map(buildRenderScene));
-      if (!payloadScenes.some((scene) => scene.clipData)) {
+      if (!payloadScenes.some((scene) => scene.clipData || scene.clipSrc)) {
         toast.error("No media found to export.");
         return;
       }
 
+      let audioPayload = undefined;
+      const activeAudio = audioTracks.find((t) => !t.muted);
+      if (activeAudio) {
+        let audioData = null;
+        if (activeAudio.file instanceof File && activeAudio.file.size > 0) {
+          audioData = await fileToDataUrl(activeAudio.file);
+        } else if (activeAudio.src) {
+          if (String(activeAudio.src).startsWith("http://") || String(activeAudio.src).startsWith("https://") || String(activeAudio.src).startsWith("gs://")) {
+            console.log("[Export] Remote audio track found — skipping browser download, server will fetch directly:", activeAudio.src);
+            audioData = activeAudio.src;
+          } else {
+            console.log("[Export] Fetching local audio blob in browser:", activeAudio.src);
+            try {
+              const audioRes = await fetch(activeAudio.src);
+              if (audioRes.ok) {
+                const audioBlob = await audioRes.blob();
+                audioData = await blobToDataUrl(audioBlob);
+              }
+            } catch (err) {
+              console.warn("[Export] Could not fetch audio blob:", err);
+            }
+          }
+        }
+
+        if (audioData) {
+          audioPayload = {
+            src: audioData,
+            volume: activeAudio.volume ?? 0.7,
+            fadeIn: activeAudio.fadeIn ?? 0.5,
+            fadeOut: activeAudio.fadeOut ?? 1.0,
+          };
+        }
+      }
+
       const payload = {
         scenes: payloadScenes,
+        audio: audioPayload,
         aspectRatio,
         totalDuration: payloadScenes.reduce((sum, scene) => sum + scene.duration, 0),
         outputFilename: `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
       };
 
       const payloadText = JSON.stringify(payload);
-      const compressedPayload = await compressTextPayload(payloadText);
+      const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      const compressedPayload = isLocalhost ? null : await compressTextPayload(payloadText);
       const requestBody = compressedPayload
         ? JSON.stringify({
             compressed: true,
@@ -4252,7 +4299,7 @@ export default function EditorShell({
         : payloadText;
 
       const estimatedPayloadBytes = new Blob([requestBody]).size;
-      const MAX_EXPORT_PAYLOAD_BYTES = 3_500_000;
+      const MAX_EXPORT_PAYLOAD_BYTES = isLocalhost ? 1_000_000_000 : 3_500_000; // 1 GB on localhost, 3.5 MB on cloud
 
       if (estimatedPayloadBytes > MAX_EXPORT_PAYLOAD_BYTES) {
         throw new Error(

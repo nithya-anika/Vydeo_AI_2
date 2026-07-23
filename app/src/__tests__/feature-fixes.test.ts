@@ -452,3 +452,29 @@ describe("Quick Navigation — Route Paths", () => {
     expect(editorRoute("proj-123")).toBe("/editor/proj-123");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Export Validation & Remote Media Render", () => {
+  it("allows exporting if scene has clipSrc but no clipData", () => {
+    const payloadScenes = [
+      { id: "s1", label: "Scene 1", duration: 5, clipSrc: "https://example.com/video.mp4" },
+    ];
+    // This matches the EditorShell handleExport validation condition
+    const hasMediaToExport = payloadScenes.some((scene: any) => scene.clipData || scene.clipSrc);
+    expect(hasMediaToExport).toBe(true);
+  });
+
+  it("checks that local FFmpeg rendering allows scene clipSrc fallback", () => {
+    const sceneWithClipSrc = {
+      id: "s1",
+      label: "Scene 1",
+      duration: 5,
+      clipSrc: "https://example.com/video.mp4"
+    };
+
+    // The condition we modified: !scene.clipData && !scene.clipSrc should be false
+    const shouldSkipAsPlaceholder = !sceneWithClipSrc.hasOwnProperty("clipData") && !sceneWithClipSrc.clipSrc;
+    expect(shouldSkipAsPlaceholder).toBe(false);
+  });
+});

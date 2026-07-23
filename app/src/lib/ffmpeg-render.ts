@@ -986,7 +986,7 @@ export async function renderWithFfmpeg(
       /* -------------------------------------------------------------------- */
 
       if (
-        !scene.clipData
+        !scene.clipData && !scene.clipSrc
       ) {
         const placeholder =
           path.join(
@@ -1003,7 +1003,7 @@ export async function renderWithFfmpeg(
           "lavfi",
 
           "-i",
-          `color=c=black:s=${W}x${H}:d=${fileDur}`,
+          `color=c=black:s=${W}x${H}:d=${fileDur}:r=30`,
 
           "-c:v",
           "libx264",
@@ -1053,10 +1053,10 @@ export async function renderWithFfmpeg(
             scene.clipExt,
 
           dataPrefix:
-            scene.clipData.slice(
+            scene.clipData?.slice(
               0,
               100
-            ),
+            ) ?? "",
         }
       );
 
@@ -1096,7 +1096,7 @@ export async function renderWithFfmpeg(
           "-f",
           "lavfi",
           "-i",
-          `color=c=black:s=${W}x${H}:d=${fileDur}`,
+          `color=c=black:s=${W}x${H}:d=${fileDur}:r=30`,
           "-c:v",
           "libx264",
           "-t",
@@ -1146,6 +1146,8 @@ export async function renderWithFfmpeg(
         `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
         `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1`;
 
+      const fpsFilter = "fps=30";
+
       const speedFilter =
         speed !== 1
           ? `setpts=${(
@@ -1164,6 +1166,7 @@ export async function renderWithFfmpeg(
 
       const vf = [
         scaleFilter,
+        fpsFilter,
         speedFilter,
         effectFilter,
       ]
