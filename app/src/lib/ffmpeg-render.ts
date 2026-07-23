@@ -4,7 +4,7 @@
  */
 
 import { writeFile, mkdir, unlink } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, writeFileSync } from "fs";
 import os from "os";
 import path from "path";
 import { spawn } from "child_process";
