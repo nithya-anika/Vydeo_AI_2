@@ -196,36 +196,24 @@ export default function TopBar({ projectId }: { projectId?: string }) {
     try {
       const stream = new CompressionStream("gzip");
       const writer = stream.writable.getWriter();
-      const encoder = new TextEncoder();
-      await writer.write(encoder.encode(text));
-      await writer.close();
+      
+      // Do NOT await writer.write here, it causes a stream deadlock for payloads > HighWaterMark
+      writer.write(new TextEncoder().encode(text)).finally(() => writer.close());
 
-      const chunks: Uint8Array[] = [];
-      const reader = stream.readable.getReader();
+      // Let the browser handle the stream reading highly efficiently via Response API
+      const blob = await new Response(stream.readable).blob();
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        chunks.push(value ?? new Uint8Array());
-      }
+      const base64Url = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result as string);
+        fr.onerror = () => reject(fr.error);
+        fr.readAsDataURL(blob);
+      });
 
-      const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-      const buffer = new Uint8Array(totalLength);
-      let offset = 0;
-
-      for (const chunk of chunks) {
-        buffer.set(chunk, offset);
-        offset += chunk.length;
-      }
-
-      let binary = "";
-      const len = buffer.byteLength;
-      for (let i = 0; i < len; i += 65536) {
-        binary += String.fromCharCode(...buffer.subarray(i, i + 65536));
-      }
-
-      return btoa(binary);
-    } catch {
+      const commaIndex = base64Url.indexOf(",");
+      return commaIndex !== -1 ? base64Url.slice(commaIndex + 1) : null;
+    } catch (err) {
+      console.error("[Export] Compression stream error:", err);
       return null;
     }
   }
