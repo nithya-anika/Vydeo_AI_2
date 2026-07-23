@@ -6,21 +6,10 @@ import { renderVideo, getEngineType } from "@/lib/transcoder";
 import type { SceneInput, AudioInput, BrandRenderInput } from "@/lib/transcoder";
 
 export const maxDuration = 300;
-const MAX_RENDER_REQUEST_BYTES = process.env.NODE_ENV === "development" ? 1_000_000_000 : 4_500_000;
 
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
-    const bodySize = Buffer.byteLength(rawBody, "utf8");
-
-    if (bodySize > MAX_RENDER_REQUEST_BYTES) {
-      return NextResponse.json(
-        {
-          error: "Export payload is too large for this environment. Please reduce the number of clips or shorten the project before exporting.",
-        },
-        { status: 413 }
-      );
-    }
 
     const envelope = JSON.parse(rawBody) as {
       compressed?: boolean;
@@ -195,7 +184,13 @@ export async function POST(req: NextRequest) {
           : "Rendered locally with FFmpeg. Set GCS_BUCKET in .env.local to enable cloud rendering.",
     });
   } catch (error) {
-    console.error("[render]", error);
+    console.error("[render] Fatal API Error:");
+    if (error instanceof Error) {
+      console.error(error.message);
+      console.error(error.stack);
+    } else {
+      console.error(error);
+    }
 
     return NextResponse.json(
       {
