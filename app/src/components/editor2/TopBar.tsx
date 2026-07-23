@@ -288,7 +288,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         : payloadText;
 
       const estimatedPayloadBytes = new Blob([requestBody]).size;
-      const MAX_EXPORT_PAYLOAD_BYTES = isLocalhost ? 1_000_000_000 : 3_500_000; // 1 GB on localhost, 3.5 MB on cloud
+      const MAX_EXPORT_PAYLOAD_BYTES = isLocalhost ? 1_000_000_000 : 4_500_000; // 1 GB on localhost, 4.5 MB on cloud
 
       if (estimatedPayloadBytes > MAX_EXPORT_PAYLOAD_BYTES) {
         throw new Error(
