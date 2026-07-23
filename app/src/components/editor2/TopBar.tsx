@@ -219,8 +219,9 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       }
 
       let binary = "";
-      for (let i = 0; i < buffer.length; i++) {
-        binary += String.fromCharCode(buffer[i]);
+      const len = buffer.byteLength;
+      for (let i = 0; i < len; i += 65536) {
+        binary += String.fromCharCode(...buffer.subarray(i, i + 65536));
       }
 
       return btoa(binary);
