@@ -3244,6 +3244,7 @@ export default function EditorShell({
 
   // Export
   const [exporting, setExporting] = useState(false);
+  const [renderStatus, setRenderStatus] = useState("");
 
   // Per-scene AI video generation progress
   const [genProgress, setGenProgress] = useState<Record<string, "generating" | "done" | "error">>({});
@@ -4247,12 +4248,16 @@ export default function EditorShell({
   const handleExport = async () => {
     try {
       setExporting(true);
+      setRenderStatus("Preparing scenes...");
+      console.log("[Export] Starting export process. Compiling scenes...");
+
       const payloadScenes = await Promise.all(scenes.map(buildRenderScene));
       if (!payloadScenes.some((scene) => scene.clipData || scene.clipSrc)) {
         toast.error("No media found to export.");
         return;
       }
 
+      setRenderStatus("Attaching audio...");
       let audioPayload = undefined;
       const activeAudio = audioTracks.find((t) => !t.muted);
       if (activeAudio) {
@@ -4295,6 +4300,9 @@ export default function EditorShell({
         outputFilename: `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
       };
 
+      setRenderStatus("Compressing payload...");
+      console.log("[Export] Payload compiled. Compressing...");
+      
       const payloadText = JSON.stringify(payload);
       const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
       const compressedPayload = isLocalhost ? null : await compressTextPayload(payloadText);
@@ -4309,11 +4317,16 @@ export default function EditorShell({
       const estimatedPayloadBytes = new Blob([requestBody]).size;
       const MAX_EXPORT_PAYLOAD_BYTES = isLocalhost ? 1_000_000_000 : 4_500_000; // 1 GB on localhost, 4.5 MB on cloud
 
+      console.log(`[Export] Request body ready. Size: ${(estimatedPayloadBytes / 1024 / 1024).toFixed(2)} MB`);
+
       if (estimatedPayloadBytes > MAX_EXPORT_PAYLOAD_BYTES) {
         throw new Error(
           "Export payload is too large for this environment. Please reduce the number of clips or shorten the project before exporting."
         );
       }
+
+      setRenderStatus("Rendering on server...");
+      console.log("[Export] Sending render request to /api/render...");
 
       const res = await fetch("/api/render", {
         method: "POST",
@@ -4321,10 +4334,15 @@ export default function EditorShell({
         body: requestBody,
       });
 
+      console.log(`[Export] Server responded with status: ${res.status}`);
+
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({}));
         throw new Error(errorBody.error ?? errorBody.message ?? "Export failed. Please try again.");
       }
+
+      setRenderStatus("Downloading video...");
+      console.log("[Export] Render complete! Initiating download...");
 
       const contentType = res.headers.get("content-type") || "";
       if (contentType.startsWith("video/")) {
@@ -4358,6 +4376,7 @@ export default function EditorShell({
       toast.error(message || "Export failed. Please try again.");
     } finally {
       setExporting(false);
+      setRenderStatus("");
     }
   };
 
@@ -4647,37 +4666,44 @@ export default function EditorShell({
             <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 500 }}>⌘K</span>
           </button>
           <VDivider />
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 14px",
-              borderRadius: "var(--r-md)",
-              fontSize: 12,
-              fontWeight: 600,
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              boxShadow: "0 2px 8px rgba(99,102,241,0.25)",
-              cursor: exporting ? "not-allowed" : "pointer",
-              opacity: exporting ? 0.7 : 1,
-              transition: "background 0.12s, opacity 0.12s",
-              whiteSpace: "nowrap",
-            }}
-            onMouseEnter={(e) => {
-              if (!exporting)
-                e.currentTarget.style.background = "var(--accent-hover)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "var(--accent)";
-            }}
-          >
-            <Download size={13} />
-            {exporting ? "Exporting…" : "Export"}
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 14px",
+                borderRadius: "var(--r-md)",
+                fontSize: 12,
+                fontWeight: 600,
+                background: "var(--accent)",
+                color: "#fff",
+                border: "none",
+                boxShadow: "0 2px 8px rgba(99,102,241,0.25)",
+                cursor: exporting ? "not-allowed" : "pointer",
+                opacity: exporting ? 0.7 : 1,
+                transition: "background 0.12s, opacity 0.12s",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) => {
+                if (!exporting)
+                  e.currentTarget.style.background = "var(--accent-hover)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--accent)";
+              }}
+            >
+              <Download size={13} />
+              {exporting ? "Exporting…" : "Export"}
+            </button>
+            {renderStatus && (
+              <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 600, position: "absolute", top: "calc(100% - 10px)" }}>
+                {renderStatus}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
