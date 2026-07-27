@@ -67,8 +67,12 @@ export default function AssetsPage() {
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
     Array.from(files).forEach(file => {
-      const type: Asset["type"] = file.type.startsWith("video/") ? "video"
-        : file.type.startsWith("image/") ? "image" : "audio";
+      let type: Asset["type"] = "audio";
+      if (file.type.startsWith("video/") || /\.(mov|mp4|webm|m4v|avi|mkv|mpeg|mpg|3gp|flv)$/i.test(file.name)) {
+        type = "video";
+      } else if (file.type.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(file.name)) {
+        type = "image";
+      }
       setAssets(prev => [...prev, {
         id: crypto.randomUUID(), name: file.name,
         type, src: URL.createObjectURL(file),

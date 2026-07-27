@@ -12,9 +12,9 @@ export const dynamic = "force-dynamic";
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "100mb",
+      sizeLimit: "2gb",
     },
-    responseLimit: "100mb",
+    responseLimit: "2gb",
   },
 };
 
@@ -191,8 +191,8 @@ export async function POST(req: NextRequest) {
       engine: result.engine,
       message:
         engine === "cloud"
-          ? "Rendered via Google Cloud Transcoder."
-          : "Rendered locally with FFmpeg. Set GCS_BUCKET in .env.local to enable cloud rendering.",
+          ? "Rendered via Shotstack Cloud Rendering."
+          : "Rendered locally with FFmpeg. Set GCS_BUCKET and SHOTSTACK_API_KEY in .env.local to enable cloud rendering.",
     });
   } catch (error) {
     console.error("[render] Fatal API Error:");
