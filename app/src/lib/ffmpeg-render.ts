@@ -1184,24 +1184,26 @@ export async function renderWithFfmpeg(
         await runFfmpeg([
           "-loop",
           "1",
-
           "-i",
           raw,
-
+          "-f",
+          "lavfi",
+          "-i",
+          "anullsrc=r=48000:cl=stereo",
           "-vf",
           vf,
-
           "-c:v",
           "libx264",
-
+          "-c:a",
+          "aac",
+          "-ar",
+          "48000",
           "-t",
           String(
             fileDur
           ),
-
           "-pix_fmt",
           "yuv420p",
-
           "-y",
           scaled,
         ]);
@@ -1243,24 +1245,21 @@ export async function renderWithFfmpeg(
         );
 
         /*
-         * We don't need the original scene audio here.
-         * Final background audio is added later.
+         * Preserve the original scene audio.
          */
 
         await runFfmpeg([
           ...inputArgs,
-
           "-vf",
           vf,
-
-          "-an",
-
           "-c:v",
           "libx264",
-
+          "-c:a",
+          "aac",
+          "-ar",
+          "48000",
           "-pix_fmt",
           "yuv420p",
-
           "-y",
           scaled,
         ]);
@@ -1330,16 +1329,11 @@ export async function renderWithFfmpeg(
         const nextLabel = `[${i + 1}:v]`;
 
         if (scene.xfadeType && scene.xfadeDur > 0) {
-          // Recreate crossfade: Delay the next stream, add alpha fade-in to it, and overlay it on the previous stream.
+          // Standard native xfade transition
           const offset = Math.max(0, timeAcc + scene.displayDuration - scene.xfadeDur);
           
           filterParts.push(
-            // Delay next video
-            `${nextLabel}setpts=PTS+${offset.toFixed(4)}/TB[next_delayed]`,
-            // Apply alpha fade-in to next video
-            `[next_delayed]format=yuva420p,fade=t=in:st=${offset.toFixed(4)}:d=${scene.xfadeDur.toFixed(4)}:alpha=1[next_fading]`,
-            // Overlay fading video on top of previous video
-            `${prevLabel}[next_fading]overlay=eof_action=pass${outLabel}`
+            `${prevLabel}${nextLabel}xfade=transition=${scene.xfadeType}:duration=${scene.xfadeDur.toFixed(4)}:offset=${offset.toFixed(4)}${outLabel}`
           );
 
           timeAcc += scene.displayDuration - scene.xfadeDur;
@@ -1354,14 +1348,26 @@ export async function renderWithFfmpeg(
         prevLabel = outLabel;
       }
 
+      if (scaledFiles.length > 1) {
+        const audioConcatParts = [];
+        for (let i = 0; i < scaledFiles.length; i++) {
+          audioConcatParts.push(`[${i}:a]`);
+        }
+        filterParts.push(`${audioConcatParts.join("")}concat=n=${scaledFiles.length}:v=0:a=1[aout]`);
+      }
+
       await runFfmpeg([
         ...inputArgs,
         "-filter_complex",
         filterParts.join(";"),
         "-map",
         "[vout]",
+        "-map",
+        "[aout]",
         "-c:v",
         "libx264",
+        "-c:a",
+        "aac",
         "-pix_fmt",
         "yuv420p",
         "-y",
@@ -1372,6 +1378,8 @@ export async function renderWithFfmpeg(
     /* ---------------------------------------------------------------------- */
     /* Background audio                                                       */
     /* ---------------------------------------------------------------------- */
+
+    const hasOriginalAudio = params.scenes.some((s) => s.clipType === "video");
 
     if (audio?.src) {
       console.log(
@@ -1404,13 +1412,19 @@ export async function renderWithFfmpeg(
       const fadeOut = audio.fadeOut ?? 1;
       const fadeOutStart = Math.max(0, totalDur - fadeOut);
 
+      const mixFilter = hasOriginalAudio
+        ? `[0:a]volume=1.0[orig_a];` +
+          `[1:a]volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeOut}[bg_a];` +
+          `[orig_a][bg_a]amix=inputs=2:duration=first[a]`
+        : `[1:a]volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeOut}[a]`;
+
       await runFfmpeg([
         "-i",
         concatenated,
         "-i",
         audioFile,
         "-filter_complex",
-        `[1:a]volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeOut}[a]`,
+        mixFilter,
         "-map",
         "0:v:0",
         "-map",
@@ -1429,8 +1443,12 @@ export async function renderWithFfmpeg(
       await runFfmpeg([
         "-i",
         concatenated,
+        "-map",
+        "0:v:0",
+        ...(hasOriginalAudio ? ["-map", "0:a:0"] : []),
         "-c:v",
         "copy",
+        ...(hasOriginalAudio ? ["-c:a", "copy"] : []),
         "-y",
         outPath,
       ]);

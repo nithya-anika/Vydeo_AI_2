@@ -78,7 +78,7 @@ export interface RenderResult {
 
 // ── Engine detection ──────────────────────────────────────────────────────────
 export function getEngineType(): "cloud" | "local" {
-  return process.env.GCS_BUCKET ? "cloud" : "local";
+  return (process.env.GCS_BUCKET && process.env.SHOTSTACK_API_KEY) ? "cloud" : "local";
 }
 
 // ── Cloud Transcoder path ─────────────────────────────────────────────────────
@@ -218,6 +218,18 @@ async function generateSignedUrl(gcsPath: string, token: string, bucket: string)
   return `https://storage.googleapis.com/${bucket}/${gcsPath}`;
 }
 
+function convertGsToPublicUrl(gsUrl: string): string {
+  if (gsUrl.startsWith("gs://")) {
+    const match = gsUrl.match(/^gs:\/\/([^\/]+)\/(.+)$/);
+    if (match) {
+      const bucket = match[1];
+      const gcsPath = match[2];
+      return `https://storage.googleapis.com/${bucket}/${gcsPath}`;
+    }
+  }
+  return gsUrl;
+}
+
 async function renderCloud(params: RenderParams): Promise<RenderResult> {
   const apiKey = process.env.SHOTSTACK_API_KEY;
   if (!apiKey) throw new Error("SHOTSTACK_API_KEY is not configured.");
@@ -246,8 +258,11 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
 
     // Determine the media URL to feed to Shotstack
     let url = "";
-    if (scene.clipSrc && (scene.clipSrc.startsWith("http://") || scene.clipSrc.startsWith("https://"))) {
-      url = scene.clipSrc;
+    const rawUrl = scene.clipSrc ?? "";
+    const resolvedUrl = convertGsToPublicUrl(rawUrl);
+
+    if (resolvedUrl && (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))) {
+      url = resolvedUrl;
     } else {
       throw new Error(`Shotstack requires public HTTP/HTTPS URLs. Scene "${scene.id}" has invalid or missing clipSrc.`);
     }
@@ -274,21 +289,24 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
   };
 
   // Add background audio if present
-  if (params.audio?.src && (params.audio.src.startsWith("http://") || params.audio.src.startsWith("https://"))) {
-    timeline.tracks.push({
-      clips: [
-        {
-          asset: {
-            type: "audio",
-            src: params.audio.src,
-            volume: params.audio.volume ?? 0.7,
-            effect: "fade", // basic mapping for fade in/out
+  if (params.audio?.src) {
+    const audioSrc = convertGsToPublicUrl(params.audio.src);
+    if (audioSrc.startsWith("http://") || audioSrc.startsWith("https://")) {
+      timeline.tracks.push({
+        clips: [
+          {
+            asset: {
+              type: "audio",
+              src: audioSrc,
+              volume: params.audio.volume ?? 0.7,
+              effect: "fade", // basic mapping for fade in/out
+            },
+            start: 0,
+            length: params.totalDuration ?? currentTime,
           },
-          start: 0,
-          length: params.totalDuration ?? currentTime,
-        },
-      ],
-    });
+        ],
+      });
+    }
   }
 
   const payload = {

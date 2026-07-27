@@ -240,7 +240,7 @@ export default function FootagePage() {
   const totalFootageDuration = clips.reduce((s, c) => s + c.duration, 0);
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
-    const videoFiles = Array.from(files).filter(f => f.type.startsWith("video/"));
+    const videoFiles = Array.from(files).filter(f => f.type.startsWith("video/") || /\.(mov|mp4|webm|m4v|avi|mkv|mpeg|mpg|3gp|flv)$/i.test(f.name));
     if (!videoFiles.length) return;
 
     const newClips: UploadedClip[] = [];
