@@ -348,7 +348,7 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
     timeline,
     output: {
       format: "mp4",
-      resolution: width > height ? "fhd" : width === height ? "square" : "fhd", // Set to Full HD (fhd) for extreme clarity instead of low-quality hd/mobile!
+      resolution: width > height ? "1080" : width === height ? "square" : "1080", // Set to "1080" (Full HD) for extreme clarity instead of low-quality hd/mobile!
       fps: 30,
     },
   };
