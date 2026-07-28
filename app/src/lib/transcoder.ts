@@ -246,9 +246,9 @@ function toShotstackTransition(type: string): string {
     case "slide-right":
       return "slideRight";
     case "zoom-in":
-      return "zoomIn";
     case "zoom-out":
-      return "zoomOut";
+    case "zoom":
+      return "zoom";
     default:
       return "fade";
   }
