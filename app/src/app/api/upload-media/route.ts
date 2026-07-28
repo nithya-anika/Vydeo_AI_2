@@ -10,7 +10,8 @@ export async function POST(req: NextRequest) {
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const supabaseBucket = process.env.SUPABASE_BUCKET || "assets";
+    const rawBucket = process.env.SUPABASE_BUCKET || "vydeoai2";
+    const supabaseBucket = rawBucket === "vydeoai" ? "vydeoai2" : rawBucket;
 
     if (supabaseUrl && supabaseKey) {
       const cleanUrl = supabaseUrl.replace(/\/$/, "");
