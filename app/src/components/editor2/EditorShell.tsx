@@ -4333,6 +4333,62 @@ export default function EditorShell({
         }
 
         if (audioData) {
+          if (audioData.startsWith("data:")) {
+            console.log(`[Export] Local audio detected (${(audioData.length / 1024 / 1024).toFixed(2)} MB). Bypassing audio payload via direct upload...`);
+            try {
+              const b64Data = audioData.split(",")[1];
+              const byteCharacters = atob(b64Data);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const uploadBlob = new Blob([byteArray], { type: "audio/mpeg" });
+
+              const uploadInitRes = await fetch("/api/upload-media", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: `audio_${activeAudio.id || crypto.randomUUID()}.mp3`, contentType: "audio/mpeg" }),
+              });
+
+              if (uploadInitRes.ok) {
+                const initData = await uploadInitRes.json();
+                const { url, gcsPath, token, isSupabase, publicUrl } = initData;
+
+                let uploadRes;
+                if (isSupabase) {
+                  uploadRes = await fetch(url, {
+                    method: "PUT",
+                    headers: { "Content-Type": "audio/mpeg" },
+                    body: uploadBlob,
+                  });
+                } else {
+                  uploadRes = await fetch(url, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "audio/mpeg", "Content-Length": String(uploadBlob.size) },
+                    body: uploadBlob,
+                  });
+                }
+
+                if (uploadRes.ok) {
+                  if (isSupabase) {
+                    console.log(`[Export] Direct audio upload successful: ${publicUrl}`);
+                    audioData = publicUrl;
+                  } else {
+                    console.log(`[Export] Direct GCS audio upload successful: gs://${gcsPath}`);
+                    audioData = `gs://${gcsPath}`;
+                  }
+                } else {
+                  console.warn(`[Export] Direct audio upload failed with status ${uploadRes.status}`);
+                }
+              } else {
+                console.warn(`[Export] Direct audio upload init failed`);
+              }
+            } catch (err) {
+              console.warn(`[Export] Direct audio upload failed, falling back to base64.`, err);
+            }
+          }
+
           audioPayload = {
             src: audioData,
             volume: activeAudio.volume ?? 0.7,
