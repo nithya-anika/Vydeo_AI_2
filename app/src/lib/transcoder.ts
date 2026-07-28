@@ -301,7 +301,7 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
               type: "audio",
               src: audioSrc,
               volume: params.audio.volume ?? 0.7,
-              effect: "fade", // basic mapping for fade in/out
+              effect: "fadeInFadeOut", // basic mapping for fade in/out
             },
             start: 0,
             length: params.totalDuration ?? currentTime,
