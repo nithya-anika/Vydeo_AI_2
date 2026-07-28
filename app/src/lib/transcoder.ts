@@ -78,7 +78,9 @@ export interface RenderResult {
 
 // ── Engine detection ──────────────────────────────────────────────────────────
 export function getEngineType(): "cloud" | "local" {
-  return (process.env.GCS_BUCKET && process.env.SHOTSTACK_API_KEY) ? "cloud" : "local";
+  const hasCloudStorage = !!(process.env.GCS_BUCKET || process.env.SUPABASE_URL);
+  const hasShotstack = !!process.env.SHOTSTACK_API_KEY;
+  return (hasCloudStorage && hasShotstack) ? "cloud" : "local";
 }
 
 // ── Cloud Transcoder path ─────────────────────────────────────────────────────
