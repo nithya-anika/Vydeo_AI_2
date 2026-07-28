@@ -4381,7 +4381,7 @@ export default function EditorShell({
 
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({}));
-        throw new Error(errorBody.error ?? errorBody.message ?? "Export failed. Please try again.");
+        throw new Error(errorBody.message ?? errorBody.error ?? "Export failed. Please try again.");
       }
 
       setRenderStatus("Downloading video...");
