@@ -232,6 +232,28 @@ function convertGsToPublicUrl(gsUrl: string): string {
   return gsUrl;
 }
 
+function toShotstackTransition(type: string): string {
+  switch (type?.toLowerCase()) {
+    case "fade":
+    case "cinematic-fade":
+      return "fade";
+    case "wipe-left":
+      return "wipeLeft";
+    case "wipe-right":
+      return "wipeRight";
+    case "slide-left":
+      return "slideLeft";
+    case "slide-right":
+      return "slideRight";
+    case "zoom-in":
+      return "zoomIn";
+    case "zoom-out":
+      return "zoomOut";
+    default:
+      return "fade";
+  }
+}
+
 async function renderCloud(params: RenderParams): Promise<RenderResult> {
   const apiKey = process.env.SHOTSTACK_API_KEY;
   if (!apiKey) throw new Error("SHOTSTACK_API_KEY is not configured.");
@@ -272,13 +294,24 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
     // Determine if it is a video or image based on clipType or extension
     const isImage = scene.clipType === "image" || url.match(/\.(jpg|jpeg|png)$/i);
 
-    return {
+    const clipObj: any = {
       asset: isImage
         ? { type: "image", src: url }
         : { type: "video", src: url },
       start,
       length,
     };
+
+    // Map transitions to Shotstack clips
+    if (scene.transition && scene.transition.type && scene.transition.type !== "cut") {
+      const type = toShotstackTransition(scene.transition.type);
+      clipObj.transition = {
+        in: type,
+        out: type,
+      };
+    }
+
+    return clipObj;
   });
 
   const timeline: any = {
@@ -315,7 +348,7 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
     timeline,
     output: {
       format: "mp4",
-      resolution: width > height ? "hd" : width === height ? "square" : "mobile", // Simple mapping
+      resolution: width > height ? "fhd" : width === height ? "square" : "fhd", // Set to Full HD (fhd) for extreme clarity instead of low-quality hd/mobile!
       fps: 30,
     },
   };
