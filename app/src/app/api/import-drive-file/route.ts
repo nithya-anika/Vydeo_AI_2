@@ -77,21 +77,22 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to download ${filename} from Google Drive: ${downloadRes.statusText}`);
     }
 
-    const buffer = await downloadRes.arrayBuffer();
-
     // Upload to Supabase Storage
     const cleanUrl = supabaseUrl.replace(/\/$/, "");
     const pathSuffix = `uploads/drive-${Date.now()}-${filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     const uploadUrl = `${cleanUrl}/storage/v1/object/${supabaseBucket}/${pathSuffix}`;
 
+    // Pipe the Google Drive ReadableStream directly to Supabase Storage!
+    // This consumes 0MB of server RAM and easily supports multi-gigabyte transfers.
     const uploadRes = await fetch(uploadUrl, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${supabaseKey}`,
         "Content-Type": mimeType,
       },
-      body: Buffer.from(buffer),
-    });
+      body: downloadRes.body,
+      duplex: "half",
+    } as any);
 
     if (!uploadRes.ok) {
       const errText = await uploadRes.text();
