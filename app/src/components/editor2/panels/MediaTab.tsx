@@ -83,7 +83,7 @@ function ClipCard({ clip, scenes, onRemove }: {
           {clip.name.replace(/\.[^.]+$/, "")}
         </div>
         <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 7 }}>
-          {formatSize(clip.file.size)}
+          {clip.file ? formatSize(clip.file.size) : "Cloud Direct"}
         </div>
 
         {/* Assignment */}

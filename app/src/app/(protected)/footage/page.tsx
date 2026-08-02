@@ -16,7 +16,7 @@ import { inferRequestedColorAdjustments, inferRequestedColorGrade, inferRequeste
 
 interface UploadedClip {
   id: string;
-  file: File;
+  file?: File;
   src: string;
   name: string;
   duration: number;
@@ -271,7 +271,6 @@ export default function FootagePage() {
             name: c.name,
             src: c.src,
             duration: c.duration,
-            type: c.type,
             thumbnail: "",
             frames: [],
           });
@@ -315,11 +314,11 @@ export default function FootagePage() {
     setClips(prev => {
       // Deduplicate by a content signature so two distinct files that happen to
       // share a name (e.g. "clip.mov") are both kept.
-      const sig = (f: File) => `${f.name}-${f.size}-${f.lastModified}`;
-      const seen = new Set(prev.map(c => sig(c.file)));
+      const sig = (f?: File) => f ? `${f.name}-${f.size}-${f.lastModified}` : null;
+      const seen = new Set(prev.map(c => c.file ? sig(c.file) : c.src));
       const deduped: UploadedClip[] = [];
       for (const c of newClips) {
-        const s = sig(c.file);
+        const s = c.file ? sig(c.file) : c.src;
         if (seen.has(s)) {
           URL.revokeObjectURL(c.src); // skipped — release its object URL
           continue;

@@ -38,7 +38,7 @@ export interface Clip {
   id: string;
   name: string;
   src: string; // blob URL
-  file: File;
+  file?: File;
   type: "video" | "image";
   duration: number;
   thumbnail?: string;
@@ -48,7 +48,7 @@ export interface AudioTrack {
   id: string;
   name: string;
   src: string;
-  file: File;
+  file?: File;
   duration: number;
   volume: number;
   fadeIn: number;
