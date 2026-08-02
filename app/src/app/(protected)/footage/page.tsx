@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload, Film, X, Play, Sparkles, ArrowRight,
   Scissors, Shuffle, Zap, Music, Clock, LayoutGrid,
-  ChevronDown, AlertCircle,
+  ChevronDown, AlertCircle, HardDrive,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useEditorStore, type AspectRatio } from "@/store/editorStore";
@@ -188,7 +188,7 @@ function ClipCard({ clip, onRemove, index }: { clip: UploadedClip; onRemove: () 
           {clip.name}
         </div>
         <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1 }}>
-          {formatSize(clip.file.size)}
+          {clip.file ? formatSize(clip.file.size) : "Cloud Direct"}
           {clip.width ? ` · ${clip.width}×${clip.height}` : ""}
         </div>
       </div>
@@ -233,6 +233,60 @@ export default function FootagePage() {
   const [processing, setProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [driveUrl, setDriveUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+
+  const handleDriveImport = async () => {
+    if (!driveUrl) return;
+    setImporting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/import-drive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderUrl: driveUrl }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to import files from Google Drive.");
+      }
+
+      const importedClips = data.clips ?? [];
+      if (importedClips.length === 0) {
+        setError("No valid video or image files were found in the Drive folder.");
+        return;
+      }
+
+      // Add all imported clips to the state
+      setClips(prev => {
+        const seen = new Set(prev.map(c => c.src));
+        const deduped: UploadedClip[] = [];
+        for (const c of importedClips) {
+          if (seen.has(c.src)) continue;
+          seen.add(c.src);
+          deduped.push({
+            id: c.id,
+            name: c.name,
+            src: c.src,
+            duration: c.duration,
+            type: c.type,
+            thumbnail: "",
+            frames: [],
+          });
+        }
+        return [...prev, ...deduped];
+      });
+
+      setDriveUrl("");
+    } catch (err: any) {
+      console.error("[Drive Import]", err);
+      setError(err.message ?? "Google Drive import failed. Please verify sharing permissions.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -551,6 +605,79 @@ export default function FootagePage() {
                   </>
                 )}
               </div>
+            </motion.div>
+
+            {/* Google Drive Import Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: 0.08 }}
+              style={{
+                padding: 16,
+                background: "rgba(255, 255, 255, 0.02)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--r-2xl)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: "var(--r-lg)",
+                  background: "rgba(99,102,241,0.1)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <HardDrive size={16} style={{ color: "var(--accent)" }} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--text-primary)", textAlign: "left" }}>Import from Google Drive Folder</h4>
+                  <p style={{ margin: 0, fontSize: 10, color: "var(--text-tertiary)", textAlign: "left" }}>Automatically scans and downloads all files inside subfolders recursively</p>
+                </div>
+              </div>
+              
+              <div style={{ display: "flex", gap: 10 }}>
+                <input
+                  type="text"
+                  placeholder="Paste Google Drive shared folder URL..."
+                  value={driveUrl}
+                  onChange={(e) => setDriveUrl(e.target.value)}
+                  disabled={importing}
+                  style={{
+                    flex: 1,
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--r-xl)",
+                    color: "var(--text-primary)",
+                    padding: "0 14px",
+                    fontSize: 13,
+                    height: 38,
+                    outline: "none",
+                    transition: "border-color 0.15s",
+                  }}
+                  onFocus={e => e.currentTarget.style.borderColor = "var(--accent)"}
+                  onBlur={e => e.currentTarget.style.borderColor = "var(--border)"}
+                />
+                <button
+                  type="button"
+                  onClick={handleDriveImport}
+                  disabled={importing || !driveUrl}
+                  style={{
+                    background: importing || !driveUrl ? "var(--bg-elevated)" : "var(--accent)",
+                    color: importing || !driveUrl ? "var(--text-tertiary)" : "#fff",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--r-xl)",
+                    padding: "0 18px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: importing || !driveUrl ? "default" : "pointer",
+                    transition: "background 0.15s, color 0.15s",
+                    height: 38,
+                  }}
+                >
+                  {importing ? "Importing…" : "Import Folder"}
+                </button>
+              </div>
+              <p style={{ margin: "6px 0 0 0", fontSize: 11, color: "var(--text-tertiary)", textAlign: "left" }}>
+                💡 Ensure the Google Drive folder sharing is set to **\"Anyone with the link can view\"**.
+              </p>
             </motion.div>
 
             {/* Prompt textarea */}
