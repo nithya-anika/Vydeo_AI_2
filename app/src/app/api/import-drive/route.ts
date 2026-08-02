@@ -33,36 +33,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Supabase Storage is not configured." }, { status: 500 });
     }
 
-    // Authenticate with Google Drive (Vercel env variable or local fallback)
+    // Google Drive Authentication (supports either GOOGLE_DRIVE_API_KEY or GOOGLE_SERVICE_ACCOUNT)
+    const apiKey = process.env.GOOGLE_DRIVE_API_KEY;
     const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT;
-    let authOptions: any;
+    let accessToken: string | null = null;
 
-    if (serviceAccountJson) {
-      try {
-        const credentials = JSON.parse(serviceAccountJson);
+    if (!apiKey) {
+      let authOptions: any;
+      if (serviceAccountJson) {
+        try {
+          const credentials = JSON.parse(serviceAccountJson);
+          authOptions = {
+            credentials,
+            scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+          };
+        } catch (parseErr: any) {
+          console.error("[Drive Auth] Failed to parse GOOGLE_SERVICE_ACCOUNT env var:", parseErr);
+          return NextResponse.json({ error: `Invalid GOOGLE_SERVICE_ACCOUNT environment variable: ${parseErr.message}` }, { status: 500 });
+        }
+      } else {
         authOptions = {
-          credentials,
+          keyFilename: path.join(process.cwd(), "config/service-account.json"),
           scopes: ["https://www.googleapis.com/auth/drive.readonly"],
         };
-      } catch (parseErr: any) {
-        console.error("[Drive Auth] Failed to parse GOOGLE_SERVICE_ACCOUNT env var:", parseErr);
-        return NextResponse.json({ error: `Invalid GOOGLE_SERVICE_ACCOUNT environment variable: ${parseErr.message}` }, { status: 500 });
       }
-    } else {
-      authOptions = {
-        keyFilename: path.join(process.cwd(), "config/service-account.json"),
-        scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-      };
+
+      try {
+        const auth = new GoogleAuth(authOptions);
+        const client = await auth.getClient();
+        const tokenResponse = await client.getAccessToken();
+        accessToken = tokenResponse.token ?? null;
+      } catch (authErr: any) {
+        console.warn("[Drive Auth] Service account authentication failed, trying to continue:", authErr.message);
+      }
     }
 
-    const auth = new GoogleAuth(authOptions);
-
-    const client = await auth.getClient();
-    const tokenResponse = await client.getAccessToken();
-    const accessToken = tokenResponse.token;
-
-    if (!accessToken) {
-      throw new Error("Failed to retrieve Google access token.");
+    if (!apiKey && !accessToken) {
+      throw new Error("Neither GOOGLE_DRIVE_API_KEY nor a valid GOOGLE_SERVICE_ACCOUNT is configured.");
     }
 
     // List files recursively
@@ -70,11 +77,16 @@ export async function POST(req: NextRequest) {
     
     async function recurse(id: string) {
       const q = `'${id}' in parents and trashed=false`;
-      const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size)`;
+      let url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size)`;
+      const headers: HeadersInit = {};
+
+      if (apiKey) {
+        url += `&key=${apiKey}`;
+      } else if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+      }
       
-      const res = await fetch(url, {
-        headers: { "Authorization": `Bearer ${accessToken}` },
-      });
+      const res = await fetch(url, { headers });
       
       if (!res.ok) {
         throw new Error(`Google Drive API returned HTTP ${res.status}: ${res.statusText}`);
@@ -108,10 +120,16 @@ export async function POST(req: NextRequest) {
         console.log(`[Drive] Importing ${file.name} (${file.mimeType})...`);
         
         // Fetch file media bytes from Google Drive
-        const downloadRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
-          { headers: { "Authorization": `Bearer ${accessToken}` } }
-        );
+        let downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+        const downloadHeaders: HeadersInit = {};
+
+        if (apiKey) {
+          downloadUrl += `&key=${apiKey}`;
+        } else if (accessToken) {
+          downloadHeaders["Authorization"] = `Bearer ${accessToken}`;
+        }
+
+        const downloadRes = await fetch(downloadUrl, { headers: downloadHeaders });
 
         if (!downloadRes.ok) {
           console.warn(`[Drive] Failed to download ${file.name}: ${downloadRes.statusText}`);
