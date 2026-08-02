@@ -2,14 +2,17 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Film, Scissors } from 'lucide-react'
+import { Film, Scissors, HardDrive } from 'lucide-react'
 import { useEditorStore } from '@/store/editorStore'
-import { Dropzone, Modal, EmptyState, Button } from '@/components/ui'
+import { Dropzone, Modal, EmptyState, Button, Input, useToast } from '@/components/ui'
 
 export function MediaPanel() {
   const router = useRouter()
+  const toast = useToast()
   const { clips, scenes, activeSceneId, addClip, assignClip, setActiveScene } = useEditorStore()
   const [showChoice, setShowChoice] = useState(false)
+  const [driveUrl, setDriveUrl] = useState('')
+  const [importing, setImporting] = useState(false)
   const activeScene = scenes.find((s) => s.id === activeSceneId) ?? null
 
   function ingest(files: File[]) {
@@ -42,6 +45,44 @@ export function MediaPanel() {
     }
   }
 
+  async function handleDriveImport() {
+    if (!driveUrl) return;
+    setImporting(true);
+    toast.success("Google Drive import started. Connecting...");
+
+    try {
+      const res = await fetch("/api/import-drive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderUrl: driveUrl }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to import files from Google Drive.");
+      }
+
+      const importedClips = data.clips ?? [];
+      if (importedClips.length === 0) {
+        toast.error("No valid video or image files were found in the Drive folder.");
+        return;
+      }
+
+      // Add all imported clips to the store
+      importedClips.forEach((clip: any) => {
+        addClip(clip);
+      });
+
+      toast.success(`Successfully imported ${importedClips.length} files from Google Drive!`);
+      setDriveUrl("");
+    } catch (err: any) {
+      console.error("[Drive Import]", err);
+      toast.error(err.message ?? "Google Drive import failed. Please verify sharing permissions.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="tool-panel">
       <div className="tool-pad">
@@ -49,6 +90,36 @@ export function MediaPanel() {
         <Button variant="secondary" size="sm" fullWidth leftIcon={<Scissors size={13} />} style={{ marginTop: 8 }} onClick={() => setShowChoice(true)}>
           Edit raw footage with AI
         </Button>
+      </div>
+
+      <div className="tool-pad" style={{ paddingTop: 0, paddingBottom: 12 }}>
+        <div style={{ padding: 12, background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <HardDrive size={14} style={{ color: "var(--accent)" }} />
+            <span style={{ fontSize: 12, fontWeight: 500 }}>Import from Google Drive Folder</span>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <Input 
+              placeholder="Paste shared Drive folder link..." 
+              value={driveUrl}
+              onChange={(e) => setDriveUrl(e.target.value)}
+              disabled={importing}
+              style={{ flex: 1, height: 28, fontSize: 11, padding: "0 8px" }}
+            />
+            <Button 
+              variant="primary" 
+              size="sm" 
+              onClick={handleDriveImport} 
+              disabled={importing || !driveUrl}
+              style={{ fontSize: 11, height: 28, padding: "0 10px" }}
+            >
+              {importing ? "Importing…" : "Import"}
+            </Button>
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+            Ensure folder is shared: "Anyone with link can view"
+          </div>
+        </div>
       </div>
 
       <div className="tool-pad" style={{ paddingTop: 0 }}>
