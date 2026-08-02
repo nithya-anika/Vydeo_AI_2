@@ -33,11 +33,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Supabase Storage is not configured." }, { status: 500 });
     }
 
-    // Authenticate with Google Drive
-    const auth = new GoogleAuth({
-      keyFilename: path.join(process.cwd(), "config/service-account.json"),
-      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-    });
+    // Authenticate with Google Drive (Vercel env variable or local fallback)
+    const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT;
+    let authOptions: any;
+
+    if (serviceAccountJson) {
+      try {
+        const credentials = JSON.parse(serviceAccountJson);
+        authOptions = {
+          credentials,
+          scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+        };
+      } catch (parseErr: any) {
+        console.error("[Drive Auth] Failed to parse GOOGLE_SERVICE_ACCOUNT env var:", parseErr);
+        return NextResponse.json({ error: `Invalid GOOGLE_SERVICE_ACCOUNT environment variable: ${parseErr.message}` }, { status: 500 });
+      }
+    } else {
+      authOptions = {
+        keyFilename: path.join(process.cwd(), "config/service-account.json"),
+        scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+      };
+    }
+
+    const auth = new GoogleAuth(authOptions);
 
     const client = await auth.getClient();
     const tokenResponse = await client.getAccessToken();
