@@ -242,46 +242,79 @@ export default function FootagePage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/import-drive", {
+      const listRes = await fetch("/api/import-drive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ folderUrl: driveUrl }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Failed to import files from Google Drive.");
+      const listData = await listRes.json();
+      if (!listRes.ok) {
+        throw new Error(listData.error ?? "Failed to list Google Drive folder contents.");
       }
 
-      const importedClips = data.clips ?? [];
-      if (importedClips.length === 0) {
-        setError("No valid video or image files were found in the Drive folder.");
+      const driveFiles = listData.files ?? [];
+      if (driveFiles.length === 0) {
+        setError("No valid video or image files were found in this Drive folder.");
+        setImporting(false);
         return;
       }
 
-      // Add all imported clips to the state
-      setClips(prev => {
-        const seen = new Set(prev.map(c => c.src));
-        const deduped: UploadedClip[] = [];
-        for (const c of importedClips) {
-          if (seen.has(c.src)) continue;
-          seen.add(c.src);
-          deduped.push({
-            id: c.id,
-            name: c.name,
-            src: c.src,
-            duration: c.duration,
-            thumbnail: "",
-            frames: [],
-          });
-        }
-        return [...prev, ...deduped];
-      });
+      let successCount = 0;
+      const importedClips: any[] = [];
 
-      setDriveUrl("");
+      for (let i = 0; i < driveFiles.length; i++) {
+        const file = driveFiles[i];
+        try {
+          const fileRes = await fetch("/api/import-drive-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fileId: file.id,
+              filename: file.name,
+              mimeType: file.mimeType,
+            }),
+          });
+
+          const fileData = await fileRes.json();
+          if (fileRes.ok && fileData.clip) {
+            importedClips.push(fileData.clip);
+            successCount++;
+          } else {
+            console.warn(`[Drive Import] Failed for ${file.name}:`, fileData.error);
+          }
+        } catch (fileErr) {
+          console.warn(`[Drive Import] Failed to fetch file ${file.name}:`, fileErr);
+        }
+      }
+
+      if (successCount > 0) {
+        // Add all imported clips to the state
+        setClips(prev => {
+          const seen = new Set(prev.map(c => c.src));
+          const deduped: UploadedClip[] = [];
+          for (const c of importedClips) {
+            if (seen.has(c.src)) continue;
+            seen.add(c.src);
+            deduped.push({
+              id: c.id,
+              name: c.name,
+              src: c.src,
+              duration: c.duration,
+              thumbnail: "",
+              frames: [],
+            });
+          }
+          return [...prev, ...deduped];
+        });
+
+        setDriveUrl("");
+      } else {
+        setError("Google Drive import failed. No files could be downloaded.");
+      }
     } catch (err: any) {
       console.error("[Drive Import]", err);
-      setError(err.message ?? "Google Drive import failed. Please verify sharing permissions.");
+      setError(err.message ?? "Google Drive import failed.");
     } finally {
       setImporting(false);
     }

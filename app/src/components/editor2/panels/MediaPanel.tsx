@@ -48,36 +48,66 @@ export function MediaPanel() {
   async function handleDriveImport() {
     if (!driveUrl) return;
     setImporting(true);
-    toast.success("Google Drive import started. Connecting...");
+    toast.success("Google Drive import started. Fetching folder list...");
 
     try {
-      const res = await fetch("/api/import-drive", {
+      const listRes = await fetch("/api/import-drive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ folderUrl: driveUrl }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Failed to import files from Google Drive.");
+      const listData = await listRes.json();
+      if (!listRes.ok) {
+        throw new Error(listData.error ?? "Failed to list Google Drive folder contents.");
       }
 
-      const importedClips = data.clips ?? [];
-      if (importedClips.length === 0) {
-        toast.error("No valid video or image files were found in the Drive folder.");
+      const driveFiles = listData.files ?? [];
+      if (driveFiles.length === 0) {
+        toast.error("No valid video or image files were found in this Drive folder.");
+        setImporting(false);
         return;
       }
 
-      // Add all imported clips to the store
-      importedClips.forEach((clip: any) => {
-        addClip(clip);
-      });
+      toast.success(`Found ${driveFiles.length} media files! Importing them one-by-one to prevent timeouts...`);
 
-      toast.success(`Successfully imported ${importedClips.length} files from Google Drive!`);
-      setDriveUrl("");
+      let successCount = 0;
+      for (let i = 0; i < driveFiles.length; i++) {
+        const file = driveFiles[i];
+        toast.success(`[${i + 1}/${driveFiles.length}] Importing "${file.name}"...`);
+
+        try {
+          const fileRes = await fetch("/api/import-drive-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fileId: file.id,
+              filename: file.name,
+              mimeType: file.mimeType,
+            }),
+          });
+
+          const fileData = await fileRes.json();
+          if (fileRes.ok && fileData.clip) {
+            addClip(fileData.clip);
+            successCount++;
+          } else {
+            console.warn(`[Drive Import] Failed for ${file.name}:`, fileData.error);
+          }
+        } catch (fileErr) {
+          console.warn(`[Drive Import] Failed to fetch file ${file.name}:`, fileErr);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully imported ${successCount} files from Google Drive!`);
+        setDriveUrl("");
+      } else {
+        toast.error("Google Drive import failed. No files could be downloaded.");
+      }
     } catch (err: any) {
       console.error("[Drive Import]", err);
-      toast.error(err.message ?? "Google Drive import failed. Please verify sharing permissions.");
+      toast.error(err.message ?? "Google Drive import failed.");
     } finally {
       setImporting(false);
     }
