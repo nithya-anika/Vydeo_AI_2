@@ -291,7 +291,7 @@ Return JSON:
   "feedback": "what failed and what the editor must fix. Empty if score > 95"
 }`;
 
-        const evalResponse = await geminiRequest("gemini-2.5-flash", {
+        const evalResponse = await geminiRequest(MODEL, {
           contents: [{ role: "user", parts: [{ text: evalPrompt }] }],
           generationConfig: {
             temperature: 0.1,
