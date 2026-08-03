@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Trash2, Volume2, VolumeX } from 'lucide-react'
+import { Plus, Trash2, Volume2, VolumeX, Sparkles } from 'lucide-react'
 import { useEditorStore, type Mood, type TransitionType } from '@/store/editorStore'
 import { Input, Textarea, Select, Slider, Button, EmptyState } from '@/components/ui'
 import { MOODS, MOOD_COLORS, ASPECT_RATIOS, ASPECT_LABELS, BRAND_FONTS } from '../data'
@@ -29,6 +29,7 @@ export function Inspector() {
     scenes, activeSceneId, aspectRatio, totalDuration,
     setAspectRatio, updateScene, addScene, removeScene, updateCaption,
     audioTracks, updateAudioTrack, removeAudioTrack, inspectorTarget,
+    aiPrompt, aiScore, aiFeedback,
   } = useEditorStore()
 
   /* ── Project ──────────────────────────────────────────────────────────*/
@@ -138,6 +139,55 @@ export function Inspector() {
   /* ── Project (default) ────────────────────────────────────────────────*/
   return (
     <div className="insp">
+      {/* AI Evaluation Scorecard from Footage Page */}
+      {(aiScore !== null || aiPrompt !== null) && (
+        <div style={{ marginBottom: 20, padding: 12, background: "rgba(255, 255, 255, 0.03)", borderRadius: "var(--r-lg)", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Sparkles size={14} color="var(--accent)" />
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Initial Edit Analysis</span>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {aiScore !== null && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: aiScore > 90 ? "rgba(16,185,129,0.15)" : aiScore > 75 ? "rgba(245,158,11,0.15)" : "rgba(239,68,68,0.15)",
+                  border: `1px solid ${aiScore > 90 ? "rgba(16,185,129,0.4)" : aiScore > 75 ? "rgba(245,158,11,0.4)" : "rgba(239,68,68,0.4)"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: aiScore > 90 ? "#10B981" : aiScore > 75 ? "#F59E0B" : "#EF4444",
+                  fontSize: 12, fontWeight: 800,
+                }}>
+                  {aiScore}
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
+                    {aiScore > 95 ? "Perfect Match" : aiScore > 80 ? "Good Match" : "Needs Review"}
+                  </div>
+                  <div style={{ fontSize: 9, color: "var(--text-tertiary)" }}>Prompt Adherence</div>
+                </div>
+              </div>
+            )}
+            {aiPrompt && (
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>Prompt</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", fontStyle: "italic", background: "var(--bg-inset)", padding: 6, borderRadius: "var(--r-sm)" }}>
+                  "{aiPrompt}"
+                </div>
+              </div>
+            )}
+            {aiFeedback && (
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>QA Agent Checklist</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", background: "var(--bg-inset)", border: "1px solid var(--border)", padding: 8, borderRadius: "var(--r-sm)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                  {aiFeedback}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="insp-title">Project</div>
       <Field label="Aspect ratio">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
