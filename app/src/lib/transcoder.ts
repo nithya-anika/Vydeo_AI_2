@@ -254,6 +254,19 @@ function toShotstackTransition(type: string): string {
   }
 }
 
+function toShotstackEffect(effect: string): string | undefined {
+  const e = effect?.toLowerCase();
+  if (!e) return undefined;
+  if (e.includes("warm")) return "warm";
+  if (e.includes("cool") || e.includes("blue") || e.includes("cold")) return "cold";
+  if (e.includes("vintage")) return "vintage";
+  if (e.includes("vibrant") || e.includes("rich")) return "vibrant";
+  if (e.includes("moody") || e.includes("dark")) return "dark";
+  if (e.includes("bright") || e.includes("light")) return "light";
+  if (e.includes("greyscale") || e.includes("grey") || e.includes("mono")) return "greyscale";
+  return undefined;
+}
+
 async function renderCloud(params: RenderParams): Promise<RenderResult> {
   const apiKey = process.env.SHOTSTACK_API_KEY;
   if (!apiKey) throw new Error("SHOTSTACK_API_KEY is not configured.");
@@ -273,12 +286,26 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
     height = 1350;
   }
 
-  // Map scenes to Shotstack clips
+  // Map scenes to Shotstack clips with proper transition overlapping
   let currentTime = 0;
-  const clips = params.scenes.map((scene) => {
-    const start = currentTime;
-    const length = scene.duration;
-    currentTime += length;
+  const clips = params.scenes.map((scene, index) => {
+    const duration = scene.duration;
+
+    // Check if there is a transition from the previous clip
+    let transitionDuration = 0;
+    if (index > 0) {
+      const prevScene = params.scenes[index - 1];
+      if (prevScene.transition && prevScene.transition.type && prevScene.transition.type !== "cut") {
+        transitionDuration = prevScene.transition.duration ?? 0.5;
+      }
+    }
+
+    // Overlap the start time by the transition duration to create a smooth crossfade
+    const start = Math.max(0, currentTime - transitionDuration);
+    const length = duration;
+
+    // Advance time accumulated, accounting for the crossfade overlap
+    currentTime = start + length;
 
     // Determine the media URL to feed to Shotstack
     let url = "";
@@ -301,6 +328,14 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
       start,
       length,
     };
+
+    // Map visual effect (color grading) to Shotstack clips
+    if (scene.visualEffect) {
+      const effect = toShotstackEffect(scene.visualEffect);
+      if (effect) {
+        clipObj.effect = effect;
+      }
+    }
 
     // Map transitions to Shotstack clips
     if (scene.transition && scene.transition.type && scene.transition.type !== "cut") {
