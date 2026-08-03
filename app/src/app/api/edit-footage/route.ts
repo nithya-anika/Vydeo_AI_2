@@ -284,11 +284,17 @@ The user provided this creative editing prompt: "${creativePrompt}"
 The editor generated this JSON plan:
 ${JSON.stringify(plan)}
 
-Analyze if the editor strictly followed the instructions (like starting/ending with specific clips, trimming, removing audio).
+Analyze if the editor strictly followed the instructions (like starting/ending with specific clips, front-trimming, removing audio).
+Return a JSON object containing a "score" and a "feedback" string.
+The "feedback" string MUST be formatted as a numbered checklist using emojis (✅ for success, ❌ for failure) evaluating each specific condition requested in the prompt.
+
+Example feedback format:
+"1) Start with girl ✅\n2) End with boy in black tshirt ❌ (Ended with clip 3 instead)\n3) Trim the beginning of the clip ✅"
+
 Return JSON:
 {
   "score": 0 to 100,
-  "feedback": "what failed and what the editor must fix. Empty if score > 95"
+  "feedback": "Your formatted checklist here."
 }`;
 
         const evalResponse = await geminiRequest(MODEL, {
