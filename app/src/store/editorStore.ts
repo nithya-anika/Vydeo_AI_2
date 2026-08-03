@@ -85,6 +85,8 @@ export interface Scene {
   clipId: string | null;
   clipSrc: string | null;
   clipType: "video" | "image" | null;
+  clipTrimStart?: number;
+  clipTrimEnd?: number;
   captions: Caption[];
   transition: Transition;
   mood: Mood;

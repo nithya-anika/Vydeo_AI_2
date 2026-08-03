@@ -57,6 +57,7 @@ interface DragState {
   startTime: number;
   startDuration: number;
   snapGuide: number | null;
+  clipTrimStart?: number;
 }
 
 interface ContextMenu {
@@ -505,6 +506,49 @@ function VideoClip({
         alignItems: "center",
       }}
     >
+      {/* Live Video Trimming Background Feedback */}
+      {scene.clipSrc && scene.clipType === "video" && (
+        <video
+          src={scene.clipSrc}
+          muted
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: 0.3,
+            pointerEvents: "none",
+            zIndex: 0
+          }}
+          ref={(v) => {
+            if (v && scene.clipTrimStart !== undefined) {
+              // Only seek if we haven't already seeked to the exact trimStart to prevent flickering
+              if (Math.abs(v.currentTime - scene.clipTrimStart) > 0.1) {
+                v.currentTime = scene.clipTrimStart;
+              }
+            }
+          }}
+        />
+      )}
+      {scene.clipSrc && scene.clipType === "image" && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={scene.clipSrc}
+          alt=""
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: 0.3,
+            pointerEvents: "none",
+            zIndex: 0
+          }}
+        />
+      )}
+
       {/* Thumbnail strip pattern */}
       {scene.clipId && (
         <div
@@ -1231,6 +1275,7 @@ export default function TimelinePanel({
     type: "move" | "resize-left" | "resize-right",
     startTime: number,
     duration: number,
+    clipTrimStart: number = 0
   ) => {
     e.preventDefault();
     setDrag({
@@ -1241,6 +1286,7 @@ export default function TimelinePanel({
       startTime,
       startDuration: duration,
       snapGuide: null,
+      clipTrimStart,
     });
 
     // Set cursor on body during drag
@@ -1281,8 +1327,10 @@ export default function TimelinePanel({
           updateAudioTrack(clipId, { startTime: snapped, duration: trimmed });
         } else if (trackType === "video") {
           // Scenes lay out sequentially (no in-point), so a left-trim shortens the
-          // scene's duration; following scenes reflow via sceneOffsets.
-          updateScene(clipId, { duration: Math.max(0.5, trimmed) });
+          // scene's duration and increases its clipTrimStart so FFmpeg skips the trimmed portion.
+          const diff = duration - trimmed;
+          const newTrimStart = Math.max(0, (clipTrimStart || 0) + diff);
+          updateScene(clipId, { duration: Math.max(0.5, trimmed), clipTrimStart: newTrimStart });
         }
       }
     };
@@ -1729,7 +1777,7 @@ export default function TimelinePanel({
                         isActive={sc.id === activeSceneId}
                         locked={videoTrack.locked}
                         onSelect={() => { setSelectedClipId(sc.id); setActiveScene(sc.id); }}
-                        onDragStart={(e, type) => startDrag(e, sc.id, "video", type, sceneOffsets[i], sc.duration)}
+                        onDragStart={(e, type) => startDrag(e, sc.id, "video", type, sceneOffsets[i], sc.duration, sc.clipTrimStart)}
                         onContextMenu={(e) => setContextMenu({ x: e.clientX, y: e.clientY, clipId: sc.id, trackType: "video" })}
                       />
                     </div>
