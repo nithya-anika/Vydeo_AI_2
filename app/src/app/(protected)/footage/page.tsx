@@ -323,6 +323,55 @@ export default function FootagePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
+  // Automatically fetch video metadata (durations, frames, dimensions) for cloud imported clips in the background
+  useEffect(() => {
+    const clipsToResolve = clips.filter(c => !c.file && (c.duration === 5 || !c.thumbnail));
+    if (clipsToResolve.length === 0) return;
+
+    clipsToResolve.forEach(async (clip) => {
+      try {
+        const tempVideo = document.createElement("video");
+        tempVideo.src = clip.src;
+        tempVideo.preload = "metadata";
+        tempVideo.crossOrigin = "anonymous"; // Avoid CORS canvas issues if bucket has CORS enabled
+        
+        await new Promise((resolve, reject) => {
+          tempVideo.onloadedmetadata = resolve;
+          tempVideo.onerror = reject;
+        });
+
+        // Generate base64 thumbnail frames for Gemini Vision
+        const frames: string[] = [];
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const W = 360;
+        const H = 640;
+        canvas.width = W;
+        canvas.height = H;
+
+        tempVideo.currentTime = Math.min(2, tempVideo.duration / 2); // Grab a frame from the beginning/middle
+        await new Promise((resolve) => {
+          tempVideo.onseeked = resolve;
+        });
+
+        ctx?.drawImage(tempVideo, 0, 0, W, H);
+        const frameData = canvas.toDataURL("image/jpeg", 0.7);
+        frames.push(frameData.split(",")[1]);
+
+        setClips(prev => prev.map(c => c.id === clip.id ? {
+          ...c,
+          duration: tempVideo.duration || c.duration,
+          width: tempVideo.videoWidth || undefined,
+          height: tempVideo.videoHeight || undefined,
+          thumbnail: frameData,
+          frames,
+        } : c));
+      } catch (err) {
+        console.warn(`[Drive Meta] Failed to load metadata for ${clip.name}:`, err);
+      }
+    });
+  }, [clips]);
+
   const totalFootageDuration = clips.reduce((s, c) => s + c.duration, 0);
 
   const addFiles = useCallback(async (files: FileList | File[]) => {

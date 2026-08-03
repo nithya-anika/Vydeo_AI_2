@@ -180,6 +180,7 @@ export interface EditorState {
 
   // Actions — clips
   addClip: (clip: Clip) => void;
+  updateClip: (id: string, patch: Partial<Clip>) => void;
   removeClip: (id: string) => void;
   assignClip: (clipId: string, sceneId: string) => void;
   unassignClip: (sceneId: string) => void;
@@ -364,6 +365,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // ── Clips ─────────────────────────────────────────────────────────────────
   addClip: (clip) => set(s => ({ clips: [...s.clips, clip], isDirty: true })),
+  updateClip: (id, patch) => set(s => ({
+    clips: s.clips.map(c => c.id === id ? { ...c, ...patch } : c),
+    isDirty: true
+  })),
   removeClip: (id) => set(s => ({ clips: s.clips.filter(c => c.id !== id), isDirty: true })),
   assignClip: (clipId, sceneId) => {
     const clip = get().clips.find(c => c.id === clipId);

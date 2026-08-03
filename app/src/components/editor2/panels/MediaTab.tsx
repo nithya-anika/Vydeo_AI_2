@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useEditorStore, type Clip } from "@/store/editorStore";
 import { v4 as uuidv4 } from "uuid";
 
@@ -23,9 +23,23 @@ function ClipCard({ clip, scenes, onRemove }: {
   scenes: ReturnType<typeof useEditorStore.getState>["scenes"];
   onRemove: () => void;
 }) {
-  const { assignClip, unassignClip } = useEditorStore();
+  const { assignClip, unassignClip, updateClip } = useEditorStore();
   const [showPicker, setShowPicker] = useState(false);
   const assignedScene = scenes.find(s => s.clipId === clip.id);
+
+  // Automatically fetch actual video duration if it has the default 5s placeholder
+  useEffect(() => {
+    if (clip.type === "video" && clip.duration === 5 && clip.src) {
+      const vid = document.createElement("video");
+      vid.preload = "metadata";
+      vid.onloadedmetadata = () => {
+        if (vid.duration && vid.duration !== 5) {
+          updateClip(clip.id, { duration: vid.duration });
+        }
+      };
+      vid.src = clip.src;
+    }
+  }, [clip.id, clip.type, clip.duration, clip.src, updateClip]);
 
   return (
     <div style={{
