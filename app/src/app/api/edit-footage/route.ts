@@ -165,14 +165,26 @@ export async function POST(req: NextRequest) {
       .map(c => `  - Clip ${c.index}: "${c.name}" (${c.duration.toFixed(1)}s)`)
       .join("\n");
 
-    // Build multimodal parts: text + image frames for each clip
-    type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
-    const userParts: GeminiPart[] = [];
+    let attempt = 1;
+    const MAX_ATTEMPTS = 3;
+    let finalPlan: EditPlan | null = null;
+    let bestPlan: EditPlan | null = null;
+    let highestScore = 0;
+    let previousFeedback = "";
 
-    userParts.push({ text: `CREATIVE EDITING PROMPT: ${creativePrompt}
+    while (attempt <= MAX_ATTEMPTS) {
+      // Build multimodal parts: text + image frames for each clip
+      type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+      const userParts: GeminiPart[] = [];
 
-Transitions, numeric slider controls, and LUT/color presets have already been removed because the web editor applies them directly. Do not infer replacements for them.
+      let introText = `CREATIVE EDITING PROMPT: ${creativePrompt}\n\nTransitions, numeric slider controls, and LUT/color presets have already been removed because the web editor applies them directly. Do not infer replacements for them.\n`;
+      
+      if (previousFeedback) {
+        introText = `[CRITICAL FEEDBACK FROM QA - ATTEMPT ${attempt}]\nYour previous plan failed evaluation. Please fix these issues:\n${previousFeedback}\n\n` + introText;
+        console.log(`[edit-footage] Attempt ${attempt} running with feedback: ${previousFeedback}`);
+      }
 
+      userParts.push({ text: `${introText}
 UPLOADED CLIPS:
 ${clipList}
 
@@ -182,91 +194,142 @@ Total footage duration: ${clips.reduce((s, c) => s + c.duration, 0).toFixed(1)}s
 Below are sample frames from each clip so you can identify who is in them and what they look like:
 ` });
 
-    for (const clip of clips) {
-      if (clip.frames && clip.frames.length > 0) {
-        userParts.push({ text: `\n--- Clip ${clip.index}: "${clip.name}" (${clip.duration.toFixed(1)}s) ---` });
-        for (const frame of clip.frames) {
-          const base64 = frame.replace(/^data:image\/\w+;base64,/, "");
-          if (base64) {
-            userParts.push({ inlineData: { mimeType: "image/jpeg", data: base64 } });
+      for (const clip of clips) {
+        if (clip.frames && clip.frames.length > 0) {
+          userParts.push({ text: `\n--- Clip ${clip.index}: "${clip.name}" (${clip.duration.toFixed(1)}s) ---` });
+          for (const frame of clip.frames) {
+            const base64 = frame.replace(/^data:image\/\w+;base64,/, "");
+            if (base64) {
+              userParts.push({ inlineData: { mimeType: "image/jpeg", data: base64 } });
+            }
           }
         }
       }
+
+      userParts.push({ text: "\nNow return the JSON edit plan exactly as specified." });
+
+      let plan: EditPlan;
+
+      try {
+        const response = await geminiRequest(MODEL, {
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [{ role: "user", parts: userParts }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 4096,
+            responseMimeType: "application/json",
+          },
+        });
+
+        const raw = (response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
+          ?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+        // Strip markdown fences if present
+        const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
+        plan = JSON.parse(cleaned) as EditPlan;
+
+        // Ensure optional fields always exist before validating the AI response.
+        if (plan.muteSourceAudio === undefined) {
+          plan.muteSourceAudio = false;
+        }
+        plan.transitions = Array.isArray(plan.transitions) ? plan.transitions : [];
+        plan.trimInstructions = Array.isArray(plan.trimInstructions) ? plan.trimInstructions : [];
+        plan.globalColorAdjustments = normalizeColorAdjustments(plan.globalColorAdjustments);
+
+        // Keep each valid clip exactly once, then append anything Gemini omitted.
+        const inputIndices = new Set(clips.map(c => c.index));
+        const seen = new Set<number>();
+        plan.sceneOrder = (Array.isArray(plan.sceneOrder) ? plan.sceneOrder : [])
+          .filter(i => inputIndices.has(i) && !seen.has(i) && seen.add(i));
+        const outputIndices = new Set(plan.sceneOrder);
+        const missing = [...inputIndices].filter(i => !outputIndices.has(i));
+        if (missing.length) {
+          plan.sceneOrder = [...plan.sceneOrder, ...missing];
+        }
+
+        const fallbackTransition = requestedTransition
+          ?? normalizeTransitionType(plan.transitions[0]?.type, "cinematic-fade");
+        const transitionByClip = new Map(
+          plan.transitions.map(t => [
+            t.afterClipIndex,
+            {
+              afterClipIndex: t.afterClipIndex,
+              type: normalizeTransitionType(t.type, fallbackTransition),
+              duration: clamp(Number(t.duration) || 0.8, 0.1, 2),
+            },
+          ])
+        );
+
+        // Rebuild boundaries in scene order so the prompt's transition cannot be lost
+        plan.transitions = plan.sceneOrder.slice(0, -1).map(afterClipIndex => {
+          const existing = transitionByClip.get(afterClipIndex);
+          return {
+            afterClipIndex,
+            type: requestedTransition ?? existing?.type ?? fallbackTransition,
+            duration: existing?.duration ?? 0.8,
+          };
+        });
+
+        if (requestedColor) {
+          plan.globalColorAdjustments = normalizeColorAdjustments({
+            ...plan.globalColorAdjustments,
+            ...requestedColor,
+          });
+        }
+
+        // EVALUATION STEP
+        // Check if the plan matches the prompt instructions
+        const evalPrompt = `You are a QA Agent evaluating an AI video editor's plan.
+The user provided this creative editing prompt: "${creativePrompt}"
+The editor generated this JSON plan:
+${JSON.stringify(plan)}
+
+Analyze if the editor strictly followed the instructions (like starting/ending with specific clips, trimming, removing audio).
+Return JSON:
+{
+  "score": 0 to 100,
+  "feedback": "what failed and what the editor must fix. Empty if score > 95"
+}`;
+
+        const evalResponse = await geminiRequest("gemini-2.5-flash", {
+          contents: [{ role: "user", parts: [{ text: evalPrompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+          },
+        });
+
+        const evalRaw = (evalResponse as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+        const evalCleaned = evalRaw.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
+        const evalData = JSON.parse(evalCleaned);
+        
+        const score = evalData.score ?? 0;
+        console.log(`[edit-footage] QA Evaluation Score: ${score}/100. Feedback: ${evalData.feedback}`);
+
+        if (score > highestScore) {
+          highestScore = score;
+          bestPlan = plan;
+        }
+
+        if (score > 95) {
+          finalPlan = plan;
+          break; // Perfect! Escape the loop.
+        } else {
+          previousFeedback = evalData.feedback ?? "Plan did not fully meet requirements.";
+          attempt++;
+        }
+
+      } catch (aiErr) {
+        console.error(`[edit-footage] AI error on attempt ${attempt}:`, aiErr);
+        attempt++; // Try again if there's a JSON parse error or API crash
+      }
     }
 
-    userParts.push({ text: "\nNow return the JSON edit plan exactly as specified." });
+    let plan = finalPlan ?? bestPlan;
 
-    let plan: EditPlan;
-
-    try {
-      const response = await geminiRequest(MODEL, {
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: "user", parts: userParts }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 4096,
-          responseMimeType: "application/json",
-        },
-      });
-
-      const raw = (response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
-        ?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
-      // Strip markdown fences if present
-      const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
-      plan = JSON.parse(cleaned) as EditPlan;
-
-      // Ensure optional fields always exist before validating the AI response.
-      if (plan.muteSourceAudio === undefined) {
-        plan.muteSourceAudio = false;
-      }
-      plan.transitions = Array.isArray(plan.transitions) ? plan.transitions : [];
-      plan.trimInstructions = Array.isArray(plan.trimInstructions) ? plan.trimInstructions : [];
-      plan.globalColorAdjustments = normalizeColorAdjustments(plan.globalColorAdjustments);
-
-      // Keep each valid clip exactly once, then append anything Gemini omitted.
-      const inputIndices = new Set(clips.map(c => c.index));
-      const seen = new Set<number>();
-      plan.sceneOrder = (Array.isArray(plan.sceneOrder) ? plan.sceneOrder : [])
-        .filter(i => inputIndices.has(i) && !seen.has(i) && seen.add(i));
-      const outputIndices = new Set(plan.sceneOrder);
-      const missing = [...inputIndices].filter(i => !outputIndices.has(i));
-      if (missing.length) {
-        plan.sceneOrder = [...plan.sceneOrder, ...missing];
-      }
-
-      const fallbackTransition = requestedTransition
-        ?? normalizeTransitionType(plan.transitions[0]?.type, "cinematic-fade");
-      const transitionByClip = new Map(
-        plan.transitions.map(t => [
-          t.afterClipIndex,
-          {
-            afterClipIndex: t.afterClipIndex,
-            type: normalizeTransitionType(t.type, fallbackTransition),
-            duration: clamp(Number(t.duration) || 0.8, 0.1, 2),
-          },
-        ])
-      );
-
-      // Rebuild boundaries in scene order so the prompt's transition cannot be lost,
-      // duplicated, or attached to the wrong clip.
-      plan.transitions = plan.sceneOrder.slice(0, -1).map(afterClipIndex => {
-        const existing = transitionByClip.get(afterClipIndex);
-        return {
-          afterClipIndex,
-          type: requestedTransition ?? existing?.type ?? fallbackTransition,
-          duration: existing?.duration ?? 0.8,
-        };
-      });
-
-      if (requestedColor) {
-        plan.globalColorAdjustments = normalizeColorAdjustments({
-          ...plan.globalColorAdjustments,
-          ...requestedColor,
-        });
-      }
-    } catch (aiErr) {
-      console.error("[edit-footage] AI error, using default plan:", aiErr);
+    // Fallback if all attempts failed completely
+    if (!plan) {
+      console.warn("[edit-footage] All attempts failed, using default plan.");
       plan = defaultPlan(clips);
       if (requestedTransition) {
         plan.transitions = plan.sceneOrder.slice(0, -1).map(afterClipIndex => ({
@@ -280,7 +343,7 @@ Below are sample frames from each clip so you can identify who is in them and wh
       }
     }
 
-    return NextResponse.json({ success: true, plan });
+    return NextResponse.json({ success: true, plan, score: highestScore });
   } catch (err) {
     console.error("[edit-footage] route error:", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
