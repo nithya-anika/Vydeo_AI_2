@@ -626,8 +626,16 @@ export default function FootagePage() {
                   </>
                 ) : (
                   <>
-                    {/* Clip rail */}
-                    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+                    {/* Clip Grid */}
+                    <div style={{ 
+                      display: "grid", 
+                      gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", 
+                      gap: 10, 
+                      paddingBottom: 4,
+                      maxHeight: "50vh",
+                      overflowY: "auto",
+                      paddingRight: 8 // scrollbar spacing
+                    }}>
                       <AnimatePresence>
                         {clips.map((clip, i) => (
                           <ClipCard
