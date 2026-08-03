@@ -4249,6 +4249,12 @@ export default function EditorShell({
     visualEffect:
       scene.visualEffect,
 
+    colorGrade:
+      scene.colorGrade,
+
+    colorAdjustments:
+      scene.colorAdjustments,
+
     transition:
       scene.transition,
 
