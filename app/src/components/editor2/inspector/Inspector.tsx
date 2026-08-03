@@ -31,6 +31,18 @@ export function Inspector() {
     audioTracks, updateAudioTrack, removeAudioTrack, inspectorTarget,
   } = useEditorStore()
 
+  /* ── Project ──────────────────────────────────────────────────────────*/
+  if (!inspectorTarget && !activeSceneId) {
+    return (
+      <div className="insp">
+        <div className="insp-title">Project Settings</div>
+        <Field label="Aspect Ratio">
+          <Select options={ASPECT_RATIOS.map((ar) => ({ label: `${ar} (${ASPECT_LABELS[ar] || ''})`, value: ar }))} value={aspectRatio} onChange={(v) => setAspectRatio(v as import("@/store/editorStore").AspectRatio)} />
+        </Field>
+      </div>
+    )
+  }
+
   /* ── Caption ──────────────────────────────────────────────────────────*/
   if (inspectorTarget?.type === 'caption') {
     const scene = scenes.find((s) => s.id === inspectorTarget.sceneId)
@@ -100,7 +112,7 @@ export function Inspector() {
       <div className="insp">
         <div className="insp-title">Scene</div>
         <Field label="Label"><Input value={activeScene.label} onChange={(e) => updateScene(activeScene.id, { label: e.target.value })} /></Field>
-        <Field label={`Duration — ${activeScene.duration}s`}><Slider min={0.5} max={600} step={0.5} value={activeScene.duration} onChange={(e) => updateScene(activeScene.id, { duration: Number(e.target.value) })} aria-label="Duration" /></Field>
+        <Field label={`Duration — ${activeScene.duration}s`}><Slider min={0.5} max={600} step={0.1} value={activeScene.duration} onChange={(e) => updateScene(activeScene.id, { duration: Number(e.target.value) })} aria-label="Duration" /></Field>
         <Field label="Mood">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {MOODS.map((m) => {
