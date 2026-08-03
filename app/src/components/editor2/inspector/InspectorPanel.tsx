@@ -54,6 +54,7 @@ function NumberInput({ label, value, onChange, min, max, step = 1, unit = "" }: 
 export default function InspectorPanel() {
   const {
     scenes, activeSceneId, aspectRatio,
+    aiPrompt, aiScore, aiFeedback,
     setAspectRatio, updateScene, removeScene, addScene,
   } = useEditorStore();
 
@@ -61,7 +62,7 @@ export default function InspectorPanel() {
 
   return (
     <div style={{
-      width: 200, flexShrink: 0,
+      width: 240, flexShrink: 0,
       background: "var(--bg-surface)", borderLeft: "1px solid var(--border)",
       display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
@@ -76,6 +77,51 @@ export default function InspectorPanel() {
       </div>
 
       <div style={{ flex: 1, overflowY: "auto" }}>
+        
+        {/* AI Evaluation Scorecard */}
+        {(aiScore !== null || aiPrompt !== null) && (
+          <Section title="AI Evaluation">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {aiScore !== null && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: "50%",
+                    background: aiScore > 90 ? "rgba(16,185,129,0.15)" : aiScore > 75 ? "rgba(245,158,11,0.15)" : "rgba(239,68,68,0.15)",
+                    border: `1px solid ${aiScore > 90 ? "rgba(16,185,129,0.4)" : aiScore > 75 ? "rgba(245,158,11,0.4)" : "rgba(239,68,68,0.4)"}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: aiScore > 90 ? "#10B981" : aiScore > 75 ? "#F59E0B" : "#EF4444",
+                    fontSize: 12, fontWeight: 800,
+                  }}>
+                    {aiScore}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
+                      {aiScore > 95 ? "Perfect Match" : aiScore > 80 ? "Good Match" : "Needs Review"}
+                    </div>
+                    <div style={{ fontSize: 9, color: "var(--text-tertiary)" }}>Prompt Adherence</div>
+                  </div>
+                </div>
+              )}
+              {aiPrompt && (
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>Prompt</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", fontStyle: "italic", background: "var(--bg-inset)", padding: 6, borderRadius: "var(--r-sm)" }}>
+                    "{aiPrompt}"
+                  </div>
+                </div>
+              )}
+              {aiFeedback && (
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 3 }}>QA Agent Checklist</div>
+                  <div style={{ fontSize: 10, color: "var(--error)", background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)", padding: 6, borderRadius: "var(--r-sm)", whiteSpace: "pre-wrap" }}>
+                    {aiFeedback}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
+
         {/* Project settings */}
         <Section title="Project">
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

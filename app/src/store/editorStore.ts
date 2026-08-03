@@ -146,6 +146,9 @@ export interface EditorState {
   activeSceneId: string | null;
   leftTab: LeftTab;
   inspectorTarget: InspectorTarget;
+  aiPrompt: string | null;
+  aiScore: number | null;
+  aiFeedback: string | null;
   isGenerating: boolean;
   isDemoMode: boolean;
   isDirty: boolean;
@@ -199,6 +202,7 @@ export interface EditorState {
   setSnapEnabled: (v: boolean) => void;
   setIsGenerating: (v: boolean) => void;
   setIsDemoMode: (v: boolean) => void;
+  setAiMetadata: (prompt: string, score: number, feedback: string) => void;
 
   // Actions — brand
   setBrandKit: (kit: BrandKit | null) => void;
@@ -275,6 +279,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeSceneId: null,
   leftTab: "media",
   inspectorTarget: null,
+  aiPrompt: null,
+  aiScore: null,
+  aiFeedback: null,
   isGenerating: false,
   isDemoMode: false,
   isDirty: false,
@@ -400,8 +407,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setSnapEnabled: (v) => set({ snapEnabled: v }),
   setIsGenerating: (v) => set({ isGenerating: v }),
   setIsDemoMode: (v) => set({ isDemoMode: v }),
+  setAiMetadata: (prompt, score, feedback) => set({ aiPrompt: prompt, aiScore: score, aiFeedback: feedback }),
 
-  // ── Brand ─────────────────────────────────────────────────────────────────
+  // ── Brand ──────────────────────────────────────────────────────────────────
   setBrandKit: (kit) => set({ brandKit: kit, isDirty: true }),
   updateBrandKit: (patch) => {
     const current = get().brandKit ?? {

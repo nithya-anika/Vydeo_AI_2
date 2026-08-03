@@ -464,6 +464,9 @@ export default function FootagePage() {
       }));
 
       let plan: EditPlan | null = null;
+      let score: number | null = null;
+      let feedback: string | null = null;
+
       if (prompt.trim()) {
         setProcessingStep("AI is analysing your clips...");
         try {
@@ -475,6 +478,8 @@ export default function FootagePage() {
           const data = await res.json();
           if (data.success && data.plan) {
             plan = data.plan as EditPlan;
+            score = data.score ?? null;
+            feedback = data.feedback ?? null;
           }
         } catch (apiErr) {
           console.warn("AI edit plan failed, using defaults:", apiErr);
@@ -495,6 +500,9 @@ export default function FootagePage() {
           type: "video" as const, duration: c.duration, thumbnail: c.thumbnail,
         });
       });
+
+      // Save AI evaluation to store
+      useEditorStore.getState().setAiMetadata(prompt.trim(), score ?? 0, feedback ?? "");
 
       // Load timeline
       loadTimeline({
