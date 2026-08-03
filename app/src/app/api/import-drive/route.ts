@@ -3,6 +3,7 @@ import { GoogleAuth } from "google-auth-library";
 import path from "path";
 
 export const maxDuration = 60; // Fast metadata-only listing!
+// Trigger fresh rebuild on Vercel
 
 function extractFolderId(url: string): string | null {
   const match = url.match(/folders\/([a-zA-Z0-9-_]+)/);
