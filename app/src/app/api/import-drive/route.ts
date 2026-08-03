@@ -98,20 +98,35 @@ export async function POST(req: NextRequest) {
     
     await recurse(folderId);
 
-    // Filter video and image media
-    const mediaFiles = filesList.filter((f) => 
-      f.mimeType.startsWith("video/") || 
-      f.mimeType.startsWith("image/")
-    );
+    // Filter video and image media (Support .mov even if Google returns a generic mimeType)
+    const mediaFiles = filesList.filter((f) => {
+      const isVideoMime = f.mimeType?.startsWith("video/");
+      const isImageMime = f.mimeType?.startsWith("image/");
+      const isVideoExt = /\.(mov|mp4|webm|m4v|avi|mkv|mpeg|mpg|3gp|flv)$/i.test(f.name);
+      const isImageExt = /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(f.name);
+      
+      return isVideoMime || isImageMime || isVideoExt || isImageExt;
+    });
+
+    // Normalize mimeType for known extensions if Google returned a generic one
+    const normalizedFiles = mediaFiles.map((f) => {
+      let mimeType = f.mimeType;
+      if (/\.mov$/i.test(f.name) && !mimeType?.startsWith("video/")) {
+        mimeType = "video/quicktime";
+      } else if (/\.mp4$/i.test(f.name) && !mimeType?.startsWith("video/")) {
+        mimeType = "video/mp4";
+      }
+      return {
+        id: f.id,
+        name: f.name,
+        mimeType,
+        size: f.size,
+      };
+    });
 
     return NextResponse.json({
       success: true,
-      files: mediaFiles.map((f) => ({
-        id: f.id,
-        name: f.name,
-        mimeType: f.mimeType,
-        size: f.size,
-      })),
+      files: normalizedFiles,
     });
   } catch (err: any) {
     console.error("[Drive] Fatal Error during listing:", err);
