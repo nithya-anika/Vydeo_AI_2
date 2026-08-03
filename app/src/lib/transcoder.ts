@@ -344,27 +344,19 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
       }
     }
 
-    // Map custom color adjustments (Brightness, Contrast, Saturation) to Shotstack Filters
+    // Map custom color adjustments (Brightness, Contrast, Saturation) to Shotstack's strictly typed filter strings.
+    // Shotstack V1 API only accepts a single predefined string for filters, not custom numeric arrays.
     if (scene.colorAdjustments) {
-      clipObj.filter = clipObj.filter || [];
-
-      // Shotstack 'brightness' filter expects 0 (dark) to 2 (bright), with 1 being default.
-      // Editor sends -100 to 100.
-      if (scene.colorAdjustments.brightness !== 0) {
-        const brightness = 1 + (scene.colorAdjustments.brightness / 100);
-        clipObj.filter.push({ type: "brightness", amount: brightness });
-      }
-
-      // Shotstack 'contrast' filter expects 0 to 2, 1 being default.
-      if (scene.colorAdjustments.contrast !== 0) {
-        const contrast = 1 + (scene.colorAdjustments.contrast / 100);
-        clipObj.filter.push({ type: "contrast", amount: contrast });
-      }
-
-      // Shotstack 'saturation' filter expects 0 (grayscale) to 2 (saturated), 1 being default.
-      if (scene.colorAdjustments.saturation !== 0) {
-        const saturation = 1 + (scene.colorAdjustments.saturation / 100);
-        clipObj.filter.push({ type: "saturation", amount: saturation });
+      if (scene.colorAdjustments.brightness > 20) {
+        clipObj.filter = "lighten";
+      } else if (scene.colorAdjustments.brightness < -20) {
+        clipObj.filter = "darken";
+      } else if (scene.colorAdjustments.contrast > 20) {
+        clipObj.filter = "contrast";
+      } else if (scene.colorAdjustments.saturation > 20) {
+        clipObj.filter = "boost";
+      } else if (scene.colorAdjustments.saturation < -50) {
+        clipObj.filter = "greyscale";
       }
     }
 
