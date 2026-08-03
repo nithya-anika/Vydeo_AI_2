@@ -1096,6 +1096,7 @@ function buildScenesFromPlan(
       clipId: clip.id,
       clipSrc: clip.src,
       clipType: "video" as const,
+      clipTrimStart: trim?.trimStart ?? 0,
       captions: [],
       transition: { type: transitionType, duration: transitionDuration } as StoreTransition,
       mood: "neutral" as const,
