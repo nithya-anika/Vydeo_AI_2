@@ -25,6 +25,8 @@ export interface SceneInput {
   clipTrimEnd?: number;
   playbackSpeed?: number;
   visualEffect?: string;
+  colorGrade?: string | null;
+  colorAdjustments?: any;
   transition?: { type: string; duration: number };
   captions?: RenderCaption[];
 }

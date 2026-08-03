@@ -233,6 +233,8 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       clipTrimStart: scene.clipTrimStart,
       clipTrimEnd: scene.clipTrimEnd,
       visualEffect: scene.visualEffect,
+      colorGrade: scene.colorGrade,
+      colorAdjustments: scene.colorAdjustments,
       transition: scene.transition,
       captions: scene.captions?.map((caption: any) => ({
         text: caption.text,
