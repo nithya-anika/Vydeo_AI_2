@@ -118,8 +118,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Storj uses a special gateway for public file access.
-    // Format: https://link.storjshare.io/raw/<ACCESS_KEY>/<BUCKET>/<PATH>
-    const publicUrl = `https://link.storjshare.io/raw/${storjAccessKey}/${storjBucket}/${pathSuffix}`;
+    // Use the STORJ_SHARED_KEY if provided, otherwise fallback to the access key (which may be blocked if not a shared key).
+    const publicAccessKey = process.env.STORJ_SHARED_KEY || storjAccessKey;
+    const publicUrl = `https://link.storjshare.io/raw/${publicAccessKey}/${storjBucket}/${pathSuffix}`;
     
     return NextResponse.json({
       success: true,
