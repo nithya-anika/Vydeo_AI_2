@@ -169,10 +169,10 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         
         if (uploadInitRes.ok) {
           const initData = await uploadInitRes.json();
-          const { url, gcsPath, token, isSupabase, publicUrl } = initData;
+          const { url, gcsPath, token, isSupabase, isS3, publicUrl } = initData;
 
           let uploadRes;
-          if (isSupabase) {
+          if (isSupabase || isS3) {
             uploadRes = await fetch(url, {
               method: "PUT",
               headers: { "Content-Type": clipMime },
@@ -189,6 +189,9 @@ export default function TopBar({ projectId }: { projectId?: string }) {
           if (uploadRes.ok) {
             if (isSupabase) {
               console.log(`[Export] Direct Supabase upload successful: ${publicUrl}`);
+              scene.clipSrc = publicUrl;
+            } else if (isS3) {
+              console.log(`[Export] Direct S3 (Storj) upload successful: ${publicUrl}`);
               scene.clipSrc = publicUrl;
             } else {
               console.log(`[Export] Direct GCS upload successful: gs://${gcsPath}`);
