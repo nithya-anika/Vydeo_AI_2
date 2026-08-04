@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createReadStream } from "fs";
 import { unlink } from "fs/promises";
 import { gunzipSync } from "zlib";
-import { renderVideo, getEngineType } from "@/lib/transcoder";
+import { renderVideo, getEngineType, cleanupCloudMedia } from "@/lib/transcoder";
 import type { SceneInput, AudioInput, BrandRenderInput } from "@/lib/transcoder";
 
 export const maxDuration = 300;
@@ -173,6 +173,17 @@ export async function POST(req: NextRequest) {
     // -----------------------------------
     // GOOGLE CLOUD TRANSCODER RENDER
     // -----------------------------------
+
+    // TRIGGER ZERO-FOOTPRINT CLOUD CLEANUP
+    // Delete source assets from Storj/Supabase now that rendering is complete
+    const urlsToCleanup = [
+      ...(envelope.scenes || []).map(s => s.clipSrc),
+      envelope.audio?.src,
+    ].filter(Boolean) as string[];
+
+    if (urlsToCleanup.length > 0) {
+      cleanupCloudMedia(urlsToCleanup).catch(e => console.error("[Cleanup Error]", e));
+    }
 
     return NextResponse.json({
       success: true,
