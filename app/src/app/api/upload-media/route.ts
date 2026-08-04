@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleAuth } from "google-auth-library";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export async function POST(req: NextRequest) {
@@ -36,10 +36,14 @@ export async function POST(req: NextRequest) {
       });
 
       const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-      // Storj uses a special gateway for public file access.
-      // Use the STORJ_SHARED_KEY if provided, otherwise fallback to the access key (which may be blocked if not a shared key).
-      const publicAccessKey = process.env.STORJ_SHARED_KEY || storjAccessKey;
-      const publicUrl = `https://link.storjshare.io/raw/${publicAccessKey}/${storjBucket}/${path}`;
+      
+      // Instead of relying on complex Storj public bucket permissions and the proprietary linkshare gateway,
+      // we generate a standard S3 Presigned GET URL valid for 24 hours (86400 seconds) so Shotstack can download it securely.
+      const getCommand = new GetObjectCommand({
+        Bucket: storjBucket,
+        Key: path,
+      });
+      const publicUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 86400 });
 
       return NextResponse.json({
         success: true,
