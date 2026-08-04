@@ -169,10 +169,10 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         
         if (uploadInitRes.ok) {
           const initData = await uploadInitRes.json();
-          const { url, gcsPath, token, isSupabase, isS3, publicUrl } = initData;
+          const { url, gcsPath, token, isS3, publicUrl } = initData;
 
           let uploadRes;
-          if (isSupabase || isS3) {
+          if (isS3) {
             uploadRes = await fetch(url, {
               method: "PUT",
               headers: { "Content-Type": clipMime },
@@ -187,10 +187,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
           }
 
           if (uploadRes.ok) {
-            if (isSupabase) {
-              console.log(`[Export] Direct Supabase upload successful: ${publicUrl}`);
-              scene.clipSrc = publicUrl;
-            } else if (isS3) {
+            if (isS3) {
               console.log(`[Export] Direct S3 (Storj) upload successful: ${publicUrl}`);
               scene.clipSrc = publicUrl;
             } else {
@@ -336,10 +333,10 @@ export default function TopBar({ projectId }: { projectId?: string }) {
 
               if (uploadInitRes.ok) {
                 const initData = await uploadInitRes.json();
-                const { url, gcsPath, token, isSupabase, publicUrl } = initData;
+                const { url, gcsPath, token, isS3, publicUrl } = initData;
 
                 let uploadRes;
-                if (isSupabase) {
+                if (isS3) {
                   uploadRes = await fetch(url, {
                     method: "PUT",
                     headers: { "Content-Type": "audio/mpeg" },
@@ -354,8 +351,8 @@ export default function TopBar({ projectId }: { projectId?: string }) {
                 }
 
                 if (uploadRes.ok) {
-                  if (isSupabase) {
-                    console.log(`[Export] Direct audio upload successful: ${publicUrl}`);
+                  if (isS3) {
+                    console.log(`[Export] Direct S3 (Storj) audio upload successful: ${publicUrl}`);
                     audioData = publicUrl;
                   } else {
                     console.log(`[Export] Direct GCS audio upload successful: gs://${gcsPath}`);

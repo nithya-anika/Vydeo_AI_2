@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleAuth } from "google-auth-library";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import path from "path";
 
 export const maxDuration = 60; // Give it up to 60 seconds per single file download/upload
-// Trigger fresh push to force Vercel to rebuild and sync with GitHub
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,13 +13,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "fileId, filename, and mimeType are required" }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const rawBucket = process.env.SUPABASE_BUCKET || "vydeoai2";
-    const supabaseBucket = rawBucket === "vydeoai" ? "vydeoai2" : rawBucket;
+    const storjAccessKey = process.env.STORJ_ACCESS_KEY;
+    const storjSecretKey = process.env.STORJ_SECRET_KEY;
+    const storjEndpoint = process.env.STORJ_ENDPOINT;
+    const storjBucket = process.env.STORJ_BUCKET || "vydeoai";
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Supabase Storage is not configured." }, { status: 500 });
+    if (!storjAccessKey || !storjSecretKey || !storjEndpoint) {
+      return NextResponse.json({ error: "Storj S3 Storage is not configured." }, { status: 500 });
     }
 
     // Google Drive Authentication
@@ -78,17 +79,33 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to download ${filename} from Google Drive: ${downloadRes.statusText}`);
     }
 
-    // Upload to Supabase Storage
-    const cleanUrl = supabaseUrl.replace(/\/$/, "");
+    // Upload to Storj S3 Storage
     const pathSuffix = `uploads/drive-${Date.now()}-${filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-    const uploadUrl = `${cleanUrl}/storage/v1/object/${supabaseBucket}/${pathSuffix}`;
+    
+    const s3Client = new S3Client({
+      region: "us-east-1", 
+      endpoint: storjEndpoint,
+      credentials: {
+        accessKeyId: storjAccessKey,
+        secretAccessKey: storjSecretKey,
+      },
+      forcePathStyle: true,
+    });
 
-    // Pipe the Google Drive ReadableStream directly to Supabase Storage!
+    const command = new PutObjectCommand({
+      Bucket: storjBucket,
+      Key: pathSuffix,
+      ContentType: mimeType,
+    });
+
+    // Generate a presigned URL valid for 1 hour to pipe to
+    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+    // Pipe the Google Drive ReadableStream directly to Storj S3 Storage!
     // This consumes 0MB of server RAM and easily supports multi-gigabyte transfers.
     const uploadRes = await fetch(uploadUrl, {
-      method: "POST",
+      method: "PUT",
       headers: {
-        "Authorization": `Bearer ${supabaseKey}`,
         "Content-Type": mimeType,
       },
       body: downloadRes.body,
@@ -97,10 +114,10 @@ export async function POST(req: NextRequest) {
 
     if (!uploadRes.ok) {
       const errText = await uploadRes.text();
-      throw new Error(`Failed to upload ${filename} to Supabase Storage: ${errText}`);
+      throw new Error(`Failed to upload ${filename} to Storj S3 Storage: ${errText}`);
     }
 
-    const publicUrl = `${cleanUrl}/storage/v1/object/public/${supabaseBucket}/${pathSuffix}`;
+    const publicUrl = `${storjEndpoint}/${storjBucket}/${pathSuffix}`;
     
     return NextResponse.json({
       success: true,
