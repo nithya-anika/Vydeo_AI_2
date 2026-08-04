@@ -36,7 +36,9 @@ export async function POST(req: NextRequest) {
       });
 
       const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-      const publicUrl = `${storjEndpoint}/${storjBucket}/${path}`;
+      // Storj uses a special gateway for public file access.
+      // Format: https://link.storjshare.io/raw/<ACCESS_KEY>/<BUCKET>/<PATH>
+      const publicUrl = `https://link.storjshare.io/raw/${storjAccessKey}/${storjBucket}/${path}`;
 
       return NextResponse.json({
         success: true,

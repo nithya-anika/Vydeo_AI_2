@@ -117,7 +117,9 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to upload ${filename} to Storj S3 Storage: ${errText}`);
     }
 
-    const publicUrl = `${storjEndpoint}/${storjBucket}/${pathSuffix}`;
+    // Storj uses a special gateway for public file access.
+    // Format: https://link.storjshare.io/raw/<ACCESS_KEY>/<BUCKET>/<PATH>
+    const publicUrl = `https://link.storjshare.io/raw/${storjAccessKey}/${storjBucket}/${pathSuffix}`;
     
     return NextResponse.json({
       success: true,
