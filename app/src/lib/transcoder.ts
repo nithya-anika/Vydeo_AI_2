@@ -12,6 +12,7 @@
  * — it needs roles/storage.objectAdmin and roles/transcoder.admin.
  */
 import { GoogleAuth } from "google-auth-library";
+import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 export interface SceneInput {
   id: string;
@@ -486,5 +487,61 @@ function aspectRatioToDimensions(r: string): [number, number] {
     case "4:5":  return [1080, 1350];
     case "3:4":  return [1080, 1440];
     default:     return [1080, 1920]; // 9:16
+  }
+}
+
+// ── Cleanup ───────────────────────────────────────────────────────────────────
+export async function cleanupCloudMedia(urls: string[]) {
+  const storjEndpoint = process.env.STORJ_ENDPOINT;
+  const storjBucket = process.env.STORJ_BUCKET || "vydeoai";
+  const storjAccessKey = process.env.STORJ_ACCESS_KEY;
+  const storjSecretKey = process.env.STORJ_SECRET_KEY;
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseBucket = process.env.SUPABASE_BUCKET || "vydeoai2";
+
+  for (const url of urls) {
+    if (!url) continue;
+
+    try {
+      // 1. Delete from Storj S3
+      if (storjEndpoint && storjAccessKey && storjSecretKey) {
+        const prefix = `${storjEndpoint}/${storjBucket}/`;
+        if (url.startsWith(prefix)) {
+          const key = url.replace(prefix, "");
+          const s3Client = new S3Client({
+            region: "us-east-1",
+            endpoint: storjEndpoint,
+            credentials: { accessKeyId: storjAccessKey, secretAccessKey: storjSecretKey },
+            forcePathStyle: true,
+          });
+          await s3Client.send(new DeleteObjectCommand({ Bucket: storjBucket, Key: key }));
+          console.log(`[Cleanup] Deleted from Storj: ${key}`);
+          continue;
+        }
+      }
+
+      // 2. Delete from Supabase
+      if (supabaseUrl && supabaseKey) {
+        const cleanUrl = supabaseUrl.replace(/\/$/, "");
+        const prefix = `${cleanUrl}/storage/v1/object/public/${supabaseBucket}/`;
+        if (url.startsWith(prefix)) {
+          const key = url.replace(prefix, "");
+          const deleteUrl = `${cleanUrl}/storage/v1/object/${supabaseBucket}/${encodeURIComponent(key)}`;
+          const delRes = await fetch(deleteUrl, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${supabaseKey}` },
+          });
+          if (delRes.ok) {
+            console.log(`[Cleanup] Deleted from Supabase: ${key}`);
+          } else {
+            console.warn(`[Cleanup] Supabase delete failed for ${key}: ${delRes.status}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[Cleanup] Failed to delete ${url}:`, err);
+    }
   }
 }
