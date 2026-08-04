@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleAuth } from "google-auth-library";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,6 +10,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Filename and contentType required" }, { status: 400 });
     }
 
+    const path = `uploads/${Date.now()}-${filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+
+    // 1. STORJ S3 INTEGRATION
+    const storjAccessKey = process.env.STORJ_ACCESS_KEY;
+    const storjSecretKey = process.env.STORJ_SECRET_KEY;
+    const storjEndpoint = process.env.STORJ_ENDPOINT;
+    const storjBucket = process.env.STORJ_BUCKET || "vydeoai";
+
+    if (storjAccessKey && storjSecretKey && storjEndpoint) {
+      const s3Client = new S3Client({
+        region: "us-east-1", // S3-compatible endpoints often default to this
+        endpoint: storjEndpoint,
+        credentials: {
+          accessKeyId: storjAccessKey,
+          secretAccessKey: storjSecretKey,
+        },
+        forcePathStyle: true, // Required for many S3 compatible providers like Storj
+      });
+
+      const command = new PutObjectCommand({
+        Bucket: storjBucket,
+        Key: path,
+        ContentType: contentType,
+      });
+
+      // Generate a presigned URL valid for 1 hour
+      const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+      
+      // Storj Public Link format: https://link.storjshare.io/raw/<access_key>/<bucket>/<path>
+      // To get a public link, the bucket must be shared, or you can construct it using the gateway.
+      // We will construct standard S3 virtual-hosted or path-style public URLs.
+      const publicUrl = `${storjEndpoint}/${storjBucket}/${path}`;
+
+      return NextResponse.json({
+        success: true,
+        url: uploadUrl,
+        isS3: true,
+        publicUrl,
+      });
+    }
+
+    // 2. SUPABASE INTEGRATION
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const rawBucket = process.env.SUPABASE_BUCKET || "vydeoai2";
@@ -15,7 +59,6 @@ export async function POST(req: NextRequest) {
 
     if (supabaseUrl && supabaseKey) {
       const cleanUrl = supabaseUrl.replace(/\/$/, "");
-      const path = `uploads/${Date.now()}-${filename}`;
       
       const signRes = await fetch(
         `${cleanUrl}/storage/v1/object/upload/sign/${supabaseBucket}/${path}`,
@@ -49,10 +92,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Google Cloud Storage fallback
+    // 3. GOOGLE CLOUD STORAGE FALLBACK
     const bucket = process.env.GCS_BUCKET;
     if (!bucket) {
-      return NextResponse.json({ error: "Neither GCS_BUCKET nor SUPABASE_URL are configured" }, { status: 400 });
+      return NextResponse.json({ error: "No cloud storage configured (Storj, Supabase, or GCS)" }, { status: 400 });
     }
 
     const auth = new GoogleAuth({
@@ -65,7 +108,7 @@ export async function POST(req: NextRequest) {
     });
     
     const token = await auth.getAccessToken();
-    const gcsPath = `uploads/${Date.now()}-${filename}`;
+    const gcsPath = path;
     
     return NextResponse.json({
       success: true,
@@ -73,6 +116,7 @@ export async function POST(req: NextRequest) {
       gcsPath,
       token,
       isSupabase: false,
+      isS3: false,
     });
   } catch (err: any) {
     console.error("[Upload] Error generating URL:", err);
