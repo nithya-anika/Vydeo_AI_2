@@ -4134,10 +4134,10 @@ export default function EditorShell({
       
       if (uploadInitRes.ok) {
         const initData = await uploadInitRes.json();
-        const { url, gcsPath, token, isSupabase, isS3, publicUrl } = initData;
+        const { url, gcsPath, token, isS3, publicUrl } = initData;
 
         let uploadRes;
-        if (isSupabase || isS3) {
+        if (isS3) {
           uploadRes = await fetch(url, {
             method: "PUT",
             headers: { "Content-Type": clipMime },
@@ -4152,10 +4152,7 @@ export default function EditorShell({
         }
 
         if (uploadRes.ok) {
-          if (isSupabase) {
-            console.log(`[Export] Direct Supabase upload successful: ${publicUrl}`);
-            scene.clipSrc = publicUrl;
-          } else if (isS3) {
+          if (isS3) {
             console.log(`[Export] Direct S3 (Storj) upload successful: ${publicUrl}`);
             scene.clipSrc = publicUrl;
           } else {
