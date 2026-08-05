@@ -5,9 +5,10 @@ import { Sparkles, SlidersHorizontal, ChevronRight } from 'lucide-react'
 import { useEditorStore } from '@/store/editorStore'
 import { IconButton } from '@/components/ui'
 import { AIPanel } from './AIPanel'
+import { AIAnalysisPanel } from './AIAnalysisPanel'
 import { Inspector } from '../inspector/Inspector'
 
-export type RightTab = 'ai' | 'inspector'
+export type RightTab = 'ai' | 'inspector' | 'analysis'
 
 export function RightDock({ tab, onTabChange, onCollapse }: {
   tab: RightTab
@@ -24,12 +25,15 @@ export function RightDock({ tab, onTabChange, onCollapse }: {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 10, flexShrink: 0 }}>
-        <div className="tabs" role="tablist" aria-label="AI and Inspector" style={{ flex: 1 }}>
-          <button type="button" role="tab" aria-selected={tab === 'ai'} className={`tab-item${tab === 'ai' ? ' active' : ''}`} onClick={() => onTabChange('ai')}>
-            <Sparkles size={13} /> AI Director
+        <div className="tabs" role="tablist" aria-label="AI, Inspector, and Analysis" style={{ flex: 1, display: 'flex', gap: 4 }}>
+          <button type="button" role="tab" aria-selected={tab === 'ai'} className={`tab-item${tab === 'ai' ? ' active' : ''}`} onClick={() => onTabChange('ai')} style={{ flex: 1, justifyContent: 'center' }}>
+            AI
           </button>
-          <button type="button" role="tab" aria-selected={tab === 'inspector'} className={`tab-item${tab === 'inspector' ? ' active' : ''}`} onClick={() => onTabChange('inspector')}>
-            <SlidersHorizontal size={13} /> Inspector
+          <button type="button" role="tab" aria-selected={tab === 'inspector'} className={`tab-item${tab === 'inspector' ? ' active' : ''}`} onClick={() => onTabChange('inspector')} style={{ flex: 1, justifyContent: 'center' }}>
+            Insp.
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'analysis'} className={`tab-item${tab === 'analysis' ? ' active' : ''}`} onClick={() => onTabChange('analysis')} style={{ flex: 1, justifyContent: 'center' }}>
+            Score
           </button>
         </div>
         {onCollapse && (
@@ -39,7 +43,9 @@ export function RightDock({ tab, onTabChange, onCollapse }: {
         )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {tab === 'ai' ? <AIPanel /> : <div style={{ flex: 1, overflowY: 'auto' }}><Inspector /></div>}
+        {tab === 'ai' && <AIPanel />}
+        {tab === 'inspector' && <div style={{ flex: 1, overflowY: 'auto' }}><Inspector /></div>}
+        {tab === 'analysis' && <AIAnalysisPanel />}
       </div>
     </div>
   )

@@ -50,6 +50,7 @@ import {
 import TimelinePanel from "./timeline/TimelinePanel";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui";
+import { AIAnalysisPanel } from "./right/AIAnalysisPanel";
 import { buildSceneVideoPrompt } from "@/lib/videoPrompt";
 import { inferRequestedColorAdjustments, inferRequestedColorGrade, inferRequestedTransition } from "@/lib/footagePromptControls";
 
@@ -3235,7 +3236,7 @@ export default function EditorShell({
   const [timelineExpanded, setTimelineExpanded] = useState(false);
 
   // Right tab
-  const [rightTab, setRightTab] = useState<"ai" | "inspector">("ai");
+  const [rightTab, setRightTab] = useState<"ai" | "inspector" | "analysis">("ai");
 
   // Project name editing
   const [editingName, setEditingName] = useState(false);
@@ -5121,7 +5122,7 @@ export default function EditorShell({
                 alignItems: "stretch",
               }}
             >
-              {(["ai", "inspector"] as const).map((tab) => (
+              {(["ai", "inspector", "analysis"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setRightTab(tab)}
@@ -5152,10 +5153,12 @@ export default function EditorShell({
                 >
                   {tab === "ai" ? (
                     <Sparkles size={11} />
+                  ) : tab === "analysis" ? (
+                    <Sparkles size={11} />
                   ) : (
                     <ZoomIn size={11} />
                   )}
-                  {tab === "ai" ? "AI" : "Inspector"}
+                  {tab === "ai" ? "AI" : tab === "analysis" ? "Score" : "Insp"}
                 </button>
               ))}
               <button
@@ -5193,6 +5196,7 @@ export default function EditorShell({
                   <InspectorContent />
                 </div>
               )}
+              {rightTab === "analysis" && <AIAnalysisPanel />}
             </div>
 
             {/* Resize handle */}
