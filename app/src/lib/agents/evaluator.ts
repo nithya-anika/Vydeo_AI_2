@@ -9,7 +9,7 @@
  *   UGC/Ads:            hook-quality(30%), pacing(20%), cta-clarity(20%), captions(15%), brand(15%)
  *   Travel/Cinematic:   story-arc(30%), visual-flow(25%), pacing(20%), captions(15%), brand(10%)
  *
- * Model: gemini-2.5-flash (evaluation doesn't need multimodal)
+ * Model: gemini-2.5-pro
  */
 
 import { geminiRequest } from "@/lib/gemini";
@@ -42,8 +42,14 @@ export interface PlatformScore {
   insight: string;    // one-line explanation
 }
 
+export interface PromptCheckpoint {
+  point: string;
+  passed: boolean;
+  reason: string;
+}
+
 export interface EvaluationOutput {
-  overallScore: number;       // 0-100 weighted average
+  overallScore: number;       // 0-100 weighted average or prompt compliance score
   criteriaScores: CriterionScore[];
   platformScores: PlatformScore[];
   passedQA: boolean;          // overall >= 60
@@ -51,6 +57,8 @@ export interface EvaluationOutput {
   improvements: string[];
   compliments: string[];
   evalModel: string;
+  promptCheckpoints?: PromptCheckpoint[];
+  promptComplianceScore?: number;
 }
 
 export async function runEvaluator(input: EvaluationInput): Promise<EvaluationOutput> {
@@ -80,7 +88,10 @@ export async function runEvaluator(input: EvaluationInput): Promise<EvaluationOu
     colorGrade: input.timeline.globalColorGrade,
   };
 
-  const prompt = `You are a video quality evaluator. Score this generated timeline against the workflow's evaluation criteria AND platform suitability.
+  const prompt = `You are a video quality evaluator and compliance auditor.
+First, divide the ORIGINAL BRIEF into individual concrete requirements ("points" or checkpoints). You must extract at least 3-6 specific checklist items from the user's prompt (e.g. style, duration, specific scene instructions, transitions, text, music, visual mood, etc.).
+
+Then, evaluate the generated timeline against these individual checkpoints and against the workflow's evaluation criteria AND platform suitability.
 
 WORKFLOW: ${workflow.name} (${workflow.cluster})
 ORIGINAL BRIEF: "${input.originalPrompt}"
@@ -105,6 +116,18 @@ Also score the following PLATFORM DIMENSIONS 0-100:
 
 Return ONLY JSON:
 {
+  "promptCheckpoints": [
+    {
+      "point": "Create a travel montage",
+      "passed": true,
+      "reason": "The scenes list depicts high-quality travel landscapes and scenery."
+    },
+    {
+      "point": "Warm color grading",
+      "passed": false,
+      "reason": "The global color grade is set to 'vibrant' instead of 'warm'."
+    }
+  ],
   "criteriaScores": [
     {
       "criterion": "hook-quality",
@@ -128,7 +151,7 @@ Return ONLY JSON:
   "compliments": ["Caption copy is punchy and on-brand", "Fast pacing matches the platform"]
 }
 
-Note: overallScore will be calculated from criteriaScores — do not include it.`;
+Note: Do NOT include overallScore or passedQA in the JSON. They are computed programmatically.`;
 
   try {
     const data = await geminiRequest(MODEL, {
@@ -138,7 +161,12 @@ Note: overallScore will be calculated from criteriaScores — do not include it.
 
     const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
       .candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-    const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as Omit<EvaluationOutput, "overallScore" | "passedQA" | "evalModel" | "platformScores"> & { platformScores?: PlatformScore[] };
+    const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as Omit<EvaluationOutput, "overallScore" | "passedQA" | "evalModel" | "platformScores"> & { platformScores?: PlatformScore[], promptCheckpoints?: PromptCheckpoint[] };
+
+    const promptCheckpoints = parsed.promptCheckpoints ?? [];
+    const totalCheckpoints = promptCheckpoints.length;
+    const passedCheckpoints = promptCheckpoints.filter(cp => cp.passed).length;
+    const promptComplianceScore = totalCheckpoints > 0 ? Math.round((passedCheckpoints / totalCheckpoints) * 100) : 100;
 
     // Recompute weighted score from criteria
     const scores = parsed.criteriaScores ?? [];
@@ -164,19 +192,44 @@ Note: overallScore will be calculated from criteriaScores — do not include it.
       }
     }
 
-    const overallScore = Math.round(scores.reduce((sum, s) => sum + s.weightedScore, 0));
+    // overallScore is calculated purely based on the individual requirements (checkpoints) passed.
+    const overallScore = totalCheckpoints > 0 ? promptComplianceScore : Math.round(scores.reduce((sum, s) => sum + s.weightedScore, 0));
 
-    console.log(`[evaluator] ${workflow.id} → score: ${overallScore}/100 | ${Date.now() - start}ms`);
+    // Construct detailed checklist comments to display which are passing and which are failing
+    const compliments = parsed.compliments ?? [];
+    const issues = parsed.issues ?? [];
+    const improvements = parsed.improvements ?? [];
+
+    if (totalCheckpoints > 0) {
+      const passingList = promptCheckpoints.filter(cp => cp.passed);
+      const failingList = promptCheckpoints.filter(cp => !cp.passed);
+
+      // Prepend failing ones to issues
+      const failingMessages = failingList.map(cp => `❌ [FAILED] Point: "${cp.point}" — ${cp.reason}`);
+      issues.unshift(...failingMessages);
+
+      // Prepend passing ones to compliments
+      const passingMessages = passingList.map(cp => `✅ [PASSED] Point: "${cp.point}" — ${cp.reason}`);
+      compliments.unshift(...passingMessages);
+
+      // Prepend score above
+      const summaryMsg = `🎯 PROMPT COMPLIANCE SCORE: ${promptComplianceScore}% (${passedCheckpoints}/${totalCheckpoints} checkpoints passed)`;
+      compliments.unshift(summaryMsg);
+    }
+
+    console.log(`[evaluator] ${workflow.id} → compliance score: ${promptComplianceScore}/100, checkpoints: ${passedCheckpoints}/${totalCheckpoints} | ${Date.now() - start}ms`);
 
     return {
       overallScore,
       criteriaScores: scores,
       platformScores: parsed.platformScores ?? [],
       passedQA: overallScore >= 60,
-      issues: parsed.issues ?? [],
-      improvements: parsed.improvements ?? [],
-      compliments: parsed.compliments ?? [],
+      issues,
+      improvements,
+      compliments,
       evalModel: MODEL,
+      promptCheckpoints,
+      promptComplianceScore,
     };
   } catch (e) {
     // Non-fatal — return neutral score
@@ -204,5 +257,7 @@ function buildNeutralEval(criteria: EvaluationCriterion[], model: string): Evalu
     improvements: ["Run evaluation manually for detailed scoring"],
     compliments: [],
     evalModel: model,
+    promptCheckpoints: [],
+    promptComplianceScore: 70,
   };
 }
