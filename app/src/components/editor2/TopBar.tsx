@@ -90,120 +90,96 @@ export default function TopBar({ projectId }: { projectId?: string }) {
     let clipData: string | null = null;
     let clipMime = clip?.file?.type ?? "";
     let clipExt = clip?.file?.name?.split(".").pop()?.toLowerCase() ?? getExtensionFromUrl(scene.clipSrc ?? "") ?? "";
+    
+    // We keep a reference to the raw Blob/File instead of eagerly converting to base64
+    let rawMediaBlob: Blob | File | null = null;
 
     if (clip?.file instanceof File && clip.file.size > 0) {
-      clipData = await fileToDataUrl(clip.file);
+      rawMediaBlob = clip.file;
       clipMime = clip.file.type || clipMime;
       clipExt = clipExt || (clip.file.name.split(".").pop()?.toLowerCase() ?? "");
     } else if (clip?.file instanceof File && clip.file.size === 0) {
       if (scene.clipSrc) {
-        console.warn(
-          `[Export] Skipping empty placeholder file for scene "${scene.label}" and falling back to clipSrc.`
-        );
+        console.warn(`[Export] Skipping empty placeholder file for scene "${scene.label}" and falling back to clipSrc.`);
       } else {
-        console.warn(
-          `[Export] Scene "${scene.label}" has no media because the attached file is empty and no clipSrc fallback is available; rendering will use a placeholder frame.`
-        );
-        clipData = null;
+        console.warn(`[Export] Scene "${scene.label}" has no media because the attached file is empty and no clipSrc fallback is available.`);
       }
     }
 
-    if (!clipData && scene.clipSrc) {
+    if (!rawMediaBlob && scene.clipSrc) {
       if (String(scene.clipSrc).startsWith("http://") || String(scene.clipSrc).startsWith("https://") || String(scene.clipSrc).startsWith("gs://")) {
-        console.log(
-          `[Export] Remote media URL found — skipping browser download, server will fetch directly for scene "${scene.label}".`
-        );
-        // Keep clipData null so the payload stays light, server will fetch it!
+        console.log(`[Export] Remote media URL found — server will fetch directly for scene "${scene.label}".`);
       } else {
         let response = null;
         try {
           response = await fetch(scene.clipSrc);
         } catch (err) {
-          console.warn(
-            `[Export] Network error fetching clip for scene "${scene.label}":`, err
-          );
+          console.warn(`[Export] Network error fetching clip for scene "${scene.label}":`, err);
         }
-        if (!response || !response.ok) {
-          console.warn(
-            `[Export] Could not fetch clip for scene "${scene.label}"; rendering will use a placeholder frame.`
-          );
-          clipData = null;
-        } else {
+        if (response && response.ok) {
           const blob = await response.blob();
-          if (blob.size === 0) {
-            console.warn(
-              `[Export] Scene "${scene.label}" returned an empty media file; rendering will use a placeholder frame.`
-            );
-            clipData = null;
-          } else {
+          if (blob.size > 0) {
+            rawMediaBlob = blob;
             clipMime = blob.type || clipMime;
             clipExt = clipExt || getExtensionFromUrl(scene.clipSrc) ?? "";
-            clipData = await blobToDataUrl(blob);
           }
         }
       }
     }
 
     // --- VERCEL PAYLOAD BYPASS (Direct GCS Upload) ---
-    // If the generated base64 is larger than 100KB, upload it directly to GCS
-    // from the browser to bypass Vercel's strict 4.5MB Serverless request limits.
-    // This executes for BOTH local files and fetched blobs.
-    if (clipData && clipData.length > 100_000) {
-      console.log(`[Export] Media detected for scene "${scene.label}" (${(clipData.length / 1024 / 1024).toFixed(2)} MB). Bypassing payload via direct GCS upload...`);
-      try {
-        // Create a Blob from the Data URL for clean binary uploading
-        const b64Data = clipData.split(",")[1];
-        const byteCharacters = atob(b64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const uploadBlob = new Blob([byteArray], { type: clipMime });
+    // Instead of base64 converting massive files (which crashes V8 with 'Invalid string length'),
+    // we take the rawBlob, upload it securely to S3/GCS, and pass the URL forward.
+    if (rawMediaBlob) {
+      if (rawMediaBlob.size > 100_000) {
+        console.log(`[Export] Media detected for scene "${scene.label}" (${(rawMediaBlob.size / 1024 / 1024).toFixed(2)} MB). Direct uploading to cloud storage...`);
+        try {
+          const uploadInitRes = await fetch("/api/upload-media", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: `scene_${scene.id}.${clipExt}`, contentType: clipMime }),
+          });
+          
+          if (uploadInitRes.ok) {
+            const initData = await uploadInitRes.json();
+            const { url, gcsPath, token, isS3, publicUrl } = initData;
 
-        const uploadInitRes = await fetch("/api/upload-media", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: `scene_${scene.id}.${clipExt}`, contentType: clipMime }),
-        });
-        
-        if (uploadInitRes.ok) {
-          const initData = await uploadInitRes.json();
-          const { url, gcsPath, token, isS3, publicUrl } = initData;
-
-          let uploadRes;
-          if (isS3) {
-            uploadRes = await fetch(url, {
-              method: "PUT",
-              headers: { "Content-Type": clipMime },
-              body: uploadBlob,
-            });
-          } else {
-            uploadRes = await fetch(url, {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${token}`, "Content-Type": clipMime, "Content-Length": String(uploadBlob.size) },
-              body: uploadBlob,
-            });
-          }
-
-          if (uploadRes.ok) {
+            let uploadRes;
             if (isS3) {
-              console.log(`[Export] Direct S3 (Storj) upload successful: ${publicUrl}`);
-              scene.clipSrc = publicUrl;
+              uploadRes = await fetch(url, {
+                method: "PUT",
+                headers: { "Content-Type": clipMime },
+                body: rawMediaBlob,
+              });
             } else {
-              console.log(`[Export] Direct GCS upload successful: gs://${gcsPath}`);
-              scene.clipSrc = `gs://${gcsPath}`; // Server transcoder natively understands gs://
+              uploadRes = await fetch(url, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${token}`, "Content-Type": clipMime, "Content-Length": String(rawMediaBlob.size) },
+                body: rawMediaBlob,
+              });
             }
-            clipData = null; // Clear base64 to keep payload tiny
-          } else {
-            console.warn(`[Export] Direct upload failed with status ${uploadRes.status}`);
+
+            if (uploadRes.ok) {
+              if (isS3) {
+                scene.clipSrc = publicUrl;
+              } else {
+                scene.clipSrc = `gs://${gcsPath}`;
+              }
+              // We successfully uploaded it, no need to inject clipData into the JSON payload
+              rawMediaBlob = null; 
+            } else {
+              console.warn(`[Export] Direct upload failed with status ${uploadRes.status}`);
+            }
           }
-        } else {
-          const errJson = await uploadInitRes.json();
-          console.warn(`[Export] Direct upload init failed:`, errJson);
+        } catch (err) {
+          console.warn(`[Export] Direct upload crashed for scene "${scene.label}".`, err);
         }
-      } catch (err) {
-        console.warn(`[Export] Direct GCS upload failed for scene "${scene.label}", falling back to base64 payload.`, err);
+      }
+
+      // If the file was tiny (< 100KB) OR the cloud upload failed, 
+      // fallback to sending it as an inline base64 string
+      if (rawMediaBlob) {
+        clipData = await blobToDataUrl(rawMediaBlob);
       }
     }
 
@@ -213,9 +189,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       const base64 = commaIndex >= 0 ? clipData.slice(commaIndex + 1) : "";
 
       if (!header.includes(";base64") || !base64.trim()) {
-        console.warn(
-          `[Export] Scene "${scene.label}" contains an empty media file; rendering will use a placeholder frame.`
-        );
+        console.warn(`[Export] Scene "${scene.label}" returned invalid base64.`);
         clipData = null;
       }
     }
