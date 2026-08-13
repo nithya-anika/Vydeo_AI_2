@@ -518,6 +518,8 @@ export default function FootagePage() {
           aspectRatio,
           totalDuration: clipScenes.reduce((s, sc) => s + sc.duration, 0),
           prompt: prompt.trim(),
+          aiScore: score ?? 0,
+          aiFeedback: feedback ?? "",
           scenes: clipScenes,
           clips: clips.map((c) => ({
             id: c.id,

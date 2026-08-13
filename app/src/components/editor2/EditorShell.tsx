@@ -3364,6 +3364,8 @@ export default function EditorShell({
       aspectRatio: AspectRatio;
       totalDuration: number;
       prompt?: string;
+      aiScore?: number;
+      aiFeedback?: string;
       scenes: Scene[];
       clips: PendingClip[];
     };
@@ -3411,6 +3413,11 @@ export default function EditorShell({
       totalDuration: payload.totalDuration,
       aspectRatio: payload.aspectRatio,
     });
+    
+    if (payload.prompt) {
+      useEditorStore.getState().setAiMetadata(payload.prompt, payload.aiScore ?? 0, payload.aiFeedback ?? "");
+    }
+    
     useEditorStore.getState().setLeftTab("transitions");
   }, []);
 
