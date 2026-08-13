@@ -229,7 +229,7 @@ export default function FootagePage() {
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [aspectRatio, setAspectRatioLocal] = useState<AspectRatio>("9:16");
-  const [targetDuration, setTargetDuration] = useState(30);
+  const [targetDuration, setTargetDuration] = useState(-1);
   const [processing, setProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
