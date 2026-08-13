@@ -11,7 +11,7 @@ import {
 
 export { inferRequestedColorAdjustments, inferRequestedTransition } from "@/lib/footagePromptControls";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const MODEL = "gemini-2.5-pro";
 const VALID_TRANSITIONS = FOOTAGE_TRANSITION_TYPES;
