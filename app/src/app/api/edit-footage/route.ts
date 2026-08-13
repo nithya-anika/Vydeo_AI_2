@@ -169,8 +169,10 @@ export async function POST(req: NextRequest) {
     const MAX_ATTEMPTS = 3;
     let finalPlan: EditPlan | null = null;
     let bestPlan: EditPlan | null = null;
-    let highestScore = 0;
+    let highestScore = -1;
     let previousFeedback = "";
+    let bestFeedback = "";
+    let finalFeedback = "";
 
     while (attempt <= MAX_ATTEMPTS) {
       // Build multimodal parts: text + image frames for each clip
@@ -284,17 +286,36 @@ The user provided this creative editing prompt: "${creativePrompt}"
 The editor generated this JSON plan:
 ${JSON.stringify(plan)}
 
-Analyze if the editor strictly followed the instructions (like starting/ending with specific clips, front-trimming, removing audio).
-Return a JSON object containing a "score" and a "feedback" string.
-The "feedback" string MUST be formatted as a numbered checklist using emojis (✅ for success, ❌ for failure) evaluating each specific condition requested in the prompt.
+Analyze if the editor strictly followed the instructions (like starting/ending with specific clips, front-trimming, removing audio, specific sequence order, conversation pacing, transitions).
 
-Example feedback format:
-"1) Start with girl ✅\n2) End with boy in black tshirt ❌ (Ended with clip 3 instead)\n3) Trim the beginning of the clip ✅"
+First, divide the user's creative editing prompt into individual concrete requirements ("points" or checkpoints). You must split compound sentences into separate, single-point checklist items (e.g. "keep the black dress woman... in beginning", "then keep white dress one", "then use black dress one", "remaining at end", "arrange so their conversations look good").
 
-Return JSON:
+For each checkpoint, determine if the plan successfully implements it.
+
+Return ONLY a JSON object:
 {
-  "score": 0 to 100,
-  "feedback": "Your formatted checklist here."
+  "checkpoints": [
+    {
+      "point": "Start with the black dress woman in front of a laptop",
+      "passed": true
+    },
+    {
+      "point": "Follow next with the white dress clip",
+      "passed": true
+    },
+    {
+      "point": "Follow next with the black dress clip",
+      "passed": true
+    },
+    {
+      "point": "Keep remaining clips at the end",
+      "passed": false
+    },
+    {
+      "point": "Arrange so their conversations look and sound good together",
+      "passed": false
+    }
+  ]
 }`;
 
         const evalResponse = await geminiRequest(MODEL, {
@@ -309,19 +330,57 @@ Return JSON:
         const evalCleaned = evalRaw.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
         const evalData = JSON.parse(evalCleaned);
         
-        const score = evalData.score ?? 0;
-        console.log(`[edit-footage] QA Evaluation Score: ${score}/100. Feedback: ${evalData.feedback}`);
+        const checkpoints = (evalData.checkpoints ?? []) as Array<{ point: string, passed: boolean }>;
+        const totalCheckpoints = checkpoints.length;
+        const passedCheckpoints = checkpoints.filter(c => c.passed).length;
+        const score = totalCheckpoints > 0 ? Math.round((passedCheckpoints / totalCheckpoints) * 100) : 100;
+
+        // Construct the EXACT requested feedback format:
+        // score : <score> %
+        //
+        // passed: 
+        //    1. "..."
+        // failed:
+        //    2. "..."
+        let index = 1;
+        const feedbackLines: string[] = [];
+        feedbackLines.push(`score : ${score} %\n`);
+        
+        feedbackLines.push("passed: ");
+        const passedList = checkpoints.filter(c => c.passed);
+        if (passedList.length > 0) {
+          passedList.forEach(c => {
+            feedbackLines.push(`   ${index++}. "${c.point}"`);
+          });
+        } else {
+          feedbackLines.push("   (none)");
+        }
+        
+        feedbackLines.push("\nfailed:");
+        const failedList = checkpoints.filter(c => !c.passed);
+        if (failedList.length > 0) {
+          failedList.forEach(c => {
+            feedbackLines.push(`   ${index++}. "${c.point}"`);
+          });
+        } else {
+          feedbackLines.push("   (none)");
+        }
+
+        const feedback = feedbackLines.join("\n");
+        console.log(`[edit-footage] QA Evaluation Score: ${score}/100. Feedback:\n${feedback}`);
 
         if (score > highestScore) {
           highestScore = score;
           bestPlan = plan;
+          bestFeedback = feedback;
         }
 
         if (score > 95) {
           finalPlan = plan;
+          finalFeedback = feedback;
           break; // Perfect! Escape the loop.
         } else {
-          previousFeedback = evalData.feedback ?? "Plan did not fully meet requirements.";
+          previousFeedback = feedback;
           attempt++;
         }
 
@@ -349,7 +408,8 @@ Return JSON:
       }
     }
 
-    return NextResponse.json({ success: true, plan, score: highestScore });
+    const finalFeedbackStr = finalPlan ? finalFeedback : bestFeedback;
+    return NextResponse.json({ success: true, plan, score: highestScore, feedback: finalFeedbackStr });
   } catch (err) {
     console.error("[edit-footage] route error:", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
