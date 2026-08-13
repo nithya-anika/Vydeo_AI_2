@@ -18,16 +18,21 @@ export function AIAnalysisPanel() {
     if (!aiFeedback) return null;
     const lines = aiFeedback.split('\n').map(l => l.trim()).filter(Boolean);
     
-    let currentSection: 'passed' | 'failed' | null = null;
-    
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {lines.map((line, index) => {
-          // Detect Score Header
-          if (line.toLowerCase().startsWith('score :')) {
+          const lowerLine = line.toLowerCase();
+          
+          // 1. Detect Score Line (supports "score : 60%", "score: 60%", "🎯 PROMPT COMPLIANCE SCORE: ...", etc.)
+          if (lowerLine.includes('score :') || lowerLine.includes('score:') || line.startsWith('🎯')) {
             const scoreMatch = line.match(/(\d+)\s*%/);
             const scoreVal = scoreMatch ? Number(scoreMatch[1]) : (aiScore ?? 0);
             const scoreText = `${scoreVal}%`;
+            const detailText = line
+              .replace(/🎯\s*/g, '')
+              .replace(/score\s*:\s*\d+\s*%/gi, '')
+              .replace(/PROMPT COMPLIANCE SCORE:\s*\d+%\s*/i, '')
+              .trim();
             
             return (
               <div key={index} style={{
@@ -54,41 +59,65 @@ export function AIAnalysisPanel() {
                 </div>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.04em' }}>PROMPT COMPLIANCE</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, fontWeight: 500 }}>Points Passed / Total Points</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, fontWeight: 500 }}>
+                    {detailText || "Points Passed / Total Points"}
+                  </div>
                 </div>
               </div>
             );
           }
           
-          // Detect Passed Section Header
-          if (line.toLowerCase().startsWith('passed:')) {
-            currentSection = 'passed';
+          // 2. Detect Section Headers
+          if (lowerLine === 'passed:' || lowerLine === 'passed') {
             return (
               <div key={index} style={{ fontSize: 11, fontWeight: 800, color: '#10b981', textTransform: 'uppercase', marginTop: 12, marginBottom: 4, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }}></span>
-                PASSED REQUIREMENTS
+                PASSED
               </div>
             );
           }
-          
-          // Detect Failed Section Header
-          if (line.toLowerCase().startsWith('failed:')) {
-            currentSection = 'failed';
+          if (lowerLine === 'failed:' || lowerLine === 'failed') {
             return (
               <div key={index} style={{ fontSize: 11, fontWeight: 800, color: '#ef4444', textTransform: 'uppercase', marginTop: 12, marginBottom: 4, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }}></span>
-                FAILED REQUIREMENTS
+                FAILED
               </div>
             );
           }
 
-          // Detect Checklist Item
-          const numberedItemMatch = line.match(/^\s*(\d+)\.\s*"(.*)"\s*$/) || line.match(/^\s*(\d+)\.\s*(.*)\s*$/);
-          if (numberedItemMatch) {
-            const num = numberedItemMatch[1];
-            const text = numberedItemMatch[2];
-            const isPassed = currentSection === 'passed';
+          // 3. Detect Passed Item (contains ✅, ✓, or [PASSED])
+          const isPassedItem = 
+            line.includes('✅') || 
+            line.includes('✓') || 
+            lowerLine.includes('[passed]');
             
+          // 4. Detect Failed Item (contains ❌, ✗, or [FAILED])
+          const isFailedItem = 
+            line.includes('❌') || 
+            line.includes('✗') || 
+            lowerLine.includes('[failed]');
+
+          if (isPassedItem || isFailedItem) {
+            const isPassed = isPassedItem && !isFailedItem; // fallback check
+            
+            // Clean emojis, numbering, and brackets
+            let cleanedText = line
+              .replace(/^[✅❌✓✗\s]*/g, '') // remove leading symbols
+              .replace(/[✅❌✓✗\s]*$/g, '') // remove trailing symbols
+              .replace(/^\[PASSED\]\s*/gi, '')
+              .replace(/^\[FAILED\]\s*/gi, '')
+              .replace(/^Point:\s*/gi, '')
+              .trim();
+
+            // Try to extract dynamic number if line starts with e.g. "1) " or "1. " or "   1. "
+            const numMatch = line.match(/^\s*(\d+)[\.\)]\s*/);
+            const numText = numMatch ? numMatch[1] : (isPassed ? "✓" : "✗");
+            
+            if (numMatch) {
+              // Strip the leading number from the text as we render it in the badge
+              cleanedText = cleanedText.replace(/^\d+[\.\)]\s*/, '');
+            }
+
             return (
               <div key={index} style={{
                 background: isPassed ? 'rgba(16, 185, 129, 0.04)' : 'rgba(239, 68, 68, 0.04)',
@@ -106,106 +135,12 @@ export function AIAnalysisPanel() {
                   color: isPassed ? '#10b981' : '#ef4444',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 10, fontWeight: 800, flexShrink: 0, marginTop: 1
-                }}>{num}</div>
+                }}>{numText}</div>
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                  {text}
+                  {cleanedText}
                 </span>
               </div>
             );
-          }
-          
-          // Legacy/Fallback parsing for runEvaluator (✅ or ❌)
-          if (line.startsWith('🎯') || line.startsWith('✅') || line.startsWith('❌')) {
-            if (line.startsWith('🎯')) {
-              const scoreMatch = line.match(/(\d+)%/);
-              const scoreVal = scoreMatch ? Number(scoreMatch[1]) : (aiScore ?? 0);
-              const scoreText = `${scoreVal}%`;
-              const detailText = line.replace(/🎯\s*/, '').replace(/PROMPT COMPLIANCE SCORE:\s*\d+%\s*/i, '');
-              
-              return (
-                <div key={index} style={{
-                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.12) 100%)',
-                  border: '1px solid rgba(168, 85, 247, 0.25)',
-                  borderRadius: 'var(--r-lg)',
-                  padding: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 16,
-                  marginBottom: 8,
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                }}>
-                  <div style={{
-                    fontSize: 32,
-                    fontWeight: 900,
-                    background: 'linear-gradient(to right, #a855f7, #6366f1)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    fontFamily: 'monospace',
-                    letterSpacing: '-0.02em',
-                  }}>
-                    {scoreText}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.04em' }}>PROMPT COMPLIANCE</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, fontWeight: 500 }}>{detailText}</div>
-                  </div>
-                </div>
-              );
-            }
-            
-            if (line.startsWith('✅')) {
-              const text = line.replace(/^✅\s*\[PASSED\]\s*Point:\s*/, '').replace(/^✅\s*Point:\s*/, '').replace(/^✅\s*/, '');
-              return (
-                <div key={index} style={{
-                  background: 'rgba(16, 185, 129, 0.04)',
-                  border: '1px solid rgba(16, 185, 129, 0.12)',
-                  borderRadius: 'var(--r-md)',
-                  padding: '10px 12px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 10,
-                  marginBottom: 2,
-                }}>
-                  <div style={{
-                    width: 16, height: 16, borderRadius: '50%',
-                    background: 'rgba(16, 185, 129, 0.15)',
-                    color: '#10b981',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, fontWeight: 900, flexShrink: 0, marginTop: 1
-                  }}>✓</div>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                    <strong style={{ color: '#10b981', fontWeight: 700 }}>Passed:</strong> {text}
-                  </span>
-                </div>
-              );
-            }
-            
-            if (line.startsWith('❌')) {
-              const text = line.replace(/^❌\s*\[FAILED\]\s*Point:\s*/, '').replace(/^❌\s*Point:\s*/, '').replace(/^❌\s*/, '');
-              return (
-                <div key={index} style={{
-                  background: 'rgba(239, 68, 68, 0.04)',
-                  border: '1px solid rgba(239, 68, 68, 0.12)',
-                  borderRadius: 'var(--r-md)',
-                  padding: '10px 12px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 10,
-                  marginBottom: 2,
-                }}>
-                  <div style={{
-                    width: 16, height: 16, borderRadius: '50%',
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    color: '#ef4444',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, fontWeight: 900, flexShrink: 0, marginTop: 1
-                  }}>✗</div>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                    <strong style={{ color: '#ef4444', fontWeight: 700 }}>Failed:</strong> {text}
-                  </span>
-                </div>
-              );
-            }
           }
           
           // Regular line
