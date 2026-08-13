@@ -82,8 +82,8 @@ export interface RenderResult {
 // ── Engine detection ──────────────────────────────────────────────────────────
 export function getEngineType(): "cloud" | "local" {
   const hasCloudStorage = !!(process.env.GCS_BUCKET || process.env.STORJ_ENDPOINT);
-  const hasShotstack = !!process.env.SHOTSTACK_API_KEY;
-  return (hasCloudStorage && hasShotstack) ? "cloud" : "local";
+  const hasJson2Video = !!process.env.JSON2VIDEO_API_KEY;
+  return (hasCloudStorage && hasJson2Video) ? "cloud" : "local";
 }
 
 // ── Cloud Transcoder path ─────────────────────────────────────────────────────
@@ -235,82 +235,78 @@ function convertGsToPublicUrl(gsUrl: string): string {
   return gsUrl;
 }
 
-function toShotstackTransition(type: string): string {
+function toJson2VideoTransition(type: string): string {
   switch (type?.toLowerCase()) {
     case "fade":
     case "cinematic-fade":
+    case "dissolve":
       return "fade";
     case "wipe-left":
-      return "wipeLeft";
+      return "wipeleft";
     case "wipe-right":
-      return "wipeRight";
+      return "wiperight";
     case "slide-left":
-      return "slideLeft";
+      return "slideleft";
     case "slide-right":
-      return "slideRight";
-    case "zoom-in":
-    case "zoom-out":
-    case "zoom":
-      return "zoom";
+      return "slideright";
     default:
       return "fade";
   }
 }
 
-function toShotstackEffect(effect: string): string | undefined {
-  const e = effect?.toLowerCase();
-  if (!e) return undefined;
-  if (e.includes("warm")) return "warm";
-  if (e.includes("cool") || e.includes("blue") || e.includes("cold")) return "cold";
-  if (e.includes("vintage")) return "vintage";
-  if (e.includes("vibrant") || e.includes("rich")) return "vibrant";
-  if (e.includes("moody") || e.includes("dark")) return "dark";
-  if (e.includes("bright") || e.includes("light")) return "light";
-  if (e.includes("greyscale") || e.includes("grey") || e.includes("mono")) return "greyscale";
-  return undefined;
+function toJson2VideoCorrection(adjustments?: any, effect?: string) {
+  const correction: any = {};
+  
+  if (effect) {
+    const e = effect.toLowerCase();
+    if (e.includes("warm")) {
+      correction.saturation = 1.1;
+    } else if (e.includes("cool") || e.includes("blue") || e.includes("cold")) {
+      correction.saturation = 0.9;
+    } else if (e.includes("vibrant") || e.includes("rich")) {
+      correction.saturation = 1.3;
+      correction.contrast = 1.1;
+    } else if (e.includes("moody") || e.includes("dark")) {
+      correction.brightness = 0.8;
+      correction.contrast = 1.1;
+    } else if (e.includes("bright") || e.includes("light")) {
+      correction.brightness = 1.2;
+    } else if (e.includes("greyscale") || e.includes("grey") || e.includes("mono")) {
+      correction.saturation = 0.0;
+    }
+  }
+
+  if (adjustments) {
+    if (adjustments.brightness !== undefined) {
+      correction.brightness = (correction.brightness ?? 1) + (adjustments.brightness / 100);
+    }
+    if (adjustments.contrast !== undefined) {
+      correction.contrast = (correction.contrast ?? 1) + (adjustments.contrast / 100);
+    }
+    if (adjustments.saturation !== undefined) {
+      correction.saturation = (correction.saturation ?? 1) + (adjustments.saturation / 100);
+    }
+  }
+
+  return Object.keys(correction).length > 0 ? correction : undefined;
 }
 
 async function renderCloud(params: RenderParams): Promise<RenderResult> {
-  const apiKey = process.env.SHOTSTACK_API_KEY;
-  if (!apiKey) throw new Error("SHOTSTACK_API_KEY is not configured.");
+  const apiKey = process.env.JSON2VIDEO_API_KEY;
+  if (!apiKey) throw new Error("JSON2VIDEO_API_KEY is not configured.");
 
   const aspect = params.aspectRatio ?? "9:16";
-  let width = 1080;
-  let height = 1920;
+  let resolution = "full-hd";
   
   if (aspect === "16:9") {
-    width = 1920;
-    height = 1080;
-  } else if (aspect === "1:1") {
-    width = 1080;
-    height = 1080;
-  } else if (aspect === "4:5") {
-    width = 1080;
-    height = 1350;
+    resolution = "full-hd";
+  } else if (aspect === "1:1" || aspect === "4:5") {
+    resolution = "hd";
   }
 
-  // Map scenes to Shotstack clips with proper transition overlapping
-  let currentTime = 0;
-  const clips = params.scenes.map((scene, index) => {
+  // Map scenes to JSON2Video sequential scenes
+  const scenes = params.scenes.map((scene, index) => {
     const duration = scene.duration;
-
-    // Check if there is a transition from the previous clip
-    let transitionDuration = 0;
-    if (index > 0) {
-      const prevScene = params.scenes[index - 1];
-      if (prevScene.transition && prevScene.transition.type && prevScene.transition.type !== "cut") {
-        transitionDuration = prevScene.transition.duration ?? 0.5;
-      }
-    }
-
-    // Overlap the start time by the transition duration to create a smooth crossfade
-    const start = Math.max(0, currentTime - transitionDuration);
-    const length = duration;
-
-    // Advance time accumulated, accounting for the crossfade overlap
-    currentTime = start + length;
-
-    // Determine the media URL to feed to Shotstack
     let url = "";
     const rawUrl = scene.clipSrc ?? "";
     const resolvedUrl = convertGsToPublicUrl(rawUrl);
@@ -318,105 +314,64 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
     if (resolvedUrl && (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))) {
       url = resolvedUrl;
     } else {
-      throw new Error(`Shotstack requires public HTTP/HTTPS URLs. Scene "${scene.id}" has invalid or missing clipSrc.`);
+      throw new Error(`JSON2Video requires public HTTP/HTTPS URLs. Scene "${scene.id}" has invalid or missing clipSrc.`);
     }
 
-    // Determine if it is a video or image based on clipType or extension
     const isImage = scene.clipType === "image" || url.match(/\.(jpg|jpeg|png)$/i);
 
-    const clipObj: any = {
-      asset: isImage
-        ? { type: "image", src: url }
-        : { type: "video", src: url },
-      start,
-      length,
+    const elementObj: any = {
+      type: isImage ? "image" : "video",
+      src: url,
+      duration: duration,
     };
 
-    // Map visual effect (color grading) to Shotstack clips
-    if (scene.visualEffect) {
-      const effect = toShotstackEffect(scene.visualEffect);
-      if (effect) {
-        clipObj.effect = effect;
-      }
-    } else if (scene.colorGrade) {
-      const effect = toShotstackEffect(scene.colorGrade);
-      if (effect) {
-        clipObj.effect = effect;
-      }
+    const correction = toJson2VideoCorrection(scene.colorAdjustments, scene.visualEffect || scene.colorGrade || undefined);
+    if (correction) {
+      elementObj.correction = correction;
     }
 
-    // Map custom color adjustments (Brightness, Contrast, Saturation) to Shotstack's strictly typed filter strings.
-    // Shotstack V1 API only accepts a single predefined string for filters, not custom numeric arrays.
-    if (scene.colorAdjustments) {
-      if (scene.colorAdjustments.brightness > 20) {
-        clipObj.filter = "lighten";
-      } else if (scene.colorAdjustments.brightness < -20) {
-        clipObj.filter = "darken";
-      } else if (scene.colorAdjustments.contrast > 20) {
-        clipObj.filter = "contrast";
-      } else if (scene.colorAdjustments.saturation > 20) {
-        clipObj.filter = "boost";
-      } else if (scene.colorAdjustments.saturation < -50) {
-        clipObj.filter = "greyscale";
-      }
-    }
+    const sceneObj: any = {
+      elements: [elementObj],
+    };
 
-    // Map transitions to Shotstack clips
-    if (scene.transition && scene.transition.type && scene.transition.type !== "cut") {
-      const type = toShotstackTransition(scene.transition.type);
-      clipObj.transition = {
-        in: type,
-        out: type,
+    // Apply scene transition if set (defines transition FROM previous scene)
+    if (index > 0 && scene.transition && scene.transition.type && scene.transition.type !== "cut") {
+      const type = toJson2VideoTransition(scene.transition.type);
+      sceneObj.transition = {
+        type: "xfade",
+        style: type,
+        duration: scene.transition.duration ?? 0.8,
       };
     }
 
-    return clipObj;
+    return sceneObj;
   });
 
-  const timeline: any = {
-    background: "#000000",
-    tracks: [
-      {
-        clips,
-      },
-    ],
-  };
+  const elements: any[] = [];
 
   // Add background audio if present
   if (params.audio?.src) {
     const audioSrc = convertGsToPublicUrl(params.audio.src);
     if (audioSrc.startsWith("http://") || audioSrc.startsWith("https://")) {
-      timeline.tracks.push({
-        clips: [
-          {
-            asset: {
-              type: "audio",
-              src: audioSrc,
-              volume: params.audio.volume ?? 0.7,
-              effect: "fadeInFadeOut", // basic mapping for fade in/out
-            },
-            start: 0,
-            length: params.totalDuration ?? currentTime,
-          },
-        ],
+      elements.push({
+        type: "audio",
+        src: audioSrc,
+        volume: params.audio.volume ?? 0.7,
+        loop: true,
       });
     }
   }
 
   const payload = {
-    timeline,
-    output: {
-      format: "mp4",
-      resolution: "1080", // Unified 1080p HD rendering tier
-      aspectRatio: aspect, // Direct, native aspect ratio setting (9:16, 1:1, 16:9, etc.)
-      quality: "high", // Set to "high" for maximum, ultra-sharp bitrate matching the original video clarity!
-      fps: 30,
-    },
+    resolution,
+    quality: "high",
+    elements,
+    scenes,
   };
 
-  console.log("[Shotstack] Dispatching render request...");
+  console.log("[JSON2Video] Dispatching render request...");
 
-  const res = await fetch("https://api.shotstack.io/edit/v1/render", {
+  const res = await fetch("https://api.json2video.com/v2/movies", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -427,41 +382,45 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
 
   if (!res.ok) {
     const errorText = await res.text();
-    throw new Error(`Shotstack render request failed (${res.status}): ${errorText}`);
+    throw new Error(`JSON2Video render request failed (${res.status}): ${errorText}`);
   }
 
   const data = await res.json();
-  const renderId = data.response.id;
-  console.log(`[Shotstack] Render accepted. ID: ${renderId}`);
+  const projectId = data.project;
+  if (!projectId) {
+    throw new Error("JSON2Video response did not contain a project ID.");
+  }
+  console.log(`[JSON2Video] Render accepted. Project ID: ${projectId}`);
 
   // Polling
   const maxPolls = 120; // 10 minutes (5s intervals)
   for (let i = 0; i < maxPolls; i++) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
     
-    const statusRes = await fetch(`https://api.shotstack.io/edit/v1/render/${renderId}`, {
+    const statusRes = await fetch(`https://api.json2video.com/v2/movies?project=${projectId}`, {
       headers: { "x-api-key": apiKey },
     });
 
     if (!statusRes.ok) continue;
     const statusData = await statusRes.json();
-    const status = statusData.response.status;
+    const movie = statusData.movie;
+    const status = movie?.status;
 
     if (status === "done") {
-      console.log(`[Shotstack] Render complete!`);
+      console.log(`[JSON2Video] Render complete!`);
       return {
-        downloadUrl: statusData.response.url,
+        downloadUrl: movie.url,
         filename: params.outputFilename,
         engine: "cloud",
       };
-    } else if (status === "failed") {
-      throw new Error(`Shotstack render failed: ${statusData.response.error}`);
+    } else if (status === "error" || status === "failed") {
+      throw new Error(`JSON2Video render failed: ${movie?.message || "Unknown error"}`);
     } else {
-      console.log(`[Shotstack] Polling... Status: ${status}`);
+      console.log(`[JSON2Video] Polling... Status: ${status}`);
     }
   }
 
-  throw new Error("Shotstack render timed out after 10 minutes.");
+  throw new Error("JSON2Video render timed out after 10 minutes.");
 }
 
 // ── Local FFmpeg fallback path ────────────────────────────────────────────────
