@@ -16,49 +16,49 @@ describe("Transcoder Engine Detection and GCS Helpers", () => {
   it("should return 'local' by default if no credentials are configured", () => {
     delete process.env.GCS_BUCKET;
     delete process.env.STORJ_ENDPOINT;
-    delete process.env.SHOTSTACK_API_KEY;
+    delete process.env.JSON2VIDEO_API_KEY;
     expect(getEngineType()).toBe("local");
   });
 
   it("should return 'local' if only GCS_BUCKET is configured", () => {
     process.env.GCS_BUCKET = "my-test-bucket";
     delete process.env.STORJ_ENDPOINT;
-    delete process.env.SHOTSTACK_API_KEY;
+    delete process.env.JSON2VIDEO_API_KEY;
     expect(getEngineType()).toBe("local");
   });
 
   it("should return 'local' if only STORJ_ENDPOINT is configured", () => {
     delete process.env.GCS_BUCKET;
     process.env.STORJ_ENDPOINT = "https://gateway.storjshare.io";
-    delete process.env.SHOTSTACK_API_KEY;
+    delete process.env.JSON2VIDEO_API_KEY;
     expect(getEngineType()).toBe("local");
   });
 
-  it("should return 'local' if only SHOTSTACK_API_KEY is configured", () => {
+  it("should return 'local' if only JSON2VIDEO_API_KEY is configured", () => {
     delete process.env.GCS_BUCKET;
     delete process.env.STORJ_ENDPOINT;
-    process.env.SHOTSTACK_API_KEY = "test-key";
+    process.env.JSON2VIDEO_API_KEY = "test-key";
     expect(getEngineType()).toBe("local");
   });
 
-  it("should return 'cloud' if GCS_BUCKET and SHOTSTACK_API_KEY are configured", () => {
+  it("should return 'cloud' if GCS_BUCKET and JSON2VIDEO_API_KEY are configured", () => {
     process.env.GCS_BUCKET = "my-test-bucket";
     delete process.env.STORJ_ENDPOINT;
-    process.env.SHOTSTACK_API_KEY = "test-key";
+    process.env.JSON2VIDEO_API_KEY = "test-key";
     expect(getEngineType()).toBe("cloud");
   });
 
-  it("should return 'cloud' if STORJ_ENDPOINT and SHOTSTACK_API_KEY are configured", () => {
+  it("should return 'cloud' if STORJ_ENDPOINT and JSON2VIDEO_API_KEY are configured", () => {
     delete process.env.GCS_BUCKET;
     process.env.STORJ_ENDPOINT = "https://gateway.storjshare.io";
-    process.env.SHOTSTACK_API_KEY = "test-key";
+    process.env.JSON2VIDEO_API_KEY = "test-key";
     expect(getEngineType()).toBe("cloud");
   });
 
-  it("should return 'cloud' if GCS_BUCKET, STORJ_ENDPOINT, and SHOTSTACK_API_KEY are configured", () => {
+  it("should return 'cloud' if GCS_BUCKET, STORJ_ENDPOINT, and JSON2VIDEO_API_KEY are configured", () => {
     process.env.GCS_BUCKET = "my-test-bucket";
     process.env.STORJ_ENDPOINT = "https://gateway.storjshare.io";
-    process.env.SHOTSTACK_API_KEY = "test-key";
+    process.env.JSON2VIDEO_API_KEY = "test-key";
     expect(getEngineType()).toBe("cloud");
   });
 });
