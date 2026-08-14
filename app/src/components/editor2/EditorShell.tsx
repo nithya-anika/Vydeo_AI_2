@@ -2758,9 +2758,9 @@ function CanvasPreview({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const applyVideoAudioPreference = useCallback((node: HTMLVideoElement) => {
-    node.muted = activeScene?.muteVideoAudio === true;
-    node.playbackRate = activeScene?.playbackRate ?? 1;
-  }, [activeScene?.muteVideoAudio, activeScene?.playbackRate]);
+    node.muted = activeScene?.muted === true;
+    node.playbackRate = activeScene?.playbackSpeed ?? 1;
+  }, [activeScene?.muted, activeScene?.playbackSpeed]);
   const setVideoElement = useCallback((node: HTMLVideoElement | null) => {
     videoRef.current = node;
     if (transportVideoRef) transportVideoRef.current = node;
@@ -3019,7 +3019,7 @@ function CanvasPreview({
               data-testid="editor-main-preview-video"
               ref={setVideoElement}
               src={activeScene.clipSrc}
-              muted={activeScene.muteVideoAudio === true}
+              muted={activeScene.muted === true}
               style={{
                 width: "100%", height: "100%", objectFit: "cover",
                 filter: cssFilter !== "none" ? cssFilter : undefined,

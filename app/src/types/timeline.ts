@@ -75,6 +75,7 @@ export const SceneSchema = z.object({
   clipType: z.enum(["video", "image"]).optional(),
   clipTrimStart: z.number().min(0).optional(),
   clipTrimEnd: z.number().min(0).optional(),
+  muted: z.boolean().optional(),
   transition: z.object({
     type: TransitionTypeSchema,
     duration: z.number().min(0).max(3),
