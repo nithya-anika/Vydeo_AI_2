@@ -236,6 +236,51 @@ export default function FootagePage() {
   const [driveUrl, setDriveUrl] = useState("");
   const [importing, setImporting] = useState(false);
 
+  // Suggestor state
+  const [showSuggestor, setShowSuggestor] = useState(false);
+  const [suggestorMessages, setSuggestorMessages] = useState<{role: "user"|"ai", content: string}[]>([]);
+  const [suggestorInput, setSuggestorInput] = useState("");
+  const [isSuggesting, setIsSuggesting] = useState(false);
+
+  const handleSuggestorSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!suggestorInput.trim() || isSuggesting) return;
+
+    const userText = suggestorInput.trim();
+    setSuggestorInput("");
+    
+    const newMessages = [...suggestorMessages, { role: "user" as const, content: userText }];
+    setSuggestorMessages(newMessages);
+    setIsSuggesting(true);
+
+    try {
+      // Send clip context alongside the conversation
+      const clipInfosWithFrames = clips.map((c, i) => ({
+        index: i,
+        name: c.name,
+        duration: c.duration,
+        frames: (c.frames ?? []).slice(0, 2),
+      }));
+
+      const res = await fetch("/api/suggest-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages, clips: clipInfosWithFrames }),
+      });
+      const data = await res.json();
+      if (data.success && data.text) {
+        setSuggestorMessages(prev => [...prev, { role: "ai", content: data.text }]);
+      } else {
+        setSuggestorMessages(prev => [...prev, { role: "ai", content: "Sorry, I ran into an error generating a suggestion. Try again." }]);
+      }
+    } catch (err) {
+      console.error(err);
+      setSuggestorMessages(prev => [...prev, { role: "ai", content: "Network error occurred." }]);
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
   const handleDriveImport = async () => {
     if (!driveUrl) return;
     setImporting(true);
@@ -687,19 +732,38 @@ export default function FootagePage() {
                     </div>
 
                     {/* Summary bar */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 4 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <Film size={13} color="var(--text-tertiary)" />
-                        <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
-                          {clips.length} clip{clips.length !== 1 ? "s" : ""}
-                        </span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Film size={13} color="var(--text-tertiary)" />
+                          <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
+                            {clips.length} clip{clips.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Clock size={13} color="var(--text-tertiary)" />
+                          <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
+                            {formatDuration(totalFootageDuration)} total
+                          </span>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <Clock size={13} color="var(--text-tertiary)" />
-                        <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
-                          {formatDuration(totalFootageDuration)} total
-                        </span>
-                      </div>
+                      
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSuggestor(true);
+                        }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          padding: "6px 12px", borderRadius: "var(--r-md)",
+                          background: "var(--accent-subtle)", border: "1px solid var(--accent-border)",
+                          color: "var(--accent-light)", fontSize: 11, fontWeight: 700,
+                          cursor: "pointer", transition: "all 0.15s ease",
+                        }}
+                      >
+                        <Sparkles size={12} />
+                        Prompt Suggestor
+                      </button>
                     </div>
                   </>
                 )}
@@ -1011,6 +1075,152 @@ export default function FootagePage() {
           </motion.div>
         </div>
       </div>
+      {/* AI Prompt Suggestor Modal Overlay */}
+      <AnimatePresence>
+        {showSuggestor && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ 
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', 
+              zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+              padding: 24, backdropFilter: 'blur(4px)' 
+            }}
+            onClick={() => setShowSuggestor(false)}
+          >
+            <motion.div
+              initial={{ y: 20, scale: 0.95 }} animate={{ y: 0, scale: 1 }} exit={{ y: 20, scale: 0.95 }}
+              onClick={e => e.stopPropagation()}
+              style={{ 
+                width: '100%', maxWidth: 500, background: 'var(--bg-base)', 
+                border: '1px solid var(--border)', borderRadius: 'var(--r-2xl)', 
+                display: 'flex', flexDirection: 'column', height: '80vh', overflow: 'hidden', 
+                boxShadow: '0 24px 64px rgba(0,0,0,0.5)' 
+              }}
+            >
+              {/* Header */}
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Sparkles size={16} color="var(--accent)" />
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>AI Prompt Helper</span>
+                </div>
+                <button onClick={() => setShowSuggestor(false)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+                  <X size={16}/>
+                </button>
+              </div>
+
+              {/* Chat Area */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ alignSelf: 'flex-start', background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '12px 12px 12px 2px', fontSize: 13, color: 'var(--text-secondary)', maxWidth: '85%', lineHeight: 1.5 }}>
+                  Hi there! I can help you write the perfect prompt for our AI editor. Tell me what kind of video you want to make, and I'll analyze your {clips.length} uploaded clips to suggest the best instructions.
+                </div>
+                
+                {suggestorMessages.map((m, i) => {
+                  const isAi = m.role === 'ai';
+                  
+                  // Extract <suggested_prompt>...</suggested_prompt>
+                  let displayContent = m.content;
+                  let suggestedPrompt = null;
+                  
+                  if (isAi) {
+                    const match = m.content.match(/<suggested_prompt>([\s\S]*?)<\/suggested_prompt>/);
+                    if (match) {
+                      suggestedPrompt = match[1].trim();
+                      displayContent = m.content.replace(match[0], "").trim();
+                    }
+                  }
+
+                  return (
+                    <div key={i} style={{ 
+                      alignSelf: isAi ? 'flex-start' : 'flex-end', 
+                      display: 'flex', flexDirection: 'column', gap: 8,
+                      maxWidth: '85%' 
+                    }}>
+                      {displayContent && (
+                        <div style={{ 
+                          background: isAi ? 'var(--bg-elevated)' : 'var(--accent)', 
+                          color: isAi ? 'var(--text-secondary)' : '#fff',
+                          padding: '12px 16px', 
+                          borderRadius: isAi ? '12px 12px 12px 2px' : '12px 12px 2px 12px', 
+                          fontSize: 13, lineHeight: 1.5,
+                          whiteSpace: 'pre-wrap'
+                        }}>
+                          {displayContent}
+                        </div>
+                      )}
+                      
+                      {suggestedPrompt && (
+                        <div style={{
+                          background: 'rgba(99, 102, 241, 0.08)',
+                          border: '1px solid var(--accent-border)',
+                          borderRadius: '12px', padding: '16px',
+                          display: 'flex', flexDirection: 'column', gap: 12
+                        }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Suggested Prompt
+                          </div>
+                          <div style={{ fontSize: 13, color: 'var(--text-primary)', fontStyle: 'italic', background: 'var(--bg-base)', padding: 12, borderRadius: 6, border: '1px solid var(--border)' }}>
+                            "{suggestedPrompt}"
+                          </div>
+                          <button
+                            onClick={() => {
+                              setPrompt(suggestedPrompt);
+                              setShowSuggestor(false);
+                            }}
+                            style={{
+                              background: 'var(--accent)', color: '#fff', border: 'none',
+                              padding: '8px 0', borderRadius: '6px', fontSize: 12, fontWeight: 700,
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                            }}
+                          >
+                            <ArrowRight size={14} /> Use this prompt
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                
+                {isSuggesting && (
+                  <div style={{ alignSelf: 'flex-start', background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '12px 12px 12px 2px', fontSize: 13, color: 'var(--text-tertiary)' }}>
+                    Thinking...
+                  </div>
+                )}
+              </div>
+
+              {/* Input Area */}
+              <form onSubmit={handleSuggestorSubmit} style={{ padding: 16, borderTop: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={suggestorInput}
+                    onChange={e => setSuggestorInput(e.target.value)}
+                    placeholder="Describe what you want..."
+                    disabled={isSuggesting}
+                    style={{
+                      flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border)',
+                      borderRadius: 'var(--r-full)', padding: '10px 16px', fontSize: 13,
+                      color: 'var(--text-primary)', outline: 'none'
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!suggestorInput.trim() || isSuggesting}
+                    style={{
+                      background: suggestorInput.trim() && !isSuggesting ? 'var(--accent)' : 'var(--bg-elevated)',
+                      color: suggestorInput.trim() && !isSuggesting ? '#fff' : 'var(--text-tertiary)',
+                      border: 'none', width: 40, height: 40, borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: suggestorInput.trim() && !isSuggesting ? 'pointer' : 'default',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
