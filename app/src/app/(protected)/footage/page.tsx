@@ -966,23 +966,32 @@ export default function FootagePage() {
               </div>
             </div>
 
-            {/* What AI will do */}
+            {/* AI Prompt Suggestions */}
             <div style={{
               background: "linear-gradient(135deg, rgba(99,102,241,0.07) 0%, rgba(139,92,246,0.05) 100%)",
               border: "1px solid rgba(99,102,241,0.2)",
               borderRadius: "var(--r-xl)", padding: "16px",
             }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
-                What AI will do
+                AI Prompt Suggestions
               </div>
               {[
-                { icon: Shuffle, label: "Reorder clips per your prompt" },
-                { icon: Zap, label: "Apply transitions you specify" },
-                { icon: LayoutGrid, label: "Adjust brightness / color" },
-                { icon: Scissors, label: "Trim pauses & repeats" },
-                { icon: Music, label: "Suggest background music" },
-              ].map(({ icon: Icon, label }) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 9, fontSize: 12, color: "var(--text-secondary)" }}>
+                { icon: Shuffle, label: "Arrange clips by energy — slow start, intense middle, strong finish" },
+                { icon: LayoutGrid, label: "Extract the key moments and add quick transitions" },
+                { icon: Scissors, label: "Trim silent pauses and arrange chronologically" },
+              ].map(({ icon: Icon, label }, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => setPrompt(label)}
+                  style={{ 
+                    display: "flex", alignItems: "center", gap: 10, marginBottom: 9, 
+                    fontSize: 12, color: "var(--text-secondary)", cursor: "pointer",
+                    padding: "6px", borderRadius: "var(--r-sm)",
+                    transition: "background 0.15s ease",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(99,102,241,0.08)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
                   <div style={{
                     width: 22, height: 22, borderRadius: "var(--r-sm)",
                     background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.2)",
@@ -990,7 +999,7 @@ export default function FootagePage() {
                   }}>
                     <Icon size={11} color="var(--accent-light)" />
                   </div>
-                  {label}
+                  <span style={{ lineHeight: 1.4 }}>{label}</span>
                 </div>
               ))}
             </div>
