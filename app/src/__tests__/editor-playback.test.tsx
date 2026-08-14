@@ -420,7 +420,7 @@ describe("Editor playback transport", () => {
             shadows: 0,
           },
           effects: [],
-          muteVideoAudio: false,
+          muted: false,
         },
       ],
       clips: [

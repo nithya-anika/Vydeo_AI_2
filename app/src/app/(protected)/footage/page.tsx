@@ -1113,7 +1113,7 @@ function buildScenesFromPlan(
       colorGrade: requestedColorGrade,
       colorAdjustments: { ...colorAdj },
       effects: [],
-      muteVideoAudio: muteSourceAudio,
+      muted: muteSourceAudio,
     } satisfies StoreScene;
   });
 }

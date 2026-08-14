@@ -93,7 +93,7 @@ export interface Scene {
   colorGrade: string | null;
   colorAdjustments: ColorAdjustments;
   effects: string[];
-  muteVideoAudio?: boolean;
+  muted?: boolean;
 }
 
 export interface BrandKit {

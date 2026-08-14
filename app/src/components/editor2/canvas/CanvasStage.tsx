@@ -178,7 +178,7 @@ function CanvasPreview({ containerWidth, containerHeight, showGrid, showSafe }: 
       <div ref={frameRef} className="canvas-frame" style={{ width: previewW, height: previewH }}>
         {activeScene?.clipSrc ? (
           activeScene.clipType === 'video'
-            ? <video ref={videoRef} src={activeScene.clipSrc} muted={activeScene.muteVideoAudio === true} playsInline preload="auto" style={mediaStyle} />
+            ? <video ref={videoRef} src={activeScene.clipSrc} muted={activeScene.muted === true} playsInline preload="auto" style={mediaStyle} />
             : <img src={activeScene.clipSrc} alt="" style={mediaStyle} />
         ) : (
           <ScenePlaceholder scene={activeScene ?? null} sceneIndex={activeScene ? scenes.findIndex((s) => s.id === activeScene.id) : 0} totalScenes={scenes.length} />
