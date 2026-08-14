@@ -126,6 +126,17 @@ export function Inspector() {
         <Field label="Transition in">
           <Select options={SCENE_TRANSITIONS.map((t) => ({ label: t, value: t }))} value={activeScene.transition.type} onChange={(v) => updateScene(activeScene.id, { transition: { ...activeScene.transition, type: v as TransitionType } })} />
         </Field>
+        <Field label="Clip Audio">
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            fullWidth 
+            leftIcon={activeScene.muted ? <VolumeX size={13} /> : <Volume2 size={13} />} 
+            onClick={() => updateScene(activeScene.id, { muted: !activeScene.muted })}
+          >
+            {activeScene.muted ? 'Unmute Clip' : 'Mute Clip'}
+          </Button>
+        </Field>
         <Field label="Description"><Textarea value={activeScene.description} rows={2} autoResize onChange={(e) => updateScene(activeScene.id, { description: e.target.value })} /></Field>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <Button variant="secondary" size="sm" fullWidth leftIcon={<Plus size={13} />} onClick={() => addScene(activeScene.id)}>Add scene after</Button>
