@@ -2759,8 +2759,8 @@ function CanvasPreview({
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const applyVideoAudioPreference = useCallback((node: HTMLVideoElement) => {
     node.muted = activeScene?.muted === true;
-    node.playbackRate = activeScene?.playbackSpeed ?? 1;
-  }, [activeScene?.muted, activeScene?.playbackSpeed]);
+    node.playbackRate = activeScene?.playbackRate ?? 1;
+  }, [activeScene?.muted, activeScene?.playbackRate]);
   const setVideoElement = useCallback((node: HTMLVideoElement | null) => {
     videoRef.current = node;
     if (transportVideoRef) transportVideoRef.current = node;
@@ -3303,7 +3303,7 @@ export default function EditorShell({
       syncTransportVideo(state);
       if (transportVideoRef.current) {
         const activeScene = state.scenes.find((scene) => scene.id === state.activeSceneId) ?? state.scenes[0];
-        if (activeScene?.muteVideoAudio !== true) {
+        if (activeScene?.muted !== true) {
           transportVideoRef.current.muted = false;
         }
         transportVideoRef.current.playbackRate = activeScene?.playbackRate ?? 1;
@@ -3488,7 +3488,7 @@ export default function EditorShell({
     if (!raw) return;
     sessionStorage.removeItem("vydeoai_pending_video_gen");
 
-    type PendingScene = Pick<Scene, "id" | "order" | "label" | "description" | "duration" | "captions" | "transition" | "mood" | "colorGrade" | "colorAdjustments" | "effects" | "muteVideoAudio"> & {
+    type PendingScene = Pick<Scene, "id" | "order" | "label" | "description" | "duration" | "captions" | "transition" | "mood" | "colorGrade" | "colorAdjustments" | "effects" | "muted"> & {
       clipId?: string | null;
       clipSrc?: string | null;
       clipType?: Scene["clipType"];
@@ -3524,7 +3524,7 @@ export default function EditorShell({
           shadows: 0,
         },
         effects: full.effects ?? [],
-        muteVideoAudio: full.muteVideoAudio,
+        muted: full.muted,
       };
     });
 
@@ -3714,7 +3714,7 @@ export default function EditorShell({
               ? { ...s.colorAdjustments, ...(globalColor ?? {}), ...(requestedColor ?? {}) }
               : s.colorAdjustments,
             colorGrade: requestedColorGrade ?? s.colorGrade,
-            muteVideoAudio: muteAudio || s.muteVideoAudio,
+            muted: muteAudio || s.muted,
           };
         });
 
@@ -4245,7 +4245,7 @@ export default function EditorShell({
 
     clipData: clipData ?? undefined,
 
-    playbackSpeed:
+    playbackRate:
       scene.playbackRate ?? 1,
 
     clipTrimStart:
