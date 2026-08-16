@@ -1040,44 +1040,6 @@ export default function FootagePage() {
               </div>
             </div>
 
-            {/* AI Prompt Suggestions */}
-            <div style={{
-              background: "linear-gradient(135deg, rgba(99,102,241,0.07) 0%, rgba(139,92,246,0.05) 100%)",
-              border: "1px solid rgba(99,102,241,0.2)",
-              borderRadius: "var(--r-xl)", padding: "16px",
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
-                AI Prompt Suggestions
-              </div>
-              {[
-                { icon: Shuffle, label: "Arrange clips by energy — slow start, intense middle, strong finish" },
-                { icon: LayoutGrid, label: "Extract the key moments and add quick transitions" },
-                { icon: Scissors, label: "Trim silent pauses and arrange chronologically" },
-              ].map(({ icon: Icon, label }, i) => (
-                <div 
-                  key={i} 
-                  onClick={() => setPrompt(label)}
-                  style={{ 
-                    display: "flex", alignItems: "center", gap: 10, marginBottom: 9, 
-                    fontSize: 12, color: "var(--text-secondary)", cursor: "pointer",
-                    padding: "6px", borderRadius: "var(--r-sm)",
-                    transition: "background 0.15s ease",
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = "rgba(99,102,241,0.08)"}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                >
-                  <div style={{
-                    width: 22, height: 22, borderRadius: "var(--r-sm)",
-                    background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.2)",
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                  }}>
-                    <Icon size={11} color="var(--accent-light)" />
-                  </div>
-                  <span style={{ lineHeight: 1.4 }}>{label}</span>
-                </div>
-              ))}
-            </div>
-
             {/* Tips */}
             <div style={{ fontSize: 11, color: "var(--text-tertiary)", lineHeight: 1.6, padding: "0 4px" }}>
               <strong style={{ color: "var(--text-secondary)" }}>Tips:</strong> Longer prompts = better results. Mention mood, pace, audience, or platform. You can always refine in the editor.
