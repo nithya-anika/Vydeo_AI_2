@@ -28,7 +28,8 @@ CRITICAL INSTRUCTIONS:
    <suggested_prompt>Arrange chronologically starting with the white dress, transition slowly into the black dress, and use the laptop girl as the outro.</suggested_prompt>
    
    Would you like to use one of these, or would you like to provide more details to modify them?"
-4. Always ask the user if they want to modify/refine the prompts or if they are happy to use one.`;
+4. Always ask the user if they want to modify/refine the prompts or if they are happy to use one.
+5. EXTREMELY IMPORTANT: Keep your suggestions concise but highly descriptive. You MUST finish your entire response completely. NEVER cut off your response mid-sentence. Ensure all 3 <suggested_prompt> tags are fully closed.`;
 
     // Construct the parts payload for Gemini
     const contents: any[] = [];
@@ -72,11 +73,11 @@ CRITICAL INSTRUCTIONS:
       contents.push({ role, parts });
     }
 
-    const response = await geminiRequest("gemini-2.5-flash", {
+    const response = await geminiRequest("gemini-2.5-pro", {
       contents,
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 4096,
       },
     });
 
