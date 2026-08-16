@@ -242,15 +242,18 @@ export default function FootagePage() {
   const [suggestorInput, setSuggestorInput] = useState("");
   const [isSuggesting, setIsSuggesting] = useState(false);
 
-  const handleSuggestorSubmit = async (e?: React.FormEvent) => {
+  const handleSuggestorSubmit = async (e?: React.FormEvent, overrideText?: string) => {
     if (e) e.preventDefault();
-    if (!suggestorInput.trim() || isSuggesting) return;
+    const userText = overrideText ?? suggestorInput.trim();
+    if (!userText || isSuggesting) return;
 
-    const userText = suggestorInput.trim();
-    setSuggestorInput("");
+    if (!overrideText) setSuggestorInput("");
     
+    // We only display the user message in the UI if they actually typed it
     const newMessages = [...suggestorMessages, { role: "user" as const, content: userText }];
-    setSuggestorMessages(newMessages);
+    if (!overrideText) {
+      setSuggestorMessages(newMessages);
+    }
     setIsSuggesting(true);
 
     try {
@@ -269,7 +272,8 @@ export default function FootagePage() {
       });
       const data = await res.json();
       if (data.success && data.text) {
-        setSuggestorMessages(prev => [...prev, { role: "ai", content: data.text }]);
+        // If it was a hidden automated request, we don't save the user's hidden prompt to state, just the AI response
+        setSuggestorMessages(prev => overrideText ? [{ role: "ai", content: data.text }] : [...prev, { role: "ai", content: data.text }]);
       } else {
         setSuggestorMessages(prev => [...prev, { role: "ai", content: "Sorry, I ran into an error generating a suggestion. Try again." }]);
       }
@@ -280,6 +284,12 @@ export default function FootagePage() {
       setIsSuggesting(false);
     }
   };
+
+  useEffect(() => {
+    if (showSuggestor && suggestorMessages.length === 0) {
+      handleSuggestorSubmit(undefined, "Please analyze my clips and provide exactly 3 different prompt suggestions focusing heavily on how to rearrange them and what transitions to use.");
+    }
+  }, [showSuggestor]);
 
   const handleDriveImport = async () => {
     if (!driveUrl) return;
@@ -1110,23 +1120,25 @@ export default function FootagePage() {
 
               {/* Chat Area */}
               <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ alignSelf: 'flex-start', background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '12px 12px 12px 2px', fontSize: 13, color: 'var(--text-secondary)', maxWidth: '85%', lineHeight: 1.5 }}>
-                  Hi there! I can help you write the perfect prompt for our AI editor. Tell me what kind of video you want to make, and I'll analyze your {clips.length} uploaded clips to suggest the best instructions.
-                </div>
+                {suggestorMessages.length === 0 && (
+                  <div style={{ alignSelf: 'flex-start', background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '12px 12px 12px 2px', fontSize: 13, color: 'var(--text-secondary)', maxWidth: '85%', lineHeight: 1.5 }}>
+                    Hi there! I am analyzing your {clips.length} uploaded clips...
+                  </div>
+                )}
                 
                 {suggestorMessages.map((m, i) => {
                   const isAi = m.role === 'ai';
                   
-                  // Extract <suggested_prompt>...</suggested_prompt>
                   let displayContent = m.content;
-                  let suggestedPrompt = null;
+                  const suggestions: string[] = [];
                   
                   if (isAi) {
-                    const match = m.content.match(/<suggested_prompt>([\s\S]*?)<\/suggested_prompt>/);
-                    if (match) {
-                      suggestedPrompt = match[1].trim();
-                      displayContent = m.content.replace(match[0], "").trim();
+                    const regex = /<suggested_prompt>([\s\S]*?)<\/suggested_prompt>/g;
+                    let match;
+                    while ((match = regex.exec(m.content)) !== null) {
+                      suggestions.push(match[1].trim());
                     }
+                    displayContent = m.content.replace(/<suggested_prompt>[\s\S]*?<\/suggested_prompt>/g, "").trim();
                   }
 
                   return (
@@ -1148,32 +1160,36 @@ export default function FootagePage() {
                         </div>
                       )}
                       
-                      {suggestedPrompt && (
-                        <div style={{
-                          background: 'rgba(99, 102, 241, 0.08)',
-                          border: '1px solid var(--accent-border)',
-                          borderRadius: '12px', padding: '16px',
-                          display: 'flex', flexDirection: 'column', gap: 12
-                        }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            Suggested Prompt
-                          </div>
-                          <div style={{ fontSize: 13, color: 'var(--text-primary)', fontStyle: 'italic', background: 'var(--bg-base)', padding: 12, borderRadius: 6, border: '1px solid var(--border)' }}>
-                            "{suggestedPrompt}"
-                          </div>
-                          <button
-                            onClick={() => {
-                              setPrompt(suggestedPrompt);
-                              setShowSuggestor(false);
-                            }}
-                            style={{
-                              background: 'var(--accent)', color: '#fff', border: 'none',
-                              padding: '8px 0', borderRadius: '6px', fontSize: 12, fontWeight: 700,
-                              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
-                            }}
-                          >
-                            <ArrowRight size={14} /> Use this prompt
-                          </button>
+                      {suggestions.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                          {suggestions.map((suggestedPrompt, idx) => (
+                            <div key={idx} style={{
+                              background: 'rgba(99, 102, 241, 0.04)',
+                              border: '1px solid var(--accent-border)',
+                              borderRadius: '12px', padding: '16px',
+                              display: 'flex', flexDirection: 'column', gap: 12
+                            }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Suggestion {idx + 1}
+                              </div>
+                              <div style={{ fontSize: 13, color: 'var(--text-primary)', fontStyle: 'italic', background: 'var(--bg-base)', padding: 12, borderRadius: 6, border: '1px solid var(--border)' }}>
+                                "{suggestedPrompt}"
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setPrompt(suggestedPrompt);
+                                  setShowSuggestor(false);
+                                }}
+                                style={{
+                                  background: 'var(--accent)', color: '#fff', border: 'none',
+                                  padding: '8px 0', borderRadius: '6px', fontSize: 12, fontWeight: 700,
+                                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                                }}
+                              >
+                                <ArrowRight size={14} /> Use this prompt
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
