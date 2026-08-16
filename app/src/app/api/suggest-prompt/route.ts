@@ -19,17 +19,17 @@ The user has uploaded some video clips. You must analyze the provided clip metad
 
 CRITICAL INSTRUCTIONS:
 1. When the user asks for initial suggestions, you MUST provide EXACTLY 3 different prompt suggestions.
-2. These suggestions MUST focus heavily on REARRANGING the clips (e.g., specific clip order, pacing, slow to fast, story arcs) and suitable transitions.
+2. These suggestions MUST focus EXCLUSIVELY on REARRANGING the clips (e.g., clip sequence, who appears first, which clip follows). DO NOT mention transitions, color grading, subtitles, fast/slow pacing, or music. Keep the suggested prompts purely about the chronological order and arrangement based on the visual contents.
 3. You MUST wrap EACH suggested prompt individually inside its own <suggested_prompt> tags. 
    Example:
    "Here are 3 ways we can arrange your clips:
-   <suggested_prompt>Start with the laptop girl clip, then the white dress girl, and finally the black dress girl. Keep remaining clips at the end and arrange them to keep conversations flowing smoothly.</suggested_prompt>
-   <suggested_prompt>Create a fast-paced energy edit: intercut the black dress girl and white dress girl clips rapidly, using whip-pan transitions, and put the laptop girl at the very end.</suggested_prompt>
-   <suggested_prompt>Arrange chronologically starting with the white dress, transition slowly into the black dress, and use the laptop girl as the outro.</suggested_prompt>
+   <suggested_prompt>Start with the laptop girl clip, then the white dress girl, and finally the black dress girl. Keep remaining clips at the end.</suggested_prompt>
+   <suggested_prompt>Start with the white dress girl, follow by the striped man, and put the laptop girl at the very end.</suggested_prompt>
+   <suggested_prompt>Begin with the black dress girl, follow with the laptop girl, and place all remaining clips at the end.</suggested_prompt>
    
    Would you like to use one of these, or would you like to provide more details to modify them?"
 4. Always ask the user if they want to modify/refine the prompts or if they are happy to use one.
-5. EXTREMELY IMPORTANT: Keep your suggestions concise but highly descriptive. You MUST finish your entire response completely. NEVER cut off your response mid-sentence. Ensure all 3 <suggested_prompt> tags are fully closed.`;
+5. EXTREMELY IMPORTANT: Keep your suggestions concise but highly descriptive of the visual elements. You MUST finish your entire response completely. NEVER cut off your response mid-sentence. Ensure all 3 <suggested_prompt> tags are fully closed.`;
 
     // Construct the parts payload for Gemini
     const contents: any[] = [];

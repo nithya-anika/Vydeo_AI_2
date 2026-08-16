@@ -286,34 +286,23 @@ The user provided this creative editing prompt: "${creativePrompt}"
 The editor generated this JSON plan:
 ${JSON.stringify(plan)}
 
-Analyze if the editor strictly followed the instructions (like starting/ending with specific clips, front-trimming, removing audio, specific sequence order, conversation pacing, transitions).
+Analyze ONLY the clip arrangement and sequence order. Ignore any instructions related to transitions, pacing, subtitles, text, music, trimming, or color grading.
 
-First, divide the user's creative editing prompt into individual concrete requirements ("points" or checkpoints). You must split compound sentences into separate, single-point checklist items (e.g. "keep the black dress woman... in beginning", "then keep white dress one", "then use black dress one", "remaining at end", "arrange so their conversations look good").
+First, extract ONLY the requirements from the user's prompt that relate to clip order and arrangement ("start with X", "end with Y", "follow with Z"). 
+Divide these arrangement requirements into individual concrete checkpoints.
 
-For each checkpoint, determine if the plan successfully implements it.
+For each checkpoint, determine if the plan's \`sceneOrder\` array successfully implements it.
 
 Return ONLY a JSON object:
 {
   "checkpoints": [
     {
-      "point": "Start with the black dress woman in front of a laptop",
+      "point": "Start with the laptop girl clip",
       "passed": true
     },
     {
-      "point": "Follow next with the white dress clip",
+      "point": "Follow next with the white dress girl clip",
       "passed": true
-    },
-    {
-      "point": "Follow next with the black dress clip",
-      "passed": true
-    },
-    {
-      "point": "Keep remaining clips at the end",
-      "passed": false
-    },
-    {
-      "point": "Arrange so their conversations look and sound good together",
-      "passed": false
     }
   ]
 }`;
