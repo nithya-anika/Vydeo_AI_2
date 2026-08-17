@@ -15,50 +15,35 @@ describe("Transcoder Engine Detection and GCS Helpers", () => {
 
   it("should return 'local' by default if no credentials are configured", () => {
     delete process.env.GCS_BUCKET;
-    delete process.env.STORJ_ENDPOINT;
-    delete process.env.JSON2VIDEO_API_KEY;
+    delete process.env.S3_BUCKET_NAME;
+    delete process.env.REMOTION_AWS_ACCESS_KEY_ID;
+    delete process.env.AWS_ACCESS_KEY_ID;
     expect(getEngineType()).toBe("local");
   });
 
-  it("should return 'local' if only GCS_BUCKET is configured", () => {
-    process.env.GCS_BUCKET = "my-test-bucket";
-    delete process.env.STORJ_ENDPOINT;
-    delete process.env.JSON2VIDEO_API_KEY;
+  it("should return 'local' if only S3_BUCKET_NAME is configured", () => {
+    process.env.S3_BUCKET_NAME = "my-test-bucket";
+    delete process.env.REMOTION_AWS_ACCESS_KEY_ID;
+    delete process.env.AWS_ACCESS_KEY_ID;
     expect(getEngineType()).toBe("local");
   });
 
-  it("should return 'local' if only STORJ_ENDPOINT is configured", () => {
+  it("should return 'local' if only REMOTION_AWS_ACCESS_KEY_ID is configured", () => {
     delete process.env.GCS_BUCKET;
-    process.env.STORJ_ENDPOINT = "https://gateway.storjshare.io";
-    delete process.env.JSON2VIDEO_API_KEY;
+    delete process.env.S3_BUCKET_NAME;
+    process.env.REMOTION_AWS_ACCESS_KEY_ID = "test-key";
     expect(getEngineType()).toBe("local");
   });
 
-  it("should return 'local' if only JSON2VIDEO_API_KEY is configured", () => {
-    delete process.env.GCS_BUCKET;
-    delete process.env.STORJ_ENDPOINT;
-    process.env.JSON2VIDEO_API_KEY = "test-key";
-    expect(getEngineType()).toBe("local");
-  });
-
-  it("should return 'cloud' if GCS_BUCKET and JSON2VIDEO_API_KEY are configured", () => {
-    process.env.GCS_BUCKET = "my-test-bucket";
-    delete process.env.STORJ_ENDPOINT;
-    process.env.JSON2VIDEO_API_KEY = "test-key";
+  it("should return 'cloud' if S3_BUCKET_NAME and REMOTION_AWS_ACCESS_KEY_ID are configured", () => {
+    process.env.S3_BUCKET_NAME = "my-test-bucket";
+    process.env.REMOTION_AWS_ACCESS_KEY_ID = "test-key";
     expect(getEngineType()).toBe("cloud");
   });
 
-  it("should return 'cloud' if STORJ_ENDPOINT and JSON2VIDEO_API_KEY are configured", () => {
-    delete process.env.GCS_BUCKET;
-    process.env.STORJ_ENDPOINT = "https://gateway.storjshare.io";
-    process.env.JSON2VIDEO_API_KEY = "test-key";
-    expect(getEngineType()).toBe("cloud");
-  });
-
-  it("should return 'cloud' if GCS_BUCKET, STORJ_ENDPOINT, and JSON2VIDEO_API_KEY are configured", () => {
-    process.env.GCS_BUCKET = "my-test-bucket";
-    process.env.STORJ_ENDPOINT = "https://gateway.storjshare.io";
-    process.env.JSON2VIDEO_API_KEY = "test-key";
+  it("should return 'cloud' if GCS_BUCKET and AWS_ACCESS_KEY_ID are configured", () => {
+    process.env.GCS_BUCKET = "my-gcs-bucket";
+    process.env.AWS_ACCESS_KEY_ID = "fallback-test-key";
     expect(getEngineType()).toBe("cloud");
   });
 });
