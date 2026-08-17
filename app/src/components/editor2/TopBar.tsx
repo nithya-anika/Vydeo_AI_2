@@ -383,6 +383,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         console.error("Export failed", errorBody);
         return;
       }
+      
       const contentType = res.headers.get("content-type") || "";
       if (contentType.startsWith("video/")) {
         const blob = await res.blob();
@@ -397,10 +398,43 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         }, 1000);
         return;
       }
+      
       const data = await res.json().catch(() => ({}));
-      if (data.downloadUrl) {
+      
+      let finalDownloadUrl = data.downloadUrl;
+
+      // Handle async AWS Lambda rendering polling
+      if (!finalDownloadUrl && data.renderId && data.bucketName) {
+        console.log(`[Export] Serverless render initiated. Polling AWS Lambda (ID: ${data.renderId})...`);
+        let done = false;
+        
+        while (!done) {
+          await new Promise(r => setTimeout(r, 4000));
+          try {
+            const statusRes = await fetch(`/api/render/status?renderId=${data.renderId}&bucketName=${data.bucketName}`);
+            const statusData = await statusRes.json();
+            
+            if (!statusRes.ok || statusData.error) {
+              console.error("[Export] AWS Lambda rendering failed:", statusData.error);
+              return;
+            }
+            
+            if (statusData.done && statusData.downloadUrl) {
+              finalDownloadUrl = statusData.downloadUrl;
+              done = true;
+            } else {
+              console.log(`[Export] Rendering progress: ${statusData.progress}%`);
+            }
+          } catch (pollErr) {
+            console.error("[Export] Polling error:", pollErr);
+          }
+        }
+      }
+
+      if (finalDownloadUrl) {
+        console.log(`[Export] Ready for download! ${finalDownloadUrl}`);
         const a = document.createElement("a");
-        a.href = data.downloadUrl; a.download = data.filename ?? "export.mp4";
+        a.href = finalDownloadUrl; a.download = data.filename ?? "export.mp4";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
       }
     } finally {
