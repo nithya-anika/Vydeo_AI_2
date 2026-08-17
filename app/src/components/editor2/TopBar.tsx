@@ -433,9 +433,16 @@ export default function TopBar({ projectId }: { projectId?: string }) {
 
       if (finalDownloadUrl) {
         console.log(`[Export] Ready for download! ${finalDownloadUrl}`);
+        // Create an explicit anchor element to force download
         const a = document.createElement("a");
-        a.href = finalDownloadUrl; a.download = data.filename ?? "export.mp4";
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        a.href = finalDownloadUrl; 
+        a.download = data.filename ?? "export.mp4";
+        a.target = "_blank"; // Ensure it opens in a new tab if it can't force download
+        document.body.appendChild(a); 
+        a.click(); 
+        document.body.removeChild(a);
+      } else {
+         console.warn("[Export] Process finished but no downloadUrl was returned.");
       }
     } finally {
       setExporting(false);
