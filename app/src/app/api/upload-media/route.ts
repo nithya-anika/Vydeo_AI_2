@@ -12,37 +12,34 @@ export async function POST(req: NextRequest) {
 
     const path = `uploads/${Date.now()}-${filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
 
-    // 1. STORJ S3 INTEGRATION
-    const storjAccessKey = process.env.STORJ_ACCESS_KEY;
-    const storjSecretKey = process.env.STORJ_SECRET_KEY;
-    const storjEndpoint = process.env.STORJ_ENDPOINT;
-    const storjBucket = process.env.STORJ_BUCKET || "vydeoai";
+    // 1. AWS S3 INTEGRATION
+    const awsAccessKey = process.env.AWS_ACCESS_KEY_ID;
+    const awsSecretKey = process.env.AWS_SECRET_ACCESS_KEY;
+    const awsRegion = process.env.AWS_REGION || "eu-north-1";
+    const awsBucket = process.env.S3_BUCKET_NAME;
 
-    if (storjAccessKey && storjSecretKey && storjEndpoint) {
+    if (awsAccessKey && awsSecretKey && awsBucket) {
       const s3Client = new S3Client({
-        region: "us-east-1", 
-        endpoint: storjEndpoint,
+        region: awsRegion, 
         credentials: {
-          accessKeyId: storjAccessKey,
-          secretAccessKey: storjSecretKey,
+          accessKeyId: awsAccessKey,
+          secretAccessKey: awsSecretKey,
         },
-        forcePathStyle: true,
       });
 
       const command = new PutObjectCommand({
-        Bucket: storjBucket,
+        Bucket: awsBucket,
         Key: path,
         ContentType: contentType,
       });
 
       const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
       
-      // Instead of relying on complex Storj public bucket permissions and the proprietary linkshare gateway,
-      // we generate a standard S3 Presigned GET URL valid for 24 hours (86400 seconds) so Shotstack can download it securely.
       const getCommand = new GetObjectCommand({
-        Bucket: storjBucket,
+        Bucket: awsBucket,
         Key: path,
       });
+      // We generate a standard S3 Presigned GET URL valid for 24 hours so rendering APIs can download it securely.
       const publicUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 86400 });
 
       return NextResponse.json({
