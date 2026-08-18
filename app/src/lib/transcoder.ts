@@ -307,8 +307,8 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
     inputProps,
     codec: "h264",
     imageFormat: "jpeg",
-    maxRetries: 3,
-    framesPerLambda: 150, // Less aggressive parallelism to avoid AWS limits
+    maxRetries: 1,
+    framesPerLambda: 900, // Process 30 seconds of video per Lambda to safely bypass new AWS account limits (max 10 concurrent)
     privacy: "public",
   });
 
