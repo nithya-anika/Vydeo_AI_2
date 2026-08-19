@@ -52,8 +52,9 @@ export async function POST(req: NextRequest) {
 
     const token = await createSession({ userId: id, email: email.trim().toLowerCase(), firstName: firstName.trim(), plan: "free" });
     const res = NextResponse.json({ success: true, firstName: firstName.trim() });
+    const isSecure = req.nextUrl.protocol === "https:";
     res.cookies.set(SESSION_COOKIE, token, {
-      httpOnly: true, secure: process.env.NODE_ENV === "production",
+      httpOnly: true, secure: isSecure,
       sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7,
     });
     return res;
