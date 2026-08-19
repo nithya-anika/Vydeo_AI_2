@@ -81,9 +81,10 @@ export interface RenderResult {
 
 // ── Engine detection ──────────────────────────────────────────────────────────
 export function getEngineType(): "cloud" | "local" {
-  const hasCloudStorage = !!(process.env.GCS_BUCKET || process.env.STORJ_ENDPOINT);
-  const hasJson2Video = !!process.env.JSON2VIDEO_API_KEY;
-  return (hasCloudStorage && hasJson2Video) ? "cloud" : "local";
+  // We explicitly return "local" here to guarantee the application 
+  // bypasses JSON2Video/Shotstack and natively uses the built-in FFmpeg renderer
+  // running on the AWS EC2 instance.
+  return "local";
 }
 
 // ── Cloud Transcoder path ─────────────────────────────────────────────────────
