@@ -188,14 +188,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       downloadUrl: result.downloadUrl,
-      renderId: result.renderId,
-      bucketName: result.bucketName,
       filename: result.filename,
       engine: result.engine,
       message:
         engine === "cloud"
-          ? "Rendered via AWS Lambda Serverless."
-          : "Rendered locally with FFmpeg.",
+          ? "Rendered via Shotstack Cloud Rendering."
+          : "Rendered locally with FFmpeg. Set GCS_BUCKET and SHOTSTACK_API_KEY in .env.local to enable cloud rendering.",
     });
   } catch (error) {
     console.error("[render] Fatal API Error:");
