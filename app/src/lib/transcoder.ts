@@ -73,9 +73,7 @@ export interface RenderParams {
 }
 
 export interface RenderResult {
-  downloadUrl?: string;
-  renderId?: string;
-  bucketName?: string;
+  downloadUrl: string;
   filename: string;
   engine: "cloud" | "local";
   outputPath?: string;
@@ -83,9 +81,9 @@ export interface RenderResult {
 
 // ── Engine detection ──────────────────────────────────────────────────────────
 export function getEngineType(): "cloud" | "local" {
-  const hasCloudStorage = !!(process.env.GCS_BUCKET || process.env.S3_BUCKET_NAME);
-  const hasRemotionLambda = !!(process.env.REMOTION_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID);
-  return (hasCloudStorage && hasRemotionLambda) ? "cloud" : "local";
+  const hasCloudStorage = !!(process.env.GCS_BUCKET || process.env.STORJ_ENDPOINT);
+  const hasJson2Video = !!process.env.JSON2VIDEO_API_KEY;
+  return (hasCloudStorage && hasJson2Video) ? "cloud" : "local";
 }
 
 // ── Cloud Transcoder path ─────────────────────────────────────────────────────
@@ -237,36 +235,78 @@ function convertGsToPublicUrl(gsUrl: string): string {
   return gsUrl;
 }
 
-import { renderMediaOnLambda } from "@remotion/lambda/client";
+function toJson2VideoTransition(type: string): string {
+  switch (type?.toLowerCase()) {
+    case "fade":
+    case "cinematic-fade":
+    case "dissolve":
+      return "fade";
+    case "wipe-left":
+      return "wipeleft";
+    case "wipe-right":
+      return "wiperight";
+    case "slide-left":
+      return "slideleft";
+    case "slide-right":
+      return "slideright";
+    default:
+      return "fade";
+  }
+}
+
+function toJson2VideoCorrection(adjustments?: any, effect?: string) {
+  const correction: any = {};
+  
+  if (effect) {
+    const e = effect.toLowerCase();
+    if (e.includes("warm")) {
+      correction.saturation = 1.1;
+    } else if (e.includes("cool") || e.includes("blue") || e.includes("cold")) {
+      correction.saturation = 0.9;
+    } else if (e.includes("vibrant") || e.includes("rich")) {
+      correction.saturation = 1.3;
+      correction.contrast = 1.1;
+    } else if (e.includes("moody") || e.includes("dark")) {
+      correction.brightness = 0.8;
+      correction.contrast = 1.1;
+    } else if (e.includes("bright") || e.includes("light")) {
+      correction.brightness = 1.2;
+    } else if (e.includes("greyscale") || e.includes("grey") || e.includes("mono")) {
+      correction.saturation = 0.0;
+    }
+  }
+
+  if (adjustments) {
+    if (adjustments.brightness !== undefined) {
+      correction.brightness = (correction.brightness ?? 1) + (adjustments.brightness / 100);
+    }
+    if (adjustments.contrast !== undefined) {
+      correction.contrast = (correction.contrast ?? 1) + (adjustments.contrast / 100);
+    }
+    if (adjustments.saturation !== undefined) {
+      correction.saturation = (correction.saturation ?? 1) + (adjustments.saturation / 100);
+    }
+  }
+
+  return Object.keys(correction).length > 0 ? correction : undefined;
+}
 
 async function renderCloud(params: RenderParams): Promise<RenderResult> {
-  const region = (process.env.REMOTION_AWS_REGION || process.env.AWS_REGION || "eu-north-1") as any;
-  const functionName = process.env.REMOTION_APP_FUNCTION_NAME;
-  const serveUrl = process.env.REMOTION_APP_SERVE_URL;
-
-  if (!functionName || !serveUrl) {
-    throw new Error(
-      "Remotion Lambda requires REMOTION_APP_FUNCTION_NAME and REMOTION_APP_SERVE_URL. Please run 'npx remotion lambda setup' and 'npx remotion lambda sites create' to generate these."
-    );
-  }
+  const apiKey = process.env.JSON2VIDEO_API_KEY;
+  if (!apiKey) throw new Error("JSON2VIDEO_API_KEY is not configured.");
 
   const aspect = params.aspectRatio ?? "9:16";
-  let width = 1080;
-  let height = 1920;
+  let resolution = "full-hd";
   
   if (aspect === "16:9") {
-    width = 1920;
-    height = 1080;
-  } else if (aspect === "1:1") {
-    width = 1080;
-    height = 1080;
-  } else if (aspect === "4:5") {
-    width = 1080;
-    height = 1350;
+    resolution = "full-hd";
+  } else if (aspect === "1:1" || aspect === "4:5") {
+    resolution = "hd";
   }
 
-  // Pre-process scenes to ensure URLs are public HTTP/HTTPS for Lambda
-  const scenes = params.scenes.map((scene) => {
+  // Map scenes to JSON2Video sequential scenes
+  const scenes = params.scenes.map((scene, index) => {
+    const duration = scene.duration;
     let url = "";
     const rawUrl = scene.clipSrc ?? "";
     const resolvedUrl = convertGsToPublicUrl(rawUrl);
@@ -274,53 +314,113 @@ async function renderCloud(params: RenderParams): Promise<RenderResult> {
     if (resolvedUrl && (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))) {
       url = resolvedUrl;
     } else {
-      throw new Error(`AWS Lambda requires public HTTP/HTTPS URLs. Scene "${scene.id}" has invalid or missing clipSrc.`);
+      throw new Error(`JSON2Video requires public HTTP/HTTPS URLs. Scene "${scene.id}" has invalid or missing clipSrc.`);
     }
 
-    return {
-      ...scene,
-      clipSrc: url,
+    const isImage = scene.clipType === "image" || url.match(/\.(jpg|jpeg|png)$/i);
+
+    const elementObj: any = {
+      type: isImage ? "image" : "video",
+      src: url,
+      duration: duration,
     };
+
+    const correction = toJson2VideoCorrection(scene.colorAdjustments, scene.visualEffect || scene.colorGrade || undefined);
+    if (correction) {
+      elementObj.correction = correction;
+    }
+
+    const sceneObj: any = {
+      elements: [elementObj],
+    };
+
+    // Apply scene transition if set (defines transition FROM previous scene)
+    if (index > 0 && scene.transition && scene.transition.type && scene.transition.type !== "cut") {
+      const type = toJson2VideoTransition(scene.transition.type);
+      sceneObj.transition = {
+        type: "xfade",
+        style: type,
+        duration: scene.transition.duration ?? 0.8,
+      };
+    }
+
+    return sceneObj;
   });
 
-  const inputProps = {
+  const elements: any[] = [];
+
+  // Add background audio if present
+  if (params.audio?.src) {
+    const audioSrc = convertGsToPublicUrl(params.audio.src);
+    if (audioSrc.startsWith("http://") || audioSrc.startsWith("https://")) {
+      elements.push({
+        type: "audio",
+        src: audioSrc,
+        volume: params.audio.volume ?? 0.7,
+        loop: true,
+      });
+    }
+  }
+
+  const payload = {
+    resolution,
+    quality: "high",
+    elements,
     scenes,
-    audio: params.audio ? {
-      ...params.audio,
-      src: convertGsToPublicUrl(params.audio.src),
-    } : undefined,
-    width,
-    height,
-    totalDuration: params.totalDuration,
   };
 
-  console.log("[Remotion Lambda] Dispatching render request...");
+  console.log("[JSON2Video] Dispatching render request...");
 
-  // Calculate total frames (assuming 30fps)
-  const durationInFrames = Math.max(30, Math.floor((params.totalDuration ?? 15) * 30));
-
-  const { renderId, bucketName } = await renderMediaOnLambda({
-    region,
-    functionName,
-    serveUrl,
-    composition: "Main", // The name of the composition in your Remotion project
-    inputProps,
-    codec: "h264",
-    imageFormat: "jpeg",
-    maxRetries: 1,
-    framesPerLambda: 900, // Process 30 seconds of video per Lambda to safely bypass new AWS account limits (max 10 concurrent)
-    privacy: "public",
+  const res = await fetch("https://api.json2video.com/v2/movies", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+    },
+    body: JSON.stringify(payload),
   });
 
-  console.log(`[Remotion Lambda] Render accepted asynchronously. ID: ${renderId} in bucket ${bucketName}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`JSON2Video render request failed (${res.status}): ${errorText}`);
+  }
 
-  // RETURN IMMEDIATELY — Do not poll here! Polling will be done by the client (TopBar.tsx) to prevent Vercel 504 timeouts.
-  return {
-    renderId,
-    bucketName,
-    filename: params.outputFilename,
-    engine: "cloud",
-  };
+  const data = await res.json();
+  const projectId = data.project;
+  if (!projectId) {
+    throw new Error("JSON2Video response did not contain a project ID.");
+  }
+  console.log(`[JSON2Video] Render accepted. Project ID: ${projectId}`);
+
+  // Polling
+  const maxPolls = 120; // 10 minutes (5s intervals)
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    
+    const statusRes = await fetch(`https://api.json2video.com/v2/movies?project=${projectId}`, {
+      headers: { "x-api-key": apiKey },
+    });
+
+    if (!statusRes.ok) continue;
+    const statusData = await statusRes.json();
+    const movie = statusData.movie;
+    const status = movie?.status;
+
+    if (status === "done") {
+      console.log(`[JSON2Video] Render complete!`);
+      return {
+        downloadUrl: movie.url,
+        filename: params.outputFilename,
+        engine: "cloud",
+      };
+    } else if (status === "error" || status === "failed") {
+      throw new Error(`JSON2Video render failed: ${movie?.message || "Unknown error"}`);
+    } else {
+      console.log(`[JSON2Video] Polling... Status: ${status}`);
+    }
+  }
+
+  throw new Error("JSON2Video render timed out after 10 minutes.");
 }
 
 // ── Local FFmpeg fallback path ────────────────────────────────────────────────
