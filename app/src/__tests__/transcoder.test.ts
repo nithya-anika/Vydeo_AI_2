@@ -35,15 +35,15 @@ describe("Transcoder Engine Detection and GCS Helpers", () => {
     expect(getEngineType()).toBe("local");
   });
 
-  it("should return 'cloud' if S3_BUCKET_NAME and REMOTION_AWS_ACCESS_KEY_ID are configured", () => {
+  it("should return 'local' if S3_BUCKET_NAME and REMOTION_AWS_ACCESS_KEY_ID are configured (forced local)", () => {
     process.env.S3_BUCKET_NAME = "my-test-bucket";
     process.env.REMOTION_AWS_ACCESS_KEY_ID = "test-key";
-    expect(getEngineType()).toBe("cloud");
+    expect(getEngineType()).toBe("local");
   });
 
-  it("should return 'cloud' if GCS_BUCKET and AWS_ACCESS_KEY_ID are configured", () => {
+  it("should return 'local' if GCS_BUCKET and AWS_ACCESS_KEY_ID are configured (forced local)", () => {
     process.env.GCS_BUCKET = "my-gcs-bucket";
     process.env.AWS_ACCESS_KEY_ID = "fallback-test-key";
-    expect(getEngineType()).toBe("cloud");
+    expect(getEngineType()).toBe("local");
   });
 });
