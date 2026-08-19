@@ -32,8 +32,9 @@ export async function POST(req: NextRequest) {
 
     const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 7;
     const res = NextResponse.json({ success: true, firstName: user.first_name });
+    const isSecure = req.nextUrl.protocol === "https:";
     res.cookies.set(SESSION_COOKIE, token, {
-      httpOnly: true, secure: process.env.NODE_ENV === "production",
+      httpOnly: true, secure: isSecure,
       sameSite: "lax", path: "/", maxAge,
     });
     return res;
