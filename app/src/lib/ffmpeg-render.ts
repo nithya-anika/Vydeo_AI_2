@@ -66,16 +66,19 @@ function runFfmpeg(
   return new Promise(
     (resolve, reject) => {
       const bin = findFfmpeg();
+      
+      // Inject thread limit at the start of inputs to keep memory footprint tiny on 2GB servers
+      const optimizedArgs = ["-threads", "1", ...args];
 
       console.log(
         "[FFmpeg]",
         bin,
-        args.join(" ")
+        optimizedArgs.join(" ")
       );
 
       const proc = spawn(
         bin,
-        args,
+        optimizedArgs,
         {
           stdio: [
             "ignore",
