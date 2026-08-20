@@ -272,6 +272,35 @@ function dataUrlExt(
   return "mp4";
 }
 
+import https from 'https';
+import http from 'http';
+import fs from 'fs';
+
+async function downloadFile(url: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https') ? https : http;
+    client.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`Failed to download ${url}. HTTP ${res.statusCode}`));
+        return;
+      }
+      const fileStream = fs.createWriteStream(outputPath);
+      res.pipe(fileStream);
+      fileStream.on('finish', () => {
+        fileStream.close();
+        resolve();
+      });
+      fileStream.on('error', (err) => {
+        fs.unlink(outputPath, () => {}); 
+        reject(err);
+      });
+    }).on('error', (err) => {
+      fs.unlink(outputPath, () => {});
+      reject(err);
+    });
+  });
+}
+
 async function fetchMediaDataUrl(url: string): Promise<string> {
   const response = await fetch(url);
 
@@ -1082,13 +1111,23 @@ export async function renderWithFfmpeg(
           ? "jpg"
           : "mp4";
 
-      const mediaDataUrl =
-        scene.clipData ??
-        (scene.clipSrc
-          ? await fetchMediaDataUrl(scene.clipSrc)
-          : null);
+      let raw = "";
 
-      if (!mediaDataUrl) {
+      if (scene.clipData) {
+         raw = await saveBase64(
+            scene.clipData,
+            fallbackExt,
+            tmpDir
+          );
+          tempFiles.push(raw);
+      } else if (scene.clipSrc) {
+         raw = path.join(tmpDir, `${uuidv4()}.${fallbackExt}`);
+         console.log(`[Export] Downloading remote media directly to disk: ${scene.clipSrc}`);
+         await downloadFile(scene.clipSrc, raw);
+         tempFiles.push(raw);
+      }
+
+      if (!raw || !existsSync(raw)) {
         const placeholder =
           path.join(
             tmpDir,
@@ -1123,17 +1162,6 @@ export async function renderWithFfmpeg(
 
         continue;
       }
-
-      const raw =
-        await saveBase64(
-          mediaDataUrl,
-          fallbackExt,
-          tmpDir
-        );
-
-      tempFiles.push(
-        raw
-      );
 
       const scaled =
         path.join(
