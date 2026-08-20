@@ -176,10 +176,10 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         }
       }
 
-      // If the file was tiny (< 100KB), fallback to sending it as an inline base64 string.
+      // If the file was tiny (< 500KB), fallback to sending it as an inline base64 string.
       // If the file is large, NEVER convert it to base64 as it will crash the browser with 'Invalid string length'.
       if (rawMediaBlob) {
-        if (rawMediaBlob.size > 5 * 1024 * 1024) {
+        if (rawMediaBlob.size > 500 * 1024) {
           throw new Error(`The video file for scene "${scene.label}" is too large (${(rawMediaBlob.size / 1024 / 1024).toFixed(1)} MB) to render inline, and S3 direct upload failed. Please verify your S3_BUCKET_NAME, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY credentials are set correctly in your server's .env.local and your S3 bucket has CORS enabled.`);
         }
         clipData = await blobToDataUrl(rawMediaBlob);
