@@ -855,7 +855,7 @@ export async function renderWithFfmpeg(
 
   const tmpDir =
     path.join(
-      os.tmpdir(),
+      "/var/tmp",
       "ai-video-renders",
       uuidv4()
     );
