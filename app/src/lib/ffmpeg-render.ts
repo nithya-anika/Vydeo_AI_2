@@ -1120,6 +1120,10 @@ export async function renderWithFfmpeg(
             tmpDir
           );
           tempFiles.push(raw);
+      } else if (scene.clipSrc && scene.clipSrc.startsWith("local://")) {
+         // Direct file path on the EC2 server SSD
+         raw = scene.clipSrc.replace("local://", "");
+         console.log(`[Export] Using local EC2 media directly: ${raw}`);
       } else if (scene.clipSrc) {
          raw = path.join(tmpDir, `${uuidv4()}.${fallbackExt}`);
          console.log(`[Export] Downloading remote media directly to disk: ${scene.clipSrc}`);
