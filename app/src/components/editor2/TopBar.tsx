@@ -234,7 +234,12 @@ export default function TopBar({ projectId }: { projectId?: string }) {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const payloadScenes = await Promise.all(scenes.map(buildRenderScene));
+      const payloadScenes = [];
+      // Process scenes sequentially (one-by-one) instead of Promise.all
+      // to prevent the browser from holding multiple multi-gigabyte blobs in RAM simultaneously.
+      for (const scene of scenes) {
+        payloadScenes.push(await buildRenderScene(scene));
+      }
 
       let audioPayload = undefined;
       const activeAudio = audioTracks.find((t) => !t.muted);
