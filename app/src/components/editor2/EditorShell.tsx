@@ -3348,77 +3348,18 @@ export default function EditorShell({
   }, [projectId, projectName, setProjectName]);
 
   useEffect(() => {
-    const raw = sessionStorage.getItem("vydeoai_pending_footage_editor");
-    if (!raw) return;
+    const flag = sessionStorage.getItem("vydeoai_pending_footage_flag");
+    if (!flag) return;
+    
+    // We arrived from the Footage Page!
     consumedEditorHandoffRef.current = true;
-    sessionStorage.removeItem("vydeoai_pending_footage_editor");
+    sessionStorage.removeItem("vydeoai_pending_footage_flag");
 
-    type PendingClip = {
-      id: string;
-      name: string;
-      src: string;
-      duration: number;
-      thumbnail?: string;
-    };
-    type PendingPayload = {
-      aspectRatio: AspectRatio;
-      totalDuration: number;
-      prompt?: string;
-      aiScore?: number;
-      aiFeedback?: string;
-      scenes: Scene[];
-      clips: PendingClip[];
-    };
-
-    let payload: PendingPayload | null = null;
-    try {
-      payload = JSON.parse(raw) as PendingPayload;
-    } catch {
-      return;
-    }
-    if (!payload) return;
-    const requestedTransition = inferRequestedTransition(payload.prompt ?? "");
-    const requestedColor = inferRequestedColorAdjustments(payload.prompt ?? "");
-    const requestedColorGrade = inferRequestedColorGrade(payload.prompt ?? "");
-    const clipById = new Map(payload.clips.map((clip) => [clip.id, clip] as const));
-    const scenes = payload.scenes.map((scene, index) => ({
-      ...scene,
-      clipSrc: scene.clipSrc ?? (scene.clipId ? clipById.get(scene.clipId)?.src ?? null : null),
-      clipType: scene.clipType ?? (scene.clipId ? "video" as const : null),
-      transition: requestedTransition && index < payload.scenes.length - 1
-        ? { ...scene.transition, type: requestedTransition }
-        : scene.transition,
-      colorGrade: requestedColorGrade ?? scene.colorGrade,
-      colorAdjustments: requestedColor
-        ? { ...scene.colorAdjustments, ...requestedColor }
-        : scene.colorAdjustments,
-    }));
-
-    useEditorStore.setState((state) => ({
-      ...state,
-      clips: payload.clips.map((clip) => ({
-        id: clip.id,
-        name: clip.name,
-        src: clip.src,
-        file: new File([], clip.name),
-        type: "video" as const,
-        duration: clip.duration,
-        thumbnail: clip.thumbnail || undefined,
-      })),
-    }));
-
-    useEditorStore.getState().loadTimeline({
-      scenes,
-      audioTracks: [],
-      totalDuration: payload.totalDuration,
-      aspectRatio: payload.aspectRatio,
-    });
+    // We do NOT need to parse any payload or inject any clips here.
+    // The Zustand global store (useEditorStore) is persistent across page navigations in Next.js SPA routing!
+    // The FootagePage already populated the store perfectly.
     
-    if (payload.prompt) {
-      useEditorStore.getState().setAiMetadata(payload.prompt, payload.aiScore ?? 0, payload.aiFeedback ?? "");
-    }
-    
-    useEditorStore.getState().setLeftTab("transitions");
+    console.log("[EditorShell] Acknowledged handoff from Footage page.");
   }, []);
 
   // ── Persistence: autosave + load via the drafts API ───────────────────────────
