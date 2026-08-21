@@ -548,7 +548,9 @@ export default function FootagePage() {
 
       setProcessingStep("Loading into editor...");
 
-      // Register clips in store
+      // The EditorStore is completely persistent and shared across pages natively!
+      // We do NOT need to cram megabytes of data into sessionStorage.
+      // 1. Add all clips (including heavy raw File references) to the global store safely:
       clips.forEach(c => {
         useEditorStore.getState().addClip({
           id: c.id, name: c.name, src: c.src, file: c.file,
@@ -556,35 +558,23 @@ export default function FootagePage() {
         });
       });
 
-      // Save AI evaluation to store
+      // 2. Add AI analysis to store
       useEditorStore.getState().setAiMetadata(prompt.trim(), score ?? 0, feedback ?? "");
 
-      // Load timeline
+      // 3. Load full timeline into store
       loadTimeline({
         scenes: clipScenes,
         audioTracks: [],
         totalDuration: clipScenes.reduce((s, sc) => s + sc.duration, 0),
         aspectRatio,
       });
+      
+      // Tell the editor to open the transition tab by default
+      useEditorStore.getState().setLeftTab("transitions");
 
-      sessionStorage.setItem(
-        "vydeoai_pending_footage_editor",
-        JSON.stringify({
-          aspectRatio,
-          totalDuration: clipScenes.reduce((s, sc) => s + sc.duration, 0),
-          prompt: prompt.trim(),
-          aiScore: score ?? 0,
-          aiFeedback: feedback ?? "",
-          scenes: clipScenes,
-          clips: clips.map((c) => ({
-            id: c.id,
-            name: c.name,
-            src: c.src,
-            duration: c.duration,
-            thumbnail: c.thumbnail ?? "",
-          })),
-        })
-      );
+      // Set a tiny flag in session storage just to tell the editor we came from the footage page
+      // but do NOT serialize any clips or scenes here to prevent Chrome OOM crash.
+      sessionStorage.setItem("vydeoai_pending_footage_flag", "true");
 
       setProcessingStep("Opening editor...");
       await new Promise(r => setTimeout(r, 150));
