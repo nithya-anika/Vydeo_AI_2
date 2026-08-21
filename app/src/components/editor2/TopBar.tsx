@@ -127,62 +127,33 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       }
     }
 
-    // --- VERCEL PAYLOAD BYPASS (Direct GCS Upload) ---
-    // Instead of base64 converting massive files (which crashes V8 with 'Invalid string length'),
-    // we take the rawBlob, upload it securely to S3/GCS, and pass the URL forward.
+    // --- EC2 DIRECT BINARY UPLOAD BYPASS ---
+    // Instead of failing over to base64 which crashes the browser, we stream the raw binary
+    // directly to the EC2 server's /var/tmp SSD space using standard FormData multipart uploads.
     if (rawMediaBlob) {
-      if (rawMediaBlob.size > 100_000) {
-        console.log(`[Export] Media detected for scene "${scene.label}" (${(rawMediaBlob.size / 1024 / 1024).toFixed(2)} MB). Direct uploading to cloud storage...`);
-        try {
-          const uploadInitRes = await fetch("/api/upload-media", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filename: `scene_${scene.id}.${clipExt}`, contentType: clipMime }),
-          });
-          
-          if (uploadInitRes.ok) {
-            const initData = await uploadInitRes.json();
-            const { url, gcsPath, token, isS3, publicUrl } = initData;
+      console.log(`[Export] Media detected for scene "${scene.label}" (${(rawMediaBlob.size / 1024 / 1024).toFixed(2)} MB). Streaming directly to EC2 server...`);
+      try {
+        const formData = new FormData();
+        formData.append("file", rawMediaBlob);
+        formData.append("ext", clipExt || "mp4");
 
-            let uploadRes;
-            if (isS3) {
-              uploadRes = await fetch(url, {
-                method: "PUT",
-                headers: { "Content-Type": clipMime },
-                body: rawMediaBlob,
-              });
-            } else {
-              uploadRes = await fetch(url, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${token}`, "Content-Type": clipMime, "Content-Length": String(rawMediaBlob.size) },
-                body: rawMediaBlob,
-              });
-            }
-
-            if (uploadRes.ok) {
-              if (isS3) {
-                scene.clipSrc = publicUrl;
-              } else {
-                scene.clipSrc = `gs://${gcsPath}`;
-              }
-              // We successfully uploaded it, no need to inject clipData into the JSON payload
-              rawMediaBlob = null; 
-            } else {
-              console.warn(`[Export] Direct upload failed with status ${uploadRes.status}`);
-            }
-          }
-        } catch (err) {
-          console.warn(`[Export] Direct upload crashed for scene "${scene.label}".`, err);
+        const uploadRes = await fetch("/api/upload-binary", {
+          method: "POST",
+          body: formData,
+        });
+        
+        if (uploadRes.ok) {
+          const data = await uploadRes.json();
+          scene.clipSrc = `local://${data.filepath}`;
+          console.log(`[Export] Stream to EC2 successful for "${scene.label}" -> ${data.filepath}`);
+          rawMediaBlob = null;
+          clipData = null;
+        } else {
+          throw new Error(`Server returned ${uploadRes.status}`);
         }
-      }
-
-      // If the file was tiny (< 500KB), fallback to sending it as an inline base64 string.
-      // If the file is large, NEVER convert it to base64 as it will crash the browser with 'Invalid string length'.
-      if (rawMediaBlob) {
-        if (rawMediaBlob.size > 500 * 1024) {
-          throw new Error(`The video file for scene "${scene.label}" is too large (${(rawMediaBlob.size / 1024 / 1024).toFixed(1)} MB) to render inline, and S3 direct upload failed. Please verify your S3_BUCKET_NAME, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY credentials are set correctly in your server's .env.local and your S3 bucket has CORS enabled.`);
-        }
-        clipData = await blobToDataUrl(rawMediaBlob);
+      } catch (err) {
+        console.warn(`[Export] Direct stream to EC2 crashed for scene "${scene.label}".`, err);
+        throw new Error(`Failed to upload scene "${scene.label}". Network dropped or file too large.`);
       }
     }
 
