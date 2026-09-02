@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createReadStream } from "fs";
-import { unlink } from "fs/promises";
 import { gunzipSync } from "zlib";
-import { renderVideo, getEngineType, cleanupCloudMedia } from "@/lib/transcoder";
+import { getDb } from "@/lib/mongodb";
+import { sendRenderJob } from "@/lib/sqs";
+import { v4 as uuidv4 } from "uuid";
 import type { SceneInput, AudioInput, BrandRenderInput } from "@/lib/transcoder";
 
 export const maxDuration = 300;
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     };
 
     const body = envelope.compressed && envelope.payload
-      ? JSON.parse(
+      ? (JSON.parse(
           gunzipSync(Buffer.from(envelope.payload, "base64")).toString("utf8")
         ) as {
           scenes: SceneInput[];
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
           aspectRatio?: string;
           totalDuration?: number;
           outputFilename?: string;
-        }
+        })
       : envelope;
 
     const {
@@ -91,15 +91,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Determine rendering engine
-    const engine = getEngineType();
-
     // Generate output filename
     const filename =
       outputFilename ?? `render-${Date.now()}.mp4`;
 
-    // Render video
-    const result = await renderVideo({
+    const jobId = `job_${uuidv4()}`;
+
+    // 1. Save "pending" state to MongoDB
+    const db = await getDb();
+    await db.collection("render_jobs").insertOne({
+      id: jobId,
+      status: "pending",
+      filename,
+      params: {
+        scenes,
+        audio,
+        brand,
+        aspectRatio,
+        totalDuration,
+        outputFilename: filename,
+      },
+      createdAt: new Date(),
+    });
+
+    console.log(`[Queue] Saved render job "${jobId}" to MongoDB.`);
+
+    // 2. Push job to AWS SQS
+    const queued = await sendRenderJob(jobId, {
       scenes,
       audio,
       brand,
@@ -108,93 +126,67 @@ export async function POST(req: NextRequest) {
       outputFilename: filename,
     });
 
-    // -----------------------------------
-    // LOCAL FFMPEG RENDER
-    // -----------------------------------
+    if (!queued) {
+      // Update DB state to failed
+      await db.collection("render_jobs").updateOne(
+        { id: jobId },
+        { $set: { status: "failed", error: "Failed to queue job in SQS." } }
+      );
+      return NextResponse.json(
+        { error: "Queue injection failed.", message: "Could not publish job to AWS SQS." },
+        { status: 500 }
+      );
+    }
 
-    if (result.engine === "local") {
-      const outputPath = result.outputPath;
+    console.log(`[Queue] Successfully enqueued "${jobId}" to SQS.`);
 
-      if (!outputPath) {
+    // 3. Enter safe long-polling loop (idle checking MongoDB)
+    const startTime = Date.now();
+    const timeoutMs = 260000; // 4.3 minutes (safely under the 5 min HTTP limit)
+    let completedJob: any = null;
+
+    while (Date.now() - startTime < timeoutMs) {
+      // Wait 3 seconds before querying again (friendly to DB)
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      const job = await db.collection("render_jobs").findOne({ id: jobId });
+      if (!job) {
         return NextResponse.json(
-          {
-            error: "Render failed.",
-            message: "Local output path missing.",
-          },
+          { error: "Internal Error", message: "Render job vanished from database." },
           { status: 500 }
         );
       }
 
-      const nodeStream = createReadStream(outputPath);
-      const body = new (globalThis as any).ReadableStream({
-        start(controller: any) {
-          nodeStream.on("data", (chunk: Buffer | string) => {
-            const buffer =
-              typeof chunk === "string"
-                ? Buffer.from(chunk)
-                : chunk;
-            controller.enqueue(new Uint8Array(buffer));
-          });
-          nodeStream.on("end", () => {
-            controller.close();
-          });
-          nodeStream.on("error", (error) => {
-            controller.error(error);
-          });
-        },
-        cancel() {
-          nodeStream.destroy();
-        },
-      });
+      if (job.status === "completed") {
+        completedJob = job;
+        break;
+      } else if (job.status === "failed") {
+        return NextResponse.json(
+          { error: "Render Failed", message: job.error || "The render worker failed to compile the video." },
+          { status: 500 }
+        );
+      }
+    }
 
-      nodeStream.on("error", (error) => {
-        console.error("[render stream]", error);
-      });
-
-      // Delete temporary file after stream finishes
-      nodeStream.on("close", () => {
-        unlink(outputPath).catch((error) => {
-          console.error(
-            "[render cleanup] Failed to delete temporary file:",
-            error
-          );
-        });
-      });
-
-      return new NextResponse(body as any, {
-        headers: {
-          "Content-Type": "video/mp4",
-          "Content-Disposition": `attachment; filename="${result.filename}"`,
-          "Cache-Control": "no-store",
-        },
+    if (!completedJob) {
+      // Job is taking longer than 4.3 minutes, return async payload so client can keep polling later
+      return NextResponse.json({
+        success: true,
+        jobId,
+        status: "processing",
+        message: "Your video is rendering. It is taking slightly longer, but you don't have to stay on this page.",
       });
     }
 
-    // -----------------------------------
-    // GOOGLE CLOUD TRANSCODER RENDER
-    // -----------------------------------
-
-    // TRIGGER ZERO-FOOTPRINT CLOUD CLEANUP
-    // Delete source assets from Storj/Supabase now that rendering is complete
-    const urlsToCleanup = [
-      ...(envelope.scenes || []).map(s => s.clipSrc),
-      envelope.audio?.src,
-    ].filter(Boolean) as string[];
-
-    if (urlsToCleanup.length > 0) {
-      cleanupCloudMedia(urlsToCleanup).catch(e => console.error("[Cleanup Error]", e));
-    }
-
+    // 4. Return the finished S3 download URL!
     return NextResponse.json({
       success: true,
-      downloadUrl: result.downloadUrl,
-      filename: result.filename,
-      engine: result.engine,
-      message:
-        engine === "cloud"
-          ? "Rendered via Shotstack Cloud Rendering."
-          : "Rendered locally with FFmpeg. Set GCS_BUCKET and SHOTSTACK_API_KEY in .env.local to enable cloud rendering.",
+      downloadUrl: completedJob.downloadUrl,
+      filename: completedJob.filename,
+      engine: "local",
+      message: "Rendered asynchronously via decoupled background worker.",
     });
+
   } catch (error) {
     console.error("[render] Fatal API Error:");
     if (error instanceof Error) {
