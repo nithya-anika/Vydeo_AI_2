@@ -171,7 +171,7 @@ function CanvasPreview({ containerWidth, containerHeight, showGrid, showSafe }: 
     return anim ? { animation: `${anim} ${dur} ease-out forwards` } : {}
   }, [enterAnim, activeScene?.transition?.duration])
 
-  const mediaStyle: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000', filter: cssFilter !== 'none' ? cssFilter : undefined, ...enterStyle }
+  const mediaStyle: React.CSSProperties = { width: '100%', height: '100%', objectFit: activeScene?.clipFit ?? "contain", backgroundColor: '#000', filter: cssFilter !== 'none' ? cssFilter : undefined, ...enterStyle }
 
   return (
     <div className="canvas-fill">

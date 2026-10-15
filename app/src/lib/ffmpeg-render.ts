@@ -1186,9 +1186,10 @@ export async function renderWithFfmpeg(
       /* Filters                                                              */
       /* -------------------------------------------------------------------- */
 
-      const scaleFilter =
-        `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
-        `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
+      const isCover = (scene as any).clipFit === "cover";
+      const scaleFilter = isCover
+        ? `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1`
+        : `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
 
       const fpsFilter = "fps=30";
 

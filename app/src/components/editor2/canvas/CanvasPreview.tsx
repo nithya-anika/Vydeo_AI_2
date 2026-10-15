@@ -129,7 +129,7 @@ const SceneVisual = memo(function SceneVisual({
           loop playsInline
           onLoadedData={e => { e.currentTarget.currentTime = 0; }}
           onError={() => setVideoError(true)}
-          style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000", position: "absolute", inset: 0 }}
+          style={{ width: "100%", height: "100%", objectFit: activeScene?.clipFit ?? "contain", backgroundColor: "#000", position: "absolute", inset: 0 }}
         />
       )}
       {/* Image clip */}
@@ -137,7 +137,7 @@ const SceneVisual = memo(function SceneVisual({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={scene.clipSrc} alt={scene.label}
           onError={() => {}}
-          style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000", position: "absolute", inset: 0 }} />
+          style={{ width: "100%", height: "100%", objectFit: activeScene?.clipFit ?? "contain", backgroundColor: "#000", position: "absolute", inset: 0 }} />
       )}
 
       {/* No clip — show rich placeholder */}

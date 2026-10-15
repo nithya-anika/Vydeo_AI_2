@@ -1034,10 +1034,10 @@ function LeftPanelContent({ tab, onOpenInspector }: { tab: LeftTab; onOpenInspec
                   {clip.type === "video" ? (
                     <video
                       src={clip.src}
-                      style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
+                      style={{ width: "100%", height: "100%", objectFit: activeScene?.clipFit ?? "contain", backgroundColor: "#000" }}
                     />
                   ) : (
-                    <img src={clip.src} style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }} alt="" />
+                    <img src={clip.src} style={{ width: "100%", height: "100%", objectFit: activeScene?.clipFit ?? "contain", backgroundColor: "#000" }} alt="" />
                   )}
                   <div
                     style={{
@@ -1326,7 +1326,7 @@ function LeftPanelContent({ tab, onOpenInspector }: { tab: LeftTab; onOpenInspec
               }}
             >
               {brandKit?.logo ? (
-                <img src={brandKit.logo} style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }} alt="logo" />
+                <img src={brandKit.logo} style={{ maxHeight: "100%", maxWidth: "100%", objectFit: activeScene?.clipFit ?? "contain" }} alt="logo" />
               ) : (
                 <>
                   <Upload size={13} style={{ color: "var(--text-tertiary)" }} />
@@ -1771,6 +1771,30 @@ function InspectorContent() {
             }
             style={inputStyle}
           />
+        </IField>
+        <IField label="Fit Mode">
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["contain", "cover"] as const).map((fit) => (
+              <button
+                key={fit}
+                onClick={() => updateScene(activeScene.id, { clipFit: fit })}
+                style={{
+                  flex: 1,
+                  padding: "5px 0",
+                  borderRadius: "var(--r-sm)",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  textTransform: "capitalize",
+                  background: (activeScene.clipFit ?? "contain") === fit ? "var(--accent-subtle)" : "var(--bg-elevated)",
+                  border: "1px solid " + ((activeScene.clipFit ?? "contain") === fit ? "var(--accent-border)" : "var(--border)"),
+                  color: (activeScene.clipFit ?? "contain") === fit ? "var(--accent-light)" : "var(--text-tertiary)",
+                  cursor: "pointer",
+                }}
+              >
+                {fit === "contain" ? "Fit (Bars)" : "Fill (Crop)"}
+              </button>
+            ))}
+          </div>
         </IField>
         <IField label="Duration">
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -3023,7 +3047,7 @@ function CanvasPreview({
               style={{
                 width: "100%",
                 height: "100%",
-                objectFit: "contain",
+                objectFit: activeScene?.clipFit ?? "contain",
                 backgroundColor: "#000",
                 filter: cssFilter !== "none" ? cssFilter : undefined,
                 ...enterStyle,
@@ -3043,7 +3067,7 @@ function CanvasPreview({
               style={{
                 width: "100%",
                 height: "100%",
-                objectFit: "contain",
+                objectFit: activeScene?.clipFit ?? "contain",
                 backgroundColor: "#000",
                 filter: cssFilter !== "none" ? cssFilter : undefined,
                 ...enterStyle,
@@ -3144,7 +3168,7 @@ function CanvasPreview({
               top: 12,
               maxWidth: Math.max(42, previewW * 0.18),
               maxHeight: Math.max(28, previewH * 0.1),
-              objectFit: "contain",
+              objectFit: activeScene?.clipFit ?? "contain",
               filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.65))",
               pointerEvents: "none",
               zIndex: 8,
@@ -4239,6 +4263,9 @@ export default function EditorShell({
 
     playbackRate:
       scene.playbackRate ?? 1,
+
+    clipFit:
+      scene.clipFit ?? "contain",
 
     clipTrimStart:
       scene.clipTrimStart,

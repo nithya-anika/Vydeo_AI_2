@@ -22,6 +22,7 @@ export interface SceneInput {
   clipType?: "video" | "image";
   clipMime?: string;
   clipExt?: string;
+  clipFit?: "cover" | "contain";
   clipTrimStart?: number;
   clipTrimEnd?: number;
   playbackSpeed?: number;

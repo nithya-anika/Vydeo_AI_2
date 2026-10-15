@@ -85,6 +85,7 @@ export interface Scene {
   clipId: string | null;
   clipSrc: string | null;
   clipType: "video" | "image" | null;
+  clipFit?: "cover" | "contain";
   clipTrimStart?: number;
   clipTrimEnd?: number;
   captions: Caption[];
