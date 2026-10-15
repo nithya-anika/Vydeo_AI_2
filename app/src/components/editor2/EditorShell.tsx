@@ -1034,10 +1034,10 @@ function LeftPanelContent({ tab, onOpenInspector }: { tab: LeftTab; onOpenInspec
                   {clip.type === "video" ? (
                     <video
                       src={clip.src}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
                     />
                   ) : (
-                    <img src={clip.src} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+                    <img src={clip.src} style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }} alt="" />
                   )}
                   <div
                     style={{
@@ -3021,7 +3021,10 @@ function CanvasPreview({
               src={activeScene.clipSrc}
               muted={activeScene.muted === true}
               style={{
-                width: "100%", height: "100%", objectFit: "cover",
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                backgroundColor: "#000",
                 filter: cssFilter !== "none" ? cssFilter : undefined,
                 ...enterStyle,
               }}
@@ -3038,7 +3041,10 @@ function CanvasPreview({
             <img
               src={activeScene.clipSrc}
               style={{
-                width: "100%", height: "100%", objectFit: "cover",
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                backgroundColor: "#000",
                 filter: cssFilter !== "none" ? cssFilter : undefined,
                 ...enterStyle,
               }}
@@ -3349,11 +3355,33 @@ export default function EditorShell({
 
   useEffect(() => {
     const flag = sessionStorage.getItem("vydeoai_pending_footage_flag");
-    if (!flag) return;
+    const rawFootagePayload = sessionStorage.getItem("vydeoai_pending_footage_editor");
+    if (!flag && !rawFootagePayload) return;
     
     // We arrived from the Footage Page!
     consumedEditorHandoffRef.current = true;
-    sessionStorage.removeItem("vydeoai_pending_footage_flag");
+    if (flag) sessionStorage.removeItem("vydeoai_pending_footage_flag");
+
+    if (rawFootagePayload) {
+      sessionStorage.removeItem("vydeoai_pending_footage_editor");
+      try {
+        const payload = JSON.parse(rawFootagePayload);
+        if (payload.scenes?.length) {
+          useEditorStore.getState().loadTimeline({
+            scenes: payload.scenes,
+            audioTracks: payload.audioTracks ?? [],
+            totalDuration: payload.totalDuration ?? payload.scenes.reduce((sum: number, s: any) => sum + s.duration, 0),
+            aspectRatio: payload.aspectRatio ?? "9:16",
+          });
+          if (payload.clips?.length) {
+            payload.clips.forEach((c: any) => useEditorStore.getState().addClip(c));
+          }
+          useEditorStore.getState().setActiveScene(payload.scenes[0].id);
+        }
+      } catch {
+        /* ignore invalid json */
+      }
+    }
 
     // We do NOT need to parse any payload or inject any clips here.
     // The Zustand global store (useEditorStore) is persistent across page navigations in Next.js SPA routing!
@@ -3891,6 +3919,7 @@ export default function EditorShell({
     : null;
 
   let clipData: string | null = null;
+  let rawBinary: Blob | File | null = null;
   let clipMime = "";
   let clipExt = "";
 
@@ -3904,6 +3933,11 @@ export default function EditorShell({
         `[Export] Scene "${sceneName}" has no media data; rendering will use a placeholder frame.`
       );
       return null;
+    }
+
+    // Skip validation for native binary placeholders
+    if (dataUrl === "NATIVE_BINARY_BYPASS") {
+      return dataUrl;
     }
 
     const commaIndex = dataUrl.indexOf(",");
@@ -3964,9 +3998,16 @@ export default function EditorShell({
         ? "jpg"
         : "mp4");
 
-    clipData = await fileToDataUrl(
-      clip.file
-    );
+    // NATIVE BINARY OPTIMIZATION: If file is large, do not read it as base64 dataUrl
+    if (clip.file.size > 100_000) {
+      console.log(`[Export] Native binary optimization active for file: ${clip.file.name}`);
+      rawBinary = clip.file;
+      clipData = "NATIVE_BINARY_BYPASS";
+    } else {
+      clipData = await fileToDataUrl(
+        clip.file
+      );
+    }
   } else if (clip?.file instanceof File && clip.file.size === 0) {
     if (clipSrc) {
       console.warn(
@@ -4051,8 +4092,15 @@ export default function EditorShell({
                 ? "webm"
                 : "mp4");
 
-          clipData =
-            await blobToDataUrl(blob);
+          // NATIVE BINARY OPTIMIZATION: If blob is large, do not convert to base64
+          if (blob.size > 100_000) {
+            console.log(`[Export] Native binary optimization active for fetched blob: ${scene.label}`);
+            rawBinary = blob;
+            clipData = "NATIVE_BINARY_BYPASS";
+          } else {
+            clipData =
+              await blobToDataUrl(blob);
+          }
         }
       }
     }
@@ -4062,18 +4110,20 @@ export default function EditorShell({
   // If the generated base64 is larger than 100KB, upload it directly to GCS
   // from the browser to bypass Vercel's strict 4.5MB Serverless request limits.
   // This executes for BOTH local files and fetched blobs.
-  if (clipData && clipData.length > 100_000) {
-    console.log(`[Export] Media detected for scene "${scene.label}" (${(clipData.length / 1024 / 1024).toFixed(2)} MB). Bypassing payload via direct GCS upload...`);
+  if (clipData && (rawBinary || clipData.length > 100_000)) {
+    console.log(`[Export] Media detected for scene "${scene.label}" (${rawBinary ? (rawBinary.size / 1024 / 1024).toFixed(2) : (clipData.length / 1024 / 1024).toFixed(2)} MB). Bypassing payload via direct cloud upload...`);
     try {
-      // Create a Blob from the Data URL for clean binary uploading
-      const b64Data = clipData.split(",")[1];
-      const byteCharacters = atob(b64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const uploadBlob = new Blob([byteArray], { type: clipMime });
+      // Use the raw File/Blob directly if available, otherwise compile from base64
+      const uploadBlob = rawBinary || (() => {
+        const b64Data = clipData!.split(",")[1];
+        const byteCharacters = atob(b64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: clipMime });
+      })();
 
       const uploadInitRes = await fetch("/api/upload-media", {
         method: "POST",
@@ -4109,6 +4159,7 @@ export default function EditorShell({
             scene.clipSrc = `gs://${gcsPath}`; // Server transcoder natively understands gs://
           }
           clipData = null; // Clear base64 to keep payload tiny
+          rawBinary = null; // Clear raw binary reference to let GC free up RAM
         } else {
           console.warn(`[Export] Direct upload failed with status ${uploadRes.status}`);
         }
@@ -4125,7 +4176,7 @@ export default function EditorShell({
   // 4. Validate REAL base64 payload
   // ---------------------------------------------------------
 
-  if (clipData !== null) {
+  if (clipData !== null && clipData !== "NATIVE_BINARY_BYPASS") {
     clipData = validateDataUrl(
       clipData,
       scene.label
@@ -4395,31 +4446,59 @@ export default function EditorShell({
         throw new Error(errorBody.message ?? errorBody.error ?? "Export failed. Please try again.");
       }
 
+      const data = await res.json().catch(() => ({}));
+      
+      let finalJob = data;
+      
+      if (data.jobId && (!data.downloadUrl || data.status === "pending" || data.status === "processing")) {
+        console.log(`[Export] Server is rendering asynchronously. Entering browser polling loop for jobId: ${data.jobId}`);
+        
+        let attempts = 0;
+        const maxAttempts = 400; // 400 * 3s = 1200 seconds = 20 minutes!
+        let completed = false;
+        
+        while (attempts < maxAttempts) {
+          attempts++;
+          setRenderStatus(`Rendering on server (connecting to queue)...`);
+          
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          
+          const statusRes = await fetch(`/api/render/status?jobId=${data.jobId}`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData.status === "completed") {
+              finalJob = statusData;
+              completed = true;
+              break;
+            } else if (statusData.status === "failed") {
+              throw new Error(statusData.error || "The render worker failed to compile the video.");
+            } else {
+              console.log(`[Export] Polling status: ${statusData.status}. Progress: ${statusData.progress}%`);
+              if (statusData.status === "rendering") {
+                const progressText = statusData.progress ? ` (${statusData.progress}%)` : "";
+                setRenderStatus(`Rendering video on background worker${progressText}...`);
+              } else {
+                setRenderStatus(`In queue (waiting for worker)...`);
+              }
+            }
+          }
+        }
+        
+        if (!completed) {
+          throw new Error("The rendering job timed out. Your video is still compiling on the server, please check back in a few minutes.");
+        }
+      }
+
       setRenderStatus("Downloading video...");
       console.log("[Export] Render complete! Initiating download...");
 
-      const contentType = res.headers.get("content-type") || "";
-      if (contentType.startsWith("video/")) {
-        const blob = await res.blob();
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
-        toast.success("Export ready — downloading now.");
-        return;
-      }
-
-      const data = await res.json().catch(() => ({}));
-      if (!data.downloadUrl) {
-        throw new Error(data.error ?? data.message ?? "Export failed. Please try again.");
+      if (!finalJob.downloadUrl) {
+        throw new Error(finalJob.error ?? finalJob.message ?? "Export failed. Please try again.");
       }
 
       const a = document.createElement("a");
-      a.href = data.downloadUrl;
-      a.download = data.filename ?? `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
+      a.href = finalJob.downloadUrl;
+      a.download = finalJob.filename ?? `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

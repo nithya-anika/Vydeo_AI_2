@@ -461,4 +461,115 @@ describe("Editor playback transport", () => {
 
     HTMLMediaElement.prototype.play = originalPlay;
   });
+
+  it("renders video and image preview with contain fit mode on black background to preserve full footage without cropping", async () => {
+    useEditorStore.setState({
+      aspectRatio: "16:9",
+      scenes: [
+        {
+          id: "scene-1",
+          order: 0,
+          label: "Video Scene",
+          description: "",
+          duration: 5,
+          clipId: "clip-1",
+          clipSrc: "https://example.com/clip.mp4",
+          clipType: "video",
+          captions: [],
+          transition: { type: "cut", duration: 0.5 },
+          mood: "neutral",
+          colorGrade: null,
+          colorAdjustments: {
+            exposure: 0,
+            contrast: 0,
+            saturation: 0,
+            temperature: 0,
+            tint: 0,
+            highlights: 0,
+            shadows: 0,
+          },
+          effects: [],
+          muted: false,
+        },
+      ],
+      clips: [
+        {
+          id: "clip-1",
+          name: "Video clip",
+          src: "https://example.com/clip.mp4",
+          file: new File([], "clip.mp4"),
+          type: "video",
+          duration: 5,
+        },
+      ],
+      totalDuration: 5,
+      activeSceneId: "scene-1",
+      currentTime: 0,
+      isPlaying: false,
+    });
+
+    const { unmount } = render(
+      <ToastProvider>
+        <EditorShell />
+      </ToastProvider>
+    );
+
+    const video = screen.getByTestId("editor-main-preview-video") as HTMLVideoElement;
+    expect(video).not.toBeNull();
+    expect(video.style.objectFit).toBe("contain");
+    expect(video.style.backgroundColor).toMatch(/^(#000|rgb\(0,\s*0,\s*0\))$/);
+
+    // Change aspect ratio to vertical (9:16)
+    useEditorStore.getState().setAspectRatio("9:16");
+    expect(useEditorStore.getState().aspectRatio).toBe("9:16");
+    expect(video.style.objectFit).toBe("contain");
+
+    unmount();
+
+    // Now test image clip
+    useEditorStore.setState({
+      aspectRatio: "1:1",
+      scenes: [
+        {
+          id: "scene-2",
+          order: 0,
+          label: "Image Scene",
+          description: "",
+          duration: 4,
+          clipId: "clip-2",
+          clipSrc: "https://example.com/image.jpg",
+          clipType: "image",
+          captions: [],
+          transition: { type: "cut", duration: 0.5 },
+          mood: "neutral",
+          colorGrade: null,
+          colorAdjustments: {
+            exposure: 0,
+            contrast: 0,
+            saturation: 0,
+            temperature: 0,
+            tint: 0,
+            highlights: 0,
+            shadows: 0,
+          },
+          effects: [],
+          muted: false,
+        },
+      ],
+      clips: [],
+      totalDuration: 4,
+      activeSceneId: "scene-2",
+    });
+
+    render(
+      <ToastProvider>
+        <EditorShell />
+      </ToastProvider>
+    );
+
+    const img = document.querySelector('img[src="https://example.com/image.jpg"]') as HTMLImageElement;
+    expect(img).not.toBeNull();
+    expect(img.style.objectFit).toBe("contain");
+    expect(img.style.backgroundColor).toMatch(/^(#000|rgb\(0,\s*0,\s*0\))$/);
+  });
 });

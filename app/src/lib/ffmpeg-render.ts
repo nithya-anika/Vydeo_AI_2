@@ -872,7 +872,8 @@ export function toXfadeType(
 /* -------------------------------------------------------------------------- */
 
 export async function renderWithFfmpeg(
-  params: RenderParams
+  params: RenderParams,
+  onProgress?: (progress: number) => void
 ): Promise<FfmpegRenderResult> {
   const {
     scenes,
@@ -966,6 +967,10 @@ export async function renderWithFfmpeg(
       scenes.length;
       si++
     ) {
+      if (onProgress) {
+        const pct = Math.round((si / scenes.length) * 80);
+        onProgress(pct);
+      }
       const scene =
         scenes[si];
 
@@ -1183,7 +1188,7 @@ export async function renderWithFfmpeg(
 
       const scaleFilter =
         `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
-        `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1`;
+        `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
 
       const fpsFilter = "fps=30";
 
@@ -1326,6 +1331,8 @@ export async function renderWithFfmpeg(
     /* Concatenate                                                            */
     /* ---------------------------------------------------------------------- */
 
+    if (onProgress) onProgress(85);
+
     const concatenated =
       path.join(
         tmpDir,
@@ -1424,6 +1431,8 @@ export async function renderWithFfmpeg(
     /* Background audio                                                       */
     /* ---------------------------------------------------------------------- */
 
+    if (onProgress) onProgress(92);
+
     const hasOriginalAudio = params.scenes.some((s) => s.clipType === "video");
 
     if (audio?.src) {
@@ -1502,6 +1511,8 @@ export async function renderWithFfmpeg(
     /* ---------------------------------------------------------------------- */
     /* Finished                                                               */
     /* ---------------------------------------------------------------------- */
+
+    if (onProgress) onProgress(98);
 
     console.log(
       "[FFmpeg Render Complete]",
