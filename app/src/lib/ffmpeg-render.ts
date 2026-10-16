@@ -1202,18 +1202,28 @@ export async function renderWithFfmpeg(
             )}*PTS`
           : "";
 
-      const effectFilter =
-        scene.visualEffect
-          ? effectToVfFilter(
-              scene.visualEffect
-            )
-          : "";
+      let eqFilter = "";
+      if (scene.colorAdjustments) {
+        const a = scene.colorAdjustments;
+        const brightness = a.exposure || 0;
+        const contrast = 1 + (a.contrast || 0) / 100;
+        const saturation = 1 + (a.saturation || 0) / 100;
+        if (brightness !== 0 || contrast !== 1 || saturation !== 1) {
+            eqFilter = "eq=brightness=" + brightness + ":contrast=" + contrast + ":saturation=" + saturation;
+        }
+      }
+      
+      const gradeFilter = scene.colorGrade ? effectToVfFilter(scene.colorGrade) : "";
+      const effectFilter = [scene.visualEffect ? effectToVfFilter(scene.visualEffect) : "", gradeFilter, eqFilter].filter(Boolean).join(",");
+
+      const captionFilters = (scene.captions || []).map(c => captionToFilter(c, W, H)).filter(Boolean).join(",");
 
       const vf = [
         scaleFilter,
         fpsFilter,
         speedFilter,
         effectFilter,
+        captionFilters
       ]
         .filter(Boolean)
         .join(",");
