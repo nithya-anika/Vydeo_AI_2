@@ -673,113 +673,43 @@ export function ratioDimensions(
 export function effectToVfFilter(
   effect: string
 ): string {
-  const e =
-    effect
-      .toLowerCase()
-      .replace(
-        /[\s_-]+/g,
-        "-"
-      );
+  const e = effect.toLowerCase();
 
-  if (
-    e.includes(
-      "black-and-white"
-    ) ||
-    e.includes(
-      "grayscale"
-    ) ||
-    e.includes("bw")
-  ) {
+  // Handle exact LUT presets from the UI
+  if (e.includes("black & white") || e.includes("black and white") || e.includes("grayscale") || e.includes("bw")) {
     return "hue=s=0";
   }
-
-  if (
-    e.includes(
-      "sepia"
-    ) ||
-    e.includes(
-      "vintage"
-    )
-  ) {
+  if (e.includes("vintage")) {
     return "colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131";
   }
-
-  if (
-    e.includes("warm") ||
-    e.includes("golden")
-  ) {
+  if (e.includes("warm")) {
     return "colorbalance=rs=0.15:gs=0.05:bs=-0.15";
   }
-
-  if (
-    e.includes("cool") ||
-    e.includes("cold")
-  ) {
+  if (e.includes("cool")) {
     return "colorbalance=rs=-0.1:gs=0:bs=0.2";
   }
-
-  if (
-    e.includes(
-      "vignette"
-    )
-  ) {
-    return "vignette=angle=PI/4:mode=forward";
+  if (e.includes("neon")) {
+    return "eq=saturation=2:brightness=0.1:contrast=1.2";
   }
-
-  if (
-    e.includes("blur") ||
-    e.includes("dreamy")
-  ) {
-    return "boxblur=3:1";
+  if (e.includes("teal")) {
+    // Teal and orange simplified
+    return "colorbalance=rs=0.15:bs=-0.15,eq=saturation=1.2:contrast=1.1";
   }
-
-  if (
-    e.includes(
-      "sharpen"
-    ) ||
-    e.includes("crisp")
-  ) {
-    return "unsharp=5:5:1.5:5:5:0.0";
+  if (e.includes("desaturat")) {
+    return "eq=saturation=0.2:contrast=1.05";
   }
-
-  if (
-    e.includes(
-      "cinematic"
-    ) ||
-    e.includes("film")
-  ) {
+  if (e.includes("cinematic")) {
     return "curves=preset=strong_contrast,colorbalance=rs=0.05:bs=-0.05";
   }
 
-  if (
-    e.includes("matte") ||
-    e.includes("fade")
-  ) {
-    return "curves=preset=lighter,eq=contrast=0.85:saturation=0.8";
-  }
-
-  if (
-    e.includes(
-      "vibrant"
-    ) ||
-    e.includes("pop")
-  ) {
-    return "eq=saturation=1.4:contrast=1.1";
-  }
-
-  if (
-    e.includes("moody") ||
-    e.includes("dark")
-  ) {
-    return "eq=brightness=-0.05:contrast=1.15:saturation=0.85";
-  }
-
-  if (
-    e.includes("bright") ||
-    e.includes("light")
-  ) {
-    return "eq=brightness=0.08:contrast=0.95";
-  }
+  // Handle generative / arbitrary effects
+  if (e.includes("vignette")) return "vignette=angle=PI/4:mode=forward";
+  if (e.includes("blur") || e.includes("dreamy")) return "boxblur=3:1";
+  if (e.includes("sharpen") || e.includes("crisp")) return "unsharp=5:5:1.5:5:5:0.0";
+  if (e.includes("matte") || e.includes("fade")) return "curves=preset=lighter,eq=contrast=0.85:saturation=0.8";
+  if (e.includes("vibrant") || e.includes("pop")) return "eq=saturation=1.4:contrast=1.1";
+  if (e.includes("moody") || e.includes("dark")) return "eq=brightness=-0.05:contrast=1.15:saturation=0.85";
+  if (e.includes("bright") || e.includes("light")) return "eq=brightness=0.08:contrast=0.95";
 
   return "";
 }
