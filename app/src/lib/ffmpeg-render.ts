@@ -1110,11 +1110,17 @@ export async function renderWithFfmpeg(
        * saveBase64 detect the actual MIME type.
        */
 
-      const fallbackExt =
-        scene.clipType ===
-        "image"
-          ? "jpg"
-          : "mp4";
+      // Fix: the frontend often sends images marked as clipType: "video".
+      // We must guess if it is an image based on the URL or data prefix.
+      let actualClipType = scene.clipType ?? "video";
+      if (scene.clipSrc && scene.clipSrc.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
+        actualClipType = "image";
+      }
+      if (scene.clipData && scene.clipData.match(/^data:image\//i)) {
+        actualClipType = "image";
+      }
+
+      const fallbackExt = actualClipType === "image" ? "jpg" : "mp4";
 
       let raw = "";
 
@@ -1232,10 +1238,7 @@ export async function renderWithFfmpeg(
       /* Image                                                                */
       /* -------------------------------------------------------------------- */
 
-      if (
-        scene.clipType ===
-        "image"
-      ) {
+      if (actualClipType === "image") {
         await runFfmpeg([
           "-loop",
           "1",
