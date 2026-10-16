@@ -4328,13 +4328,15 @@ export default function EditorShell({
   };
 };
 
-  const handleExport = async () => {
+  const handleExport = async (sceneIdToExport?: string | React.MouseEvent) => {
+    const isSingleScene = typeof sceneIdToExport === "string";
     try {
       setExporting(true);
       setRenderStatus("Preparing scenes...");
       console.log("[Export] Starting export process. Compiling scenes...");
 
-      const payloadScenes = await Promise.all(scenes.map(buildRenderScene));
+      const scenesToExport = isSingleScene ? scenes.filter(s => s.id === sceneIdToExport) : scenes;
+      const payloadScenes = await Promise.all(scenesToExport.map(buildRenderScene));
       if (!payloadScenes.some((scene) => scene.clipData || scene.clipSrc)) {
         toast.error("No media found to export.");
         return;
@@ -4342,7 +4344,7 @@ export default function EditorShell({
 
       setRenderStatus("Attaching audio...");
       let audioPayload = undefined;
-      const activeAudio = audioTracks.find((t) => !t.muted);
+      const activeAudio = !isSingleScene ? audioTracks.find((t) => !t.muted) : null;
       if (activeAudio) {
         let audioData = null;
         if (activeAudio.file instanceof File && activeAudio.file.size > 0) {
@@ -4436,7 +4438,7 @@ export default function EditorShell({
         audio: audioPayload,
         aspectRatio,
         totalDuration: payloadScenes.reduce((sum, scene) => sum + scene.duration, 0),
-        outputFilename: `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
+        outputFilename: isSingleScene ? `${storeName.replace(/\s+/g, "-")}-scene-${Date.now()}.mp4` : `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
       };
 
       setRenderStatus("Compressing payload...");
@@ -4793,6 +4795,37 @@ export default function EditorShell({
           >
             {Math.round(zoom * 100)}%
           </div>
+          <VDivider />
+          <button
+            onClick={() => activeSceneId ? handleExport(activeSceneId) : toast.error("Select a scene to export")}
+            disabled={exporting || !activeSceneId}
+            title="Export current scene"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 10px",
+              borderRadius: "var(--r-md)",
+              fontSize: 11,
+              fontWeight: 600,
+              background: "var(--bg-elevated)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
+              cursor: (exporting || !activeSceneId) ? "not-allowed" : "pointer",
+              opacity: (exporting || !activeSceneId) ? 0.5 : 1,
+              transition: "all 0.12s",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => {
+              if (!exporting && activeSceneId) e.currentTarget.style.color = "var(--text-primary)";
+            }}
+            onMouseLeave={(e) => {
+              if (!exporting && activeSceneId) e.currentTarget.style.color = "var(--text-secondary)";
+            }}
+          >
+            <Download size={12} />
+            Export Scene
+          </button>
           <VDivider />
           <button
             onClick={() => { setRightCollapsed(false); setRightTab("ai"); }}
