@@ -4836,46 +4836,6 @@ export default function EditorShell({
           </button>
           <VDivider />
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              const state = useEditorStore.getState();
-              if (state.activeSceneId) {
-                handleExport(state.activeSceneId);
-              } else {
-                toast.error("Select a scene to export");
-              }
-            }}
-            disabled={exporting}
-            title="Export current scene"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "5px 10px",
-              borderRadius: "var(--r-md)",
-              fontSize: 11,
-              fontWeight: 600,
-              background: "var(--bg-elevated)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border)",
-              cursor: exporting ? "not-allowed" : "pointer",
-              opacity: exporting ? 0.5 : 1,
-              transition: "all 0.12s",
-              whiteSpace: "nowrap",
-            }}
-            onMouseEnter={(e) => {
-              if (!exporting) e.currentTarget.style.color = "var(--text-primary)";
-            }}
-            onMouseLeave={(e) => {
-              if (!exporting) e.currentTarget.style.color = "var(--text-secondary)";
-            }}
-          >
-            <Download size={12} />
-            Export Scene
-          </button>
-          <VDivider />
-          
-          <button
             onClick={() => { setRightCollapsed(false); setRightTab("ai"); }}
             title="Open AI Assistant (⌘K)"
             style={{
