@@ -174,7 +174,11 @@ function SceneCard({
         background: hasVideo ? "#000" : `linear-gradient(160deg, color-mix(in srgb, ${c} 30%, #0A0A0D) 0%, color-mix(in srgb, ${c} 8%, #08080f) 100%)`,
       }}>
         {hasVideo ? (
-          <video src={scene.clipSrc!} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted />
+          scene.clipType === "image" || scene.clipSrc?.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+            <img src={scene.clipSrc!} style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }} alt="" />
+          ) : (
+            <video src={scene.clipSrc!} style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }} muted />
+          )
         ) : (
           <>
             {/* Cinematic vignette */}
@@ -1122,9 +1126,9 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
                       {uploadedRefs.map((r, i) => (
                         <div key={i} style={{ position: "relative", borderRadius: "var(--r-sm)", overflow: "hidden", aspectRatio: "16/9", background: "#000", border: "1px solid var(--border)" }}>
                           {r.isVideo ? (
-                            <video src={r.src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <video src={r.src} style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }} />
                           ) : (
-                            <img src={r.src} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+                            <img src={r.src} style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }} alt="" />
                           )}
                           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "3px 5px", background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)", fontSize: 8, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {r.name}

@@ -140,51 +140,12 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Queue] Successfully enqueued "${jobId}" to SQS.`);
 
-    // 3. Enter safe long-polling loop (idle checking MongoDB)
-    const startTime = Date.now();
-    const timeoutMs = 260000; // 4.3 minutes (safely under the 5 min HTTP limit)
-    let completedJob: any = null;
-
-    while (Date.now() - startTime < timeoutMs) {
-      // Wait 3 seconds before querying again (friendly to DB)
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-
-      const job = await db.collection("render_jobs").findOne({ id: jobId });
-      if (!job) {
-        return NextResponse.json(
-          { error: "Internal Error", message: "Render job vanished from database." },
-          { status: 500 }
-        );
-      }
-
-      if (job.status === "completed") {
-        completedJob = job;
-        break;
-      } else if (job.status === "failed") {
-        return NextResponse.json(
-          { error: "Render Failed", message: job.error || "The render worker failed to compile the video." },
-          { status: 500 }
-        );
-      }
-    }
-
-    if (!completedJob) {
-      // Job is taking longer than 4.3 minutes, return async payload so client can keep polling later
-      return NextResponse.json({
-        success: true,
-        jobId,
-        status: "processing",
-        message: "Your video is rendering. It is taking slightly longer, but you don't have to stay on this page.",
-      });
-    }
-
-    // 4. Return the finished S3 download URL!
+    // Immediately return the enqueued job details so the browser can poll asynchronously!
     return NextResponse.json({
       success: true,
-      downloadUrl: completedJob.downloadUrl,
-      filename: completedJob.filename,
-      engine: "local",
-      message: "Rendered asynchronously via decoupled background worker.",
+      jobId,
+      status: "pending",
+      message: "Render job successfully enqueued. Processing in background...",
     });
 
   } catch (error) {

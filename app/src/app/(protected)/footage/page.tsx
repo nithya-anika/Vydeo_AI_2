@@ -12,19 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import { useEditorStore, type AspectRatio } from "@/store/editorStore";
 import { inferRequestedColorAdjustments, inferRequestedColorGrade, inferRequestedTransition } from "@/lib/footagePromptControls";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface UploadedClip {
-  id: string;
-  file?: File;
-  src: string;
-  name: string;
-  duration: number;
-  thumbnail?: string;
-  width?: number;
-  height?: number;
-  frames?: string[]; // base64 JPEG keyframes for Gemini Vision
-}
+import { buildScenesFromPlan, type UploadedClip, type EditPlan } from "@/lib/footagePlan";
 
 // ── Prompt suggestions ────────────────────────────────────────────────────────
 
@@ -1195,112 +1183,5 @@ export default function FootagePage() {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface EditPlan {
-  reasoning?: string;
-  sceneOrder: number[];
-  trimInstructions?: Array<{ clipIndex: number; trimStart: number; trimEnd: number | null }>;
-  transitions?: Array<{ afterClipIndex: number; type: string; duration: number }>;
-  globalColorAdjustments?: {
-    exposure: number; contrast: number; saturation: number;
-    temperature: number; tint: number; highlights: number; shadows: number;
-  };
-  targetDuration?: number | null;
-  muteSourceAudio?: boolean;
-}
-
-// ── Scene builder (AI-plan aware) ─────────────────────────────────────────────
-
-const VALID_TRANSITIONS = new Set([
-  "cut","fade","dissolve","wipe-left","wipe-right","zoom-in","zoom-out",
-  "cross-zoom","slide-left","slide-right","cinematic-fade","glitch",
-  "blur","whip","light-leak","flash",
-]);
-
-function buildScenesFromPlan(
-  clips: UploadedClip[],
-  plan: EditPlan | null,
-  targetDuration: number,
-  prompt: string,
-): import("@/store/editorStore").Scene[] {
-  type StoreScene = import("@/store/editorStore").Scene;
-  type StoreTransition = import("@/store/editorStore").Transition;
-  type StoreTransitionType = import("@/store/editorStore").TransitionType;
-
-  const DEFAULT_ADJ = { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 };
-  const requestedColor = inferRequestedColorAdjustments(prompt);
-  const requestedColorGrade = inferRequestedColorGrade(prompt);
-  const requestedTransition = inferRequestedTransition(prompt);
-  const colorAdj = { ...DEFAULT_ADJ, ...(plan?.globalColorAdjustments ?? {}), ...(requestedColor ?? {}) };
-  const muteSourceAudio = plan?.muteSourceAudio ?? false;
-
-  // Build clip lookup by original index
-  const byIndex = new Map(clips.map((c, i) => [i, c]));
-
-  // Determine scene order — AI-provided or original
-  const order: number[] = plan?.sceneOrder?.length
-    ? plan.sceneOrder.filter(i => byIndex.has(i))
-    : clips.map((_, i) => i);
-
-  // Build a lookup: originalIndex → transition that follows it
-  const transitionAfter = new Map<number, { type: string; duration: number }>();
-  for (const t of plan?.transitions ?? []) {
-    transitionAfter.set(t.afterClipIndex, t);
-  }
-
-  // Build a lookup: originalIndex → trim info
-  const trimFor = new Map<number, { trimStart: number; trimEnd: number | null }>();
-  for (const t of plan?.trimInstructions ?? []) {
-    trimFor.set(t.clipIndex, t);
-  }
-
-  // Scale durations to target if needed
-  const orderedClips = order.map(i => byIndex.get(i)!).filter(Boolean);
-  const totalRaw = orderedClips.reduce((s, c) => {
-    const tr = trimFor.get(clips.indexOf(c));
-    const dur = tr?.trimEnd != null ? tr.trimEnd - tr.trimStart : c.duration - (tr?.trimStart ?? 0);
-    return s + dur;
-  }, 0);
-  const scale = targetDuration > 0 && totalRaw > targetDuration ? targetDuration / totalRaw : 1;
-
-  return orderedClips.map((clip, i) => {
-    const origIdx = clips.indexOf(clip);
-    const trim = trimFor.get(origIdx);
-    const rawDur = trim?.trimEnd != null
-      ? trim.trimEnd - trim.trimStart
-      : clip.duration - (trim?.trimStart ?? 0);
-    const sceneDuration = Math.max(0.5, Math.round(rawDur * scale * 10) / 10);
-
-    // A scene stores the transition used when leaving that scene.
-    let transitionType: StoreTransitionType = i < orderedClips.length - 1
-      ? (requestedTransition ?? "fade")
-      : "cut";
-    let transitionDuration = 0.5;
-    if (i < orderedClips.length - 1) {
-      const t = transitionAfter.get(origIdx);
-      if (!requestedTransition && t && VALID_TRANSITIONS.has(t.type)) {
-        transitionType = t.type as StoreTransitionType;
-        transitionDuration = t.duration;
-      }
-    }
-
-    return {
-      id: uuidv4(),
-      order: i,
-      label: clip.name,
-      description: clip.name,
-      duration: sceneDuration,
-      playbackRate: 1,
-      clipId: clip.id,
-      clipSrc: clip.src,
-      clipType: "video" as const,
-      clipTrimStart: trim?.trimStart ?? 0,
-      captions: [],
-      transition: { type: transitionType, duration: transitionDuration } as StoreTransition,
-      mood: "neutral" as const,
-      colorGrade: requestedColorGrade,
-      colorAdjustments: { ...colorAdj },
-      effects: [],
-      muted: muteSourceAudio,
-    } satisfies StoreScene;
-  });
-}
+export type { UploadedClip, EditPlan } from "@/lib/footagePlan";
+export { buildScenesFromPlan } from "@/lib/footagePlan";

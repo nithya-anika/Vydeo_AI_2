@@ -1,3 +1,4 @@
+import "./env-loader";
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getDb } from "./lib/mongodb";
@@ -104,8 +105,14 @@ async function startWorker() {
       );
 
       try {
-        // 2. Render locally using FFmpeg
-        const renderResult = await renderWithFfmpeg(params);
+        // 2. Render locally using FFmpeg with real-time MongoDB progress tracking
+        const renderResult = await renderWithFfmpeg(params, async (progress) => {
+          console.log(`[Worker] Job ${jobId} Progress: ${progress}%`);
+          await db.collection("render_jobs").updateOne(
+            { id: jobId },
+            { $set: { progress } }
+          );
+        });
         
         if (!renderResult.outputPath) {
           throw new Error("FFmpeg rendering failed: outputPath is missing.");

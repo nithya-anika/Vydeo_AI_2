@@ -29,6 +29,8 @@ import {
   transitionPlannerTool, captionGeneratorTool, musicSelectorTool,
 } from "./tools";
 import type { ToolContext } from "./tools/types";
+import { validateAndRepairTimeline } from "./pipeline-guards";
+import { transcribeClipWithGemini } from "./transcription";
 import {
   saveGeneration, saveWorkflowRun, saveToolExecution, saveEvaluationResult,
   getSimilarGenerations,
@@ -59,6 +61,7 @@ export interface PipelineResult {
     improvements: string[];
     issues: string[];
     compliments: string[];
+    timestampViolations?: import("./pipeline-guards").TimestampViolation[];
     criteriaScores: Array<{ criterion: string; score: number; rating: string; notes: string }>;
     platformScores: Array<{ platform: string; score: number; rating: string; insight: string }>;
   };
@@ -153,6 +156,7 @@ export async function runAgentPipeline(params: {
   let suggestions: LineupResponse["suggestions"] = undefined;
   let clipAssignments: ClipAssignment[] = [];
   let musicSpec = undefined;
+  let capturedTimestampViolations: import("./pipeline-guards").TimestampViolation[] = [];
 
   for (const { toolName, reason } of plan.tools) {
     let t0 = Date.now();
@@ -169,6 +173,44 @@ export async function runAgentPipeline(params: {
           decision: result.data ? `${result.data.editableClipCount} usable clips | quality: ${result.data.overallQuality} | ${result.data.suggestedCluster}` : "fallback metadata",
         });
         toolsExecuted.push(toolName);
+
+        // Audio-aware trimming: Transcribe audio for clips with video/audio data
+        const transcribableClips = clips.filter(c => c.data && !c.speechSegments);
+        if (transcribableClips.length > 0) {
+          const transStart = Date.now();
+          await Promise.allSettled(
+            transcribableClips.map(async (clip) => {
+              try {
+                const res = await transcribeClipWithGemini({
+                  base64Data: clip.data!,
+                  mimeType: clip.mimeType || "video/mp4",
+                  duration: clip.duration ?? 10,
+                  clipIndex: clip.index,
+                  clipId: clip.id,
+                });
+                clip.transcriptionStatus = res.status;
+                clip.speechSegments = res.segments;
+                clip.transcript = res.fullTranscript;
+                clip.transcriptionError = res.error;
+              } catch (err: any) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                console.warn(`[pipeline:transcribe] Failed to transcribe clip ${clip.index}:`, errMsg);
+                clip.transcriptionStatus = "failed";
+                clip.transcriptionError = errMsg;
+                clip.speechSegments = [];
+                clip.transcript = "";
+              }
+            })
+          );
+          const speechClipsCount = clips.filter(c => c.transcriptionStatus === "completed_with_speech").length;
+          const failedClipsCount = clips.filter(c => c.transcriptionStatus === "failed").length;
+          trace.push({
+            stage: "Audio Transcription",
+            model: getModel("vision"),
+            durationMs: Date.now() - transStart,
+            decision: `${speechClipsCount} speech | ${failedClipsCount} unverified (failed) | ${clips.length - speechClipsCount - failedClipsCount} confirmed silent`,
+          });
+        }
 
       } else if (toolName === "hook-detection") {
         const result = await hookDetectionTool.execute({
@@ -188,7 +230,7 @@ export async function runAgentPipeline(params: {
         toolsExecuted.push(toolName);
 
       } else if (toolName === "timeline-generator") {
-        const result = await timelineGeneratorTool.execute({
+        const generatorPayload = {
           prompt: enrichedPrompt,
           brand,
           aspectRatio,
@@ -205,84 +247,70 @@ export async function runAgentPipeline(params: {
             tone: plan.tone,
             platform: plan.platform,
           },
-        }, ctx);
+        };
+
+        let result = await timelineGeneratorTool.execute(generatorPayload, ctx);
         void saveToolExecution({ runId, toolName, modelUsed: result.modelUsed, durationMs: result.durationMs, success: result.success, errorMsg: result.error });
         if (!result.success || !result.data) throw new Error(result.error ?? "Timeline generation failed");
+
         timeline = result.data.timeline;
         suggestions = result.data.suggestions;
         clipAssignments = result.data.clipAssignments;
 
-        if (hasClips && timeline.scenes) {
-          // Guard A: deduplicate scene IDs — model sometimes writes the same UUID twice.
-          // If two scenes share an ID, the second one gets a fresh UUID and its
-          // clipAssignment entry (if any) is updated to the new ID.
-          const seenSceneIds = new Set<string>();
-          for (const scene of timeline.scenes) {
-            if (seenSceneIds.has(scene.id)) {
-              const oldId = scene.id;
-              const newId = uuidv4();
-              scene.id = newId;
-              // patch clipAssignments that referenced the old duplicate ID
-              for (const a of clipAssignments) {
-                if (a.sceneId === oldId && !seenSceneIds.has(newId)) a.sceneId = newId;
+        if (timeline.scenes) {
+          let validation = validateAndRepairTimeline(
+            timeline,
+            hasClips ? clips : [],
+            clipAssignments
+          );
+
+          // If invalid in editorial mode, retry once with explicit corrective feedback
+          if (!validation.valid && hasClips) {
+            console.warn("[pipeline] Initial timeline invalid, retrying with error context:", validation.errors);
+            const retryPayload = {
+              ...generatorPayload,
+              prompt: `${enrichedPrompt}\n\nIMPORTANT CORRECTION: The previous timeline generation had structural errors: ${validation.errors.join("; ")}. Please return a strictly valid timeline matching the schema and valid clip durations.`,
+            };
+            const retryResult = await timelineGeneratorTool.execute(retryPayload, ctx);
+            if (retryResult.success && retryResult.data) {
+              const retryValidation = validateAndRepairTimeline(
+                retryResult.data.timeline,
+                clips,
+                retryResult.data.clipAssignments
+              );
+              if (retryValidation.valid) {
+                result = retryResult;
+                validation = retryValidation;
               }
             }
-            seenSceneIds.add(scene.id);
           }
 
-          // Guard B: fix duplicate clipIndex — model sometimes assigns the same clip to
-          // multiple scenes. Reassign each duplicate to the next unused clip index.
-          const usedClipIndices = new Set<number>();
-          for (const a of clipAssignments) {
-            if (!usedClipIndices.has(a.clipIndex)) {
-              usedClipIndices.add(a.clipIndex);
-            } else {
-              let next = 0;
-              while (usedClipIndices.has(next) && next < clips.length) next++;
-              if (next < clips.length) { a.clipIndex = next; usedClipIndices.add(next); }
-            }
+          if (!validation.valid) {
+            throw new Error(`Timeline validation failed: ${validation.errors.join("; ")}`);
           }
 
-          // Guard C: ensure EVERY scene has exactly one clipAssignment.
-          // If a scene is missing from clipAssignments, assign the next available clip.
-          const availableClipIndices = clips.map((_, i) => i).filter(i => !usedClipIndices.has(i));
-          for (const scene of timeline.scenes) {
-            if (!clipAssignments.some(a => a.sceneId === scene.id) && availableClipIndices.length > 0) {
-              const nextIdx = availableClipIndices.shift()!;
-              clipAssignments.push({ sceneId: scene.id, clipIndex: nextIdx, trimStart: scene.clipTrimStart ?? 0, trimEnd: scene.clipTrimEnd });
-              usedClipIndices.add(nextIdx);
-            }
-          }
+          if (!result.data) throw new Error("Missing result data after timeline generation.");
 
-          // Guard 1: trim excess scenes — never more than the number of uploaded clips
-          if (timeline.scenes.length > clips.length) {
-            timeline.scenes = timeline.scenes.slice(0, clips.length);
-          }
+          timeline = validation.timeline;
+          clipAssignments = validation.clipAssignments;
+          suggestions = result.data.suggestions;
+          capturedTimestampViolations = validation.timestampViolations;
 
-          // Guard 3: clamp clipTrimEnd to exact clip duration — only cap the end, preserve trimStart
-          timeline.scenes.forEach((scene, sceneIdx) => {
-            const assignment = clipAssignments.find(a => a.sceneId === scene.id);
-            const clipIdx = assignment?.clipIndex ?? sceneIdx;
-            const sourceClip = clips[clipIdx] ?? clips[sceneIdx];
-            const exactDuration = sourceClip?.duration;
-            if (exactDuration && exactDuration > 0) {
-              const trimStart = Math.max(0, scene.clipTrimStart ?? 0);
-              const trimEnd = Math.min(scene.clipTrimEnd ?? exactDuration, exactDuration);
-              scene.clipTrimStart = trimStart;
-              scene.clipTrimEnd = trimEnd > trimStart ? trimEnd : exactDuration;
-              scene.duration = parseFloat((scene.clipTrimEnd - scene.clipTrimStart).toFixed(3));
-            }
-          });
-          timeline.totalDuration = parseFloat(
-            timeline.scenes.reduce((s, sc) => s + (sc.duration ?? 0), 0).toFixed(3)
-          );
+          if (capturedTimestampViolations.length > 0) {
+            trace.push({
+              stage: "Timestamp Auditor",
+              model: "pipeline-guards",
+              durationMs: 0,
+              decision: `${capturedTimestampViolations.length} invalid timestamp(s) caught & clamped: ${capturedTimestampViolations.map(v => v.details).join("; ").slice(0, 100)}`,
+            });
+          }
         }
 
         trace.push({
           stage: "Timeline Generator",
           model: result.modelUsed ?? (hasClips ? MODELS.EDITORIAL_ANALYZER : MODELS.CONCEPT_GENERATOR),
           durationMs: result.durationMs,
-          decision: `${timeline.scenes?.length ?? 0} scenes | ${timeline.totalDuration}s | ${result.data.generationNotes}`,
+          decision: result.data ? `${timeline.scenes?.length ?? 0} scenes | ${timeline.totalDuration}s | ${result.data.generationNotes}` : "Timeline Generator failed",
         });
         toolsExecuted.push(toolName);
 
@@ -390,12 +418,18 @@ export async function runAgentPipeline(params: {
 
   // ── Step 4: Evaluate ────────────────────────────────────────────────────────
   const evalStart = Date.now();
-  const evalResult = await runEvaluator({ timeline, brand, workflow, originalPrompt: enrichedPrompt });
+  const evalResult = await runEvaluator({
+    timeline,
+    brand,
+    workflow,
+    originalPrompt: enrichedPrompt,
+    timestampViolations: capturedTimestampViolations,
+  });
   trace.push({
     stage: "Evaluator",
     model: evalResult.evalModel,
     durationMs: Date.now() - evalStart,
-    decision: `score: ${evalResult.overallScore}/100 | ${evalResult.passedQA ? "PASSED" : "FAILED"} | ${evalResult.issues.length} issue(s)`,
+    decision: `score: ${evalResult.overallScore}/100 | ${evalResult.passedQA ? "PASSED" : "FAILED"} | ${evalResult.issues.length} issue(s)${capturedTimestampViolations.length > 0 ? ` (${capturedTimestampViolations.length} timestamp violations)` : ""}`,
   });
 
   // ── Step 4: Persist ─────────────────────────────────────────────────────────
@@ -452,6 +486,7 @@ export async function runAgentPipeline(params: {
       improvements: evalResult.improvements,
       issues: evalResult.issues,
       compliments: evalResult.compliments,
+      timestampViolations: evalResult.timestampViolations,
       criteriaScores: evalResult.criteriaScores.map(s => ({
         criterion: s.criterion,
         score: s.score,

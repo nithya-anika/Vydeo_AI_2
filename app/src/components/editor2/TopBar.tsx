@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useEditorStore } from "@/store/editorStore";
+import { Button, useToast, Icons } from "@/components/ui";
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -84,6 +85,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(projectName);
   const [exporting, setExporting] = useState(false);
+  const toast = useToast();
 
   const buildRenderScene = async (scene: any) => {
     const clip = scene.clipId ? clips.find((item) => item.id === scene.clipId) : null;
@@ -157,10 +159,11 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       }
     }
 
-    if (clipData) {
-      const commaIndex = clipData.indexOf(",");
-      const header = commaIndex >= 0 ? clipData.slice(0, commaIndex) : "";
-      const base64 = commaIndex >= 0 ? clipData.slice(commaIndex + 1) : "";
+    if (typeof clipData === "string") {
+      const dataStr = clipData as string;
+      const commaIndex = dataStr.indexOf(",");
+      const header = commaIndex >= 0 ? dataStr.slice(0, commaIndex) : "";
+      const base64 = commaIndex >= 0 ? dataStr.slice(commaIndex + 1) : "";
 
       if (!header.includes(";base64") || !base64.trim()) {
         console.warn(`[Export] Scene "${scene.label}" returned invalid base64.`);
@@ -377,14 +380,48 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         return;
       }
       const data = await res.json().catch(() => ({}));
-      if (data.downloadUrl) {
+      
+      let finalJob = data;
+      
+      if (data.jobId && (!data.downloadUrl || data.status === "pending" || data.status === "processing")) {
+        console.log(`[Export] Server is rendering asynchronously. Entering browser polling loop for jobId: ${data.jobId}`);
+        
+        let attempts = 0;
+        const maxAttempts = 400; // 400 * 3s = 1200 seconds = 20 minutes!
+        let completed = false;
+        
+        while (attempts < maxAttempts) {
+          attempts++;
+          
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          
+          const statusRes = await fetch(`/api/render/status?jobId=${data.jobId}`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData.status === "completed") {
+              finalJob = statusData;
+              completed = true;
+              break;
+            } else if (statusData.status === "failed") {
+              throw new Error(statusData.error || "The render worker failed to compile the video.");
+            }
+          }
+        }
+        
+        if (!completed) {
+          throw new Error("The rendering job timed out. Your video is still compiling on the server, please check back in a few minutes.");
+        }
+      }
+
+      if (finalJob.downloadUrl) {
         const a = document.createElement("a");
-        a.href = data.downloadUrl; a.download = data.filename ?? "export.mp4";
+        a.href = finalJob.downloadUrl; a.download = finalJob.filename ?? "export.mp4";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        toast.success("Export complete! Downloading video...");
       }
     } catch (err: any) {
       console.error("[Export Error]:", err);
-      alert(err.message || "An unexpected error occurred during export. Please check your network and try again.");
+      toast.error(err.message || "An unexpected error occurred during export. Please check your network and try again.");
     } finally {
       setExporting(false);
     }
@@ -475,22 +512,15 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       </div>
 
       {/* Export */}
-      <Btn variant="primary" onClick={handleExport} style={{ gap: 6 }}>
-        {exporting ? (
-          <>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-              style={{ animation: "spin 1s linear infinite" }}>
-              <path d="M21 12a9 9 0 11-6.219-8.56"/>
-            </svg>
-            Exporting…
-          </>
-        ) : (
-          <>
-            <Svg d={["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4", "M17 8l-5-5-5 5", "M12 3v12"]} />
-            Export
-          </>
-        )}
-      </Btn>
+      <Button
+        variant="primary"
+        size="sm"
+        isLoading={exporting}
+        leftIcon={<Icons.Download size={14} />}
+        onClick={handleExport}
+      >
+        Export
+      </Button>
     </header>
   );
 }

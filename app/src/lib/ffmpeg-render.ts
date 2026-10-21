@@ -26,10 +26,63 @@ export type FfmpegRenderResult = {
 };
 
 /* -------------------------------------------------------------------------- */
-/* FFmpeg                                                                     */
+/* FFmpeg & System Font Detection                                            */
 /* -------------------------------------------------------------------------- */
 
-function findFfmpeg(): string {
+export function escapeFontPathForFfmpeg(filePath: string): string {
+  return filePath
+    .replace(/\\/g, "/")
+    .replace(/:/g, "\\:")
+    .replace(/'/g, "\\'")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]");
+}
+
+export function findSystemFont(): string | null {
+  const fontCandidates = [
+    // 1. Bundled production repository font (always present in app / container)
+    path.join(process.cwd(), "public/fonts/Geist-Regular.ttf"),
+    path.join(process.cwd(), "app/public/fonts/Geist-Regular.ttf"),
+    path.join(__dirname, "../../../public/fonts/Geist-Regular.ttf"),
+
+    // 2. Production container / Linux paths (Debian/Ubuntu/Alpine)
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+
+    // 3. macOS local dev paths
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/System/Library/Fonts/HelveticaNeue.ttc",
+
+    // 4. Windows paths
+    "C:/Windows/Fonts/arial.ttf",
+  ];
+
+  for (const candidate of fontCandidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+export function findFfmpeg(): string {
+  // 1. Check if @ffmpeg-installer binary exists (compiled with libfreetype & libass)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const installer = require("@ffmpeg-installer/ffmpeg");
+    if (installer?.path && existsSync(installer.path)) {
+      return installer.path;
+    }
+  } catch {
+    // Fall back to system paths
+  }
+
   const candidates = [
     "/opt/homebrew/bin/ffmpeg",
     "/usr/local/bin/ffmpeg",
@@ -41,20 +94,6 @@ function findFfmpeg(): string {
     if (existsSync(candidate)) {
       return candidate;
     }
-  }
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const installer = require("@ffmpeg-installer/ffmpeg");
-
-    if (
-      installer?.path &&
-      existsSync(installer.path)
-    ) {
-      return installer.path;
-    }
-  } catch {
-    // Fall back to ffmpeg from PATH.
   }
 
   return "ffmpeg";
@@ -102,6 +141,16 @@ function runFfmpeg(
         (code) => {
           if (code === 0) {
             resolve();
+            return;
+          }
+
+          if (stderr.includes("No such filter: 'drawtext'") || stderr.includes("No font filename provided")) {
+            console.error("[FFmpeg Caption Error] Requested captions failed to render:", stderr);
+            reject(
+              new Error(
+                `Caption rendering failed: FFmpeg was unable to render requested captions (${stderr.slice(-400).trim()}). Requested text was NOT silently dropped. Ensure an FFmpeg binary with libfreetype support and system fonts are installed.`
+              )
+            );
             return;
           }
 
@@ -593,12 +642,17 @@ function captionToFilter(
       ? ":font='Inter:style=Bold'"
       : "";
 
+  const fontPath = findSystemFont();
+  const fontArg = fontPath ? `:fontfile='${escapeFontPathForFfmpeg(fontPath)}'` : "";
+
   return [
     "drawtext=",
 
     `text='${escapeDrawtext(
       text
     )}'`,
+
+    fontArg,
 
     weight,
 
@@ -676,13 +730,19 @@ export function effectToVfFilter(
   const e = effect.toLowerCase();
 
   // Handle exact LUT presets from the UI
-  if (e.includes("black & white") || e.includes("black and white") || e.includes("grayscale") || e.includes("bw")) {
+  if (
+    e.includes("black & white") ||
+    e.includes("black and white") ||
+    e.includes("black-and-white") ||
+    e.includes("grayscale") ||
+    e.includes("bw")
+  ) {
     return "hue=s=0";
   }
-  if (e.includes("vintage")) {
+  if (e.includes("vintage") || e.includes("sepia")) {
     return "colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131";
   }
-  if (e.includes("warm")) {
+  if (e.includes("warm") || e.includes("golden")) {
     return "colorbalance=rs=0.15:gs=0.05:bs=-0.15";
   }
   if (e.includes("cool")) {
@@ -698,7 +758,7 @@ export function effectToVfFilter(
   if (e.includes("desaturat")) {
     return "eq=saturation=0.2:contrast=1.05";
   }
-  if (e.includes("cinematic")) {
+  if (e.includes("cinematic") || e.includes("film")) {
     return "curves=preset=strong_contrast,colorbalance=rs=0.05:bs=-0.05";
   }
 
@@ -1238,23 +1298,64 @@ export async function renderWithFfmpeg(
          * Preserve the original scene audio.
          */
 
-        await runFfmpeg([
-          ...inputArgs,
-          "-vf",
-          vf,
-          "-c:v",
-          "libx264",
-          "-preset",
-          "ultrafast",
-          "-c:a",
-          "aac",
-          "-ar",
-          "48000",
-          "-pix_fmt",
-          "yuv420p",
-          "-y",
-          scaled,
-        ]);
+        const hasSourceAudio = await new Promise<boolean>((resolve) => {
+          const p = spawn("ffprobe", ["-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_type", "-of", "csv=p=0", raw]);
+          let out = "";
+          p.stdout?.on("data", (d) => { out += d.toString(); });
+          p.on("close", () => resolve(out.includes("audio")));
+          p.on("error", () => resolve(false));
+        });
+
+        if (hasSourceAudio && !(scene as any).muted) {
+          // Input has audio — encode video and audio
+          await runFfmpeg([
+            ...inputArgs,
+            "-vf",
+            vf,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "aac",
+            "-ar",
+            "48000",
+            "-pix_fmt",
+            "yuv420p",
+            "-y",
+            scaled,
+          ]);
+        } else {
+          // Input is silent or muted — inject synchronized anullsrc stereo track so concat always succeeds
+          await runFfmpeg([
+            ...inputArgs,
+            "-f",
+            "lavfi",
+            "-t",
+            sourceDur.toFixed(6),
+            "-i",
+            "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-vf",
+            vf,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "aac",
+            "-ar",
+            "48000",
+            "-pix_fmt",
+            "yuv420p",
+            "-shortest",
+            "-y",
+            scaled,
+          ]);
+        }
       }
 
       scaledFiles.push(

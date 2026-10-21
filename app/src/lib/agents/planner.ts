@@ -18,8 +18,7 @@ import { geminiRequest } from "@/lib/gemini";
 import { listWorkflows, getDefaultWorkflow } from "@/lib/workflows/registry";
 import type { ExecutionPlan, WorkflowCluster, EditMode } from "@/lib/tools/types";
 import type { ToolName } from "@/lib/tools";
-
-const MODEL = "gemini-2.5-pro";
+import { getModel } from "@/lib/ai-router";
 
 export interface PlannerInput {
   prompt: string;
@@ -100,9 +99,10 @@ Mode must be exactly "editorial" or "concept".
 tools[].toolName must be valid tool names from the registry above.`;
 
   try {
-    const data = await geminiRequest(MODEL, {
+    const model = getModel("planning");
+    const data = await geminiRequest(model, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 1.0, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 2000 } },
+      generationConfig: { responseMimeType: "application/json", temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 2000 } },
     });
 
     const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })

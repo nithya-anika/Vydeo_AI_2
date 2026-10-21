@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { geminiRequest } from "@/lib/gemini";
+import { getModel } from "@/lib/ai-router";
 import {
   DEFAULT_PROMPT_COLOR,
   FOOTAGE_TRANSITION_TYPES,
@@ -13,7 +14,7 @@ export { inferRequestedColorAdjustments, inferRequestedTransition } from "@/lib/
 
 export const maxDuration = 300;
 
-const MODEL = "gemini-2.5-pro";
+const MODEL = getModel("planning");
 const VALID_TRANSITIONS = FOOTAGE_TRANSITION_TYPES;
 type ValidTransition = FootageTransitionType;
 const DEFAULT_COLOR = DEFAULT_PROMPT_COLOR;

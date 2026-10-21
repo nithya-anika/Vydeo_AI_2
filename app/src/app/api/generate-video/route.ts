@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createVertexJWT, createStorageJWT, geminiRequest } from "@/lib/gemini";
+import { getModel } from "@/lib/ai-router";
 
 export const maxDuration = 300;
 
@@ -22,7 +23,7 @@ type PollResponse = {
 type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 const VEO_SUPPORTED_DURATION_SECONDS = [4, 6, 8] as const;
-const PROMPT_ENHANCER_MODEL = "gemini-2.5-pro";
+const PROMPT_ENHANCER_MODEL = getModel("planning");
 const VEO_MODELS_WITH_AUDIO = [
   "veo-3.1-generate-preview",
   "veo-3.1-fast-generate-preview",

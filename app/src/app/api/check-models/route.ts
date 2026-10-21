@@ -5,12 +5,21 @@ const PROJECT = process.env.GOOGLE_PROJECT_ID!;
 const LOCATION = process.env.GOOGLE_LOCATION ?? "us-central1";
 const BASE = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${LOCATION}/publishers/google/models`;
 
-async function checkGemini(token: string, model: string): Promise<string> {
+async function checkGemini(model: string): Promise<string> {
   try {
-    const res = await fetch(`${BASE}/${model}:generateContent`, {
+    const isGlobal = process.env.GOOGLE_VERTEX_LOCATION === "global" ||
+      model.startsWith("gemini-3") ||
+      model.startsWith("gemini-4");
+    const token = createVertexJWT(isGlobal);
+    const host = isGlobal ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
+    const loc = isGlobal ? "global" : LOCATION;
+    const url = `https://${host}/v1/projects/${PROJECT}/locations/${loc}/publishers/google/models/${model}:generateContent`;
+
+    const res = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
+      signal: AbortSignal.timeout(10000),
     });
     const j = await res.json() as { candidates?: unknown[]; error?: { message?: string; status?: string } };
     if (j.candidates) return "✅ available";
@@ -49,14 +58,17 @@ export async function GET() {
   try {
     const token = createVertexJWT();
     const [
-      pro, flash, proPreview, flashPreview,
+      pro31, flash38, argon4, flash35,
+      pro25, flash25,
       veo2, veo3, veo3fast,
       img3, img4, img4ultra,
     ] = await Promise.all([
-      checkGemini(token, "gemini-2.5-pro"),
-      checkGemini(token, "gemini-2.5-flash"),
-      checkGemini(token, "gemini-2.5-pro-preview-06-05"),
-      checkGemini(token, "gemini-2.5-flash-preview-05-20"),
+      checkGemini("gemini-3.1-pro-preview"),
+      checkGemini("gemini-3.8-flash"),
+      checkGemini("gemini-4-argon"),
+      checkGemini("gemini-3.5-flash"),
+      checkGemini("gemini-2.5-pro"),
+      checkGemini("gemini-2.5-flash"),
       checkVeo(token, "veo-2.0-generate-001"),
       checkVeo(token, "veo-3.0-generate-001"),
       checkVeo(token, "veo-3.0-fast-generate-001"),
@@ -67,10 +79,12 @@ export async function GET() {
 
     return NextResponse.json({
       gemini: {
-        "gemini-2.5-pro": pro,
-        "gemini-2.5-pro-preview-06-05": proPreview,
-        "gemini-2.5-flash": flash,
-        "gemini-2.5-flash-preview-05-20": flashPreview,
+        "gemini-3.1-pro-preview": pro31,
+        "gemini-3.8-flash": flash38,
+        "gemini-4-argon": argon4,
+        "gemini-3.5-flash": flash35,
+        "gemini-2.5-pro": pro25,
+        "gemini-2.5-flash": flash25,
       },
       veo: {
         "veo-2.0-generate-001": veo2,

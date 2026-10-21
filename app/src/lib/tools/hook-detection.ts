@@ -17,8 +17,7 @@
 import { geminiRequest } from "@/lib/gemini";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import type { VideoAnalysisOutput, ClipAnalysis } from "./video-analysis";
-
-const MODEL = "gemini-2.5-pro";
+import { getModel } from "@/lib/ai-router";
 
 export interface HookDetectionInput {
   videoAnalysis?: VideoAnalysisOutput;
@@ -50,7 +49,7 @@ export const hookDetectionTool: Tool<HookDetectionInput, HookDetectionOutput> = 
   purpose: "Mirrors how a professional editor chooses the first 3 seconds — the most critical editing decision",
   inputs: "VideoAnalysisOutput (optional), brief text, platform, cluster, target duration",
   outputs: "Ranked hook candidates with engagement scores, hook type classification, caption suggestions",
-  modelsUsed: [MODEL],
+  modelsUsed: [getModel("planning")],
   failureCases: [
     "No clips → returns text/concept-based hook suggestions",
     "All candidates score below 0.4 → best-available returned with warning flag",
@@ -65,6 +64,7 @@ export const hookDetectionTool: Tool<HookDetectionInput, HookDetectionOutput> = 
   async execute(input: HookDetectionInput, ctx: ToolContext): Promise<ToolResult<HookDetectionOutput>> {
     void ctx;
     const start = Date.now();
+    const activeModel = getModel("planning");
 
     try {
       const analysisSection = input.videoAnalysis
@@ -78,7 +78,7 @@ BRIEF: ${input.brief}
 PLATFORM: ${input.platform}
 CLUSTER: ${input.cluster}
 
-AVAILABLE CLIPS:
+AVAILABLE CLIPS (with scene-aware observations and camera movements):
 ${analysisSection}
 
 Return ONLY valid JSON:
@@ -110,16 +110,16 @@ Return ONLY valid JSON:
 hookType must be one of: visual-reveal, action-moment, emotion-peak, product-close-up, text-driven, sound-driven
 If no clips, set clipIndex: null and describe the shot to film.`;
 
-      const data = await geminiRequest(MODEL, {
+      const data = await geminiRequest(activeModel, {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 1.0, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 3000 } },
+        generationConfig: { responseMimeType: "application/json", temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 3000 } },
       });
 
       const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
         .candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
       const result = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as HookDetectionOutput;
 
-      return { success: true, data: result, durationMs: Date.now() - start, modelUsed: MODEL };
+      return { success: true, data: result, durationMs: Date.now() - start, modelUsed: activeModel };
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : String(e), durationMs: Date.now() - start };
     }
@@ -128,9 +128,9 @@ If no clips, set clipIndex: null and describe the shot to film.`;
 
 function buildClipSummary(clips: ClipAnalysis[]): string {
   return clips.map(c =>
-    `Clip ${c.clipIndex} "${c.name}": ${c.motion} motion, quality=${c.quality}, usability=${c.usability}
+    `Clip ${c.clipIndex} (ID: ${c.clipId ?? `clip-${c.clipIndex}`}) "${c.name}": motion=${c.motion}, camera=${c.cameraMovement ?? "static"}, quality=${c.quality}, usability=${c.usability}
   Best segment: ${c.bestSegmentStart}s–${c.bestSegmentEnd}s
-  Scenes: ${c.scenes.map(s => `[${s.startTime}–${s.endTime}s] ${s.description} (hook=${s.suitableAsHook})`).join(" | ")}
+  Scenes: ${c.scenes.map(s => `[${s.startTime}s–${s.endTime}s] ${s.description} (action: "${s.action || "none"}", camera: ${s.cameraMovement || "static"}, conf: ${s.confidence ?? 0.9}, hook=${s.suitableAsHook}${s.hookRationale ? ` - ${s.hookRationale}` : ""})`).join(" | ")}
   Suggested use: ${c.suggestedUse}`
   ).join("\n\n");
 }

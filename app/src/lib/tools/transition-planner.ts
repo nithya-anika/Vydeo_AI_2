@@ -17,8 +17,7 @@
 import { geminiRequest } from "@/lib/gemini";
 import type { Timeline } from "@/types/timeline";
 import type { Tool, ToolContext, ToolResult } from "./types";
-
-const MODEL = "gemini-2.5-pro";
+import { getModel } from "@/lib/ai-router";
 
 export interface TransitionPlannerInput {
   timeline: Timeline;
@@ -47,7 +46,7 @@ export const transitionPlannerTool: Tool<TransitionPlannerInput, TransitionPlann
   purpose: "Replicate the rough-cut review step where an editor refines cuts based on energy and narrative",
   inputs: "Timeline JSON, cluster pacing style, platform, tone",
   outputs: "Per-scene transition type and duration, overall flow score, pacing notes",
-  modelsUsed: [MODEL],
+  modelsUsed: [getModel("planning")],
   failureCases: [
     "Empty timeline → no-op, returns empty plan",
     "Model error → original transitions preserved (non-fatal)",
@@ -60,6 +59,7 @@ export const transitionPlannerTool: Tool<TransitionPlannerInput, TransitionPlann
   async execute(input: TransitionPlannerInput, ctx: ToolContext): Promise<ToolResult<TransitionPlannerOutput>> {
     void ctx;
     const start = Date.now();
+    const activeModel = getModel("planning");
     const scenes = input.timeline.scenes ?? [];
 
     if (!scenes.length) {
@@ -67,7 +67,7 @@ export const transitionPlannerTool: Tool<TransitionPlannerInput, TransitionPlann
         success: true,
         data: { transitions: [], overallFlowScore: 0, pacingNotes: "No scenes to plan" },
         durationMs: Date.now() - start,
-        modelUsed: MODEL,
+        modelUsed: activeModel,
       };
     }
 
@@ -118,16 +118,16 @@ Return ONLY JSON:
   "pacingNotes": "Pacing builds well from calm intro to energetic middle — tighten last scene"
 }`;
 
-      const data = await geminiRequest(MODEL, {
+      const data = await geminiRequest(activeModel, {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 1.0, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 1500 } },
+        generationConfig: { responseMimeType: "application/json", temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 1500 } },
       });
 
       const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
         .candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
       const result = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as TransitionPlannerOutput;
 
-      return { success: true, data: result, durationMs: Date.now() - start, modelUsed: MODEL };
+      return { success: true, data: result, durationMs: Date.now() - start, modelUsed: activeModel };
     } catch (e) {
       // Non-fatal — original transitions are fine
       return {
@@ -143,7 +143,7 @@ Return ONLY JSON:
           pacingNotes: `Transition planning error: ${e instanceof Error ? e.message : String(e)}`,
         },
         durationMs: Date.now() - start,
-        modelUsed: MODEL,
+        modelUsed: activeModel,
         error: "Used original transitions",
       };
     }

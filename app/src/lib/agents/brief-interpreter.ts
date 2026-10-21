@@ -10,8 +10,7 @@
  */
 
 import { geminiRequest } from "@/lib/gemini";
-
-const MODEL = "gemini-2.5-pro";
+import { getModel } from "@/lib/ai-router";
 
 export interface StructuredBrief {
   // What the user fundamentally wants this video to achieve
@@ -108,7 +107,8 @@ captionTone options: "all-caps-punchy" | "natural-speech" | "narrative" | "minim
 If the brief doesn't specify something, infer it from the overall context.`;
 
   try {
-    const data = await geminiRequest(MODEL, {
+    const activeModel = getModel("chat");
+    const data = await geminiRequest(activeModel, {
       contents: [
         { role: "user", parts: [{ text: systemPrompt }] },
         { role: "model", parts: [{ text: "Understood. I will extract the user's exact intent without adding assumptions." }] },

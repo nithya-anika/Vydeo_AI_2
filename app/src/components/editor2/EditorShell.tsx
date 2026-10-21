@@ -49,7 +49,7 @@ import {
 } from "@/store/editorStore";
 import TimelinePanel from "./timeline/TimelinePanel";
 import { useRouter } from "next/navigation";
-import { useToast } from "@/components/ui";
+import { Button, IconButton, useToast, Spinner } from "@/components/ui";
 import { AIAnalysisPanel } from "./right/AIAnalysisPanel";
 import { buildSceneVideoPrompt } from "@/lib/videoPrompt";
 import { inferRequestedColorAdjustments, inferRequestedColorGrade, inferRequestedTransition } from "@/lib/footagePromptControls";
@@ -430,24 +430,26 @@ function MusicStudio({
               <div key={t.id} style={{ borderRadius: "var(--r-md)", background: "var(--bg-elevated)", border: "1px solid var(--accent-border)", overflow: "hidden" }}>
                 {/* Track row */}
                 <div style={{ padding: "8px 10px", display: "flex", alignItems: "center", gap: 8 }}>
-                  <button
+                  <IconButton
+                    label={t.muted ? "Unmute track" : "Mute track"}
+                    size="sm"
                     onClick={() => updateAudioTrack(t.id, { muted: !t.muted })}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: t.muted ? "#EF4444" : "#10B981", padding: 0, flexShrink: 0 }}
+                    style={{ color: t.muted ? "var(--error)" : "#10B981" }}
                   >
                     {t.muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
-                  </button>
+                  </IconButton>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</div>
                     <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1 }}>{Math.round(t.duration)}s</div>
                   </div>
-                  <button
+                  <IconButton
+                    label="Delete track"
+                    variant="danger"
+                    size="sm"
                     onClick={() => removeAudioTrack(t.id)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-tertiary)", padding: 0, flexShrink: 0 }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#EF4444"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-tertiary)"; }}
                   >
-                    <Trash2 size={11} />
-                  </button>
+                    <Trash2 size={13} />
+                  </IconButton>
                 </div>
                 {/* Volume slider */}
                 <div style={{ padding: "0 10px 8px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -4797,7 +4799,11 @@ export default function EditorShell({
             {Math.round(zoom * 100)}%
           </div>
           <VDivider />
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
+            isLoading={exporting}
+            leftIcon={<Download size={12} />}
             onClick={(e) => {
               e.preventDefault();
               if (activeSceneId) {
@@ -4806,34 +4812,10 @@ export default function EditorShell({
                 toast.error("Select a scene to export");
               }
             }}
-            disabled={exporting}
             title="Export current scene"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "5px 10px",
-              borderRadius: "var(--r-md)",
-              fontSize: 11,
-              fontWeight: 600,
-              background: "var(--bg-elevated)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border)",
-              cursor: exporting ? "not-allowed" : "pointer",
-              opacity: exporting ? 0.5 : 1,
-              transition: "all 0.12s",
-              whiteSpace: "nowrap",
-            }}
-            onMouseEnter={(e) => {
-              if (!exporting) e.currentTarget.style.color = "var(--text-primary)";
-            }}
-            onMouseLeave={(e) => {
-              if (!exporting) e.currentTarget.style.color = "var(--text-secondary)";
-            }}
           >
-            <Download size={12} />
             Export Scene
-          </button>
+          </Button>
           <VDivider />
           <button
             onClick={() => { setRightCollapsed(false); setRightTab("ai"); }}
@@ -4868,39 +4850,17 @@ export default function EditorShell({
           </button>
           <VDivider />
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "6px 14px",
-                borderRadius: "var(--r-md)",
-                fontSize: 12,
-                fontWeight: 600,
-                background: "var(--accent)",
-                color: "#fff",
-                border: "none",
-                boxShadow: "0 2px 8px rgba(99,102,241,0.25)",
-                cursor: exporting ? "not-allowed" : "pointer",
-                opacity: exporting ? 0.7 : 1,
-                transition: "background 0.12s, opacity 0.12s",
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={(e) => {
-                if (!exporting)
-                  e.currentTarget.style.background = "var(--accent-hover)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--accent)";
-              }}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => handleExport()}
+              isLoading={exporting}
+              leftIcon={<Download size={13} />}
             >
-              <Download size={13} />
-              {exporting ? "Exporting…" : "Export"}
-            </button>
+              Export
+            </Button>
             {renderStatus && (
-              <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 600, position: "absolute", top: "calc(100% - 10px)" }}>
+              <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 600, position: "absolute", top: "calc(100% - 10px)", whiteSpace: "nowrap" }}>
                 {renderStatus}
               </div>
             )}

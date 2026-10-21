@@ -21,11 +21,13 @@ import type { Timeline, LineupResponse } from "@/types/timeline";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import type { HookDetectionOutput } from "./hook-detection";
 import type { VideoAnalysisOutput } from "./video-analysis";
-
-const MODELS = {
-  editorial: "gemini-2.5-pro",
-  concept:   "gemini-2.5-pro",
-} as const;
+import { getModel } from "@/lib/ai-router";
+import { snapTrimToSpeechBoundaries } from "@/lib/transcription";
+import {
+  buildCandidateSegmentInventory,
+  resolveSelectedCandidatesToScenes,
+  type SelectedCandidateOrder,
+} from "@/lib/candidateInventory";
 
 export interface TimelineGeneratorInput {
   prompt: string;
@@ -69,7 +71,7 @@ export const timelineGeneratorTool: Tool<TimelineGeneratorInput, TimelineGenerat
   purpose: "Produce an edit plan that matches professional output for the target cluster and platform",
   inputs: "Brief, brand workspace, cluster config, hook result, video analysis, past examples",
   outputs: "Timeline JSON, clip assignments, editorial suggestions, generation notes",
-  modelsUsed: [MODELS.editorial, MODELS.concept],
+  modelsUsed: [getModel("storyboard"), getModel("planning")],
   failureCases: [
     "Empty scenes → caller falls back to demo lineup",
     "Duration mismatch >20% → QA issue logged",
@@ -84,7 +86,7 @@ export const timelineGeneratorTool: Tool<TimelineGeneratorInput, TimelineGenerat
   async execute(input: TimelineGeneratorInput, ctx: ToolContext): Promise<ToolResult<TimelineGeneratorOutput>> {
     void ctx;
     const start = Date.now();
-    const model = input.clips?.length ? MODELS.editorial : MODELS.concept;
+    const model = input.clips?.length ? getModel("storyboard") : getModel("planning");
 
     try {
       const ratio = input.aspectRatio ?? input.brand.defaultAspectRatio;
@@ -216,78 +218,83 @@ async function generateEditorial(
   start: number,
 ): Promise<ToolResult<TimelineGeneratorOutput>> {
   const clips = input.clips!;
+  const candidateInventory = buildCandidateSegmentInventory(clips, input.videoAnalysis);
   const { pacingStyle, defaultTransitions, captionStyle, colorGradeDefault } = input.clusterConfig;
-  const clipList = clips.map(c => `  Clip ${c.index}: "${c.name}"${c.duration ? ` (${c.duration.toFixed(2)}s — clipTrimEnd max: ${c.duration.toFixed(2)})` : ""}`).join("\n");
+
+  const candidateList = candidateInventory.candidates.map(c =>
+    `  [${c.candidateId}] Clip ${c.clipIndex} ("${c.clipName}"): ${c.sourceTrimStart}s–${c.sourceTrimEnd}s (${c.duration}s)
+     - Visual: "${c.visualDescription}" (action: "${c.action}", camera: ${c.cameraMovement}, quality: ${c.visualQuality}, conf: ${c.confidence})
+     ${c.speechText ? `- Dialogue: "${c.speechText}"` : "- Audio: B-roll / ambient sound"}
+     ${c.suitableAsHook ? `- HOOK SUITABLE: ${c.hookRationale || "High visual impact opening"}` : ""}`
+  ).join("\n\n");
+
+  const clipList = clips.map(c => {
+    let str = `  Clip ${c.index} (ID: "${c.id ?? `clip-${c.index}`}"): "${c.name}"${c.duration ? ` (${c.duration.toFixed(2)}s — clipTrimEnd max: ${c.duration.toFixed(2)})` : ""}`;
+    if (c.speechSegments && c.speechSegments.length > 0) {
+      str += `\n    Audio / Spoken Transcript:\n` + c.speechSegments.map(s => `      [${s.startTime.toFixed(2)}s - ${s.endTime.toFixed(2)}s]: "${s.text}"`).join("\n");
+    } else if (c.transcript) {
+      str += `\n    Transcript: "${c.transcript}"`;
+    }
+    return str;
+  }).join("\n\n");
 
   const analysisSummary = input.videoAnalysis?.clips?.length
-    ? `\nCLIP ANALYSIS — who/what is visible in each clip (use this to match clips to the brief's ordering):\n${input.videoAnalysis.clips.map(c => {
-        const sceneDescs = c.scenes?.map(s => s.description).filter(Boolean).join("; ") ?? "";
-        return `  Clip ${c.clipIndex} ("${c.name}"): ${sceneDescs || c.suggestedUse}\n    → suggestedUse: ${c.suggestedUse}`;
+    ? `\nSCENE & MOTION ANALYSIS (with camera movements and actions):\n${input.videoAnalysis.clips.map(c => {
+        const sceneDescs = c.scenes?.map(s => `[${s.startTime}s-${s.endTime}s: "${s.description}", action: "${s.action || "none"}", camera: ${s.cameraMovement || "static"}, conf: ${s.confidence ?? 0.9}]`).join("; ") ?? "";
+        return `  Clip ${c.clipIndex} (ID: "${c.clipId ?? `clip-${c.clipIndex}`}"): ${sceneDescs || c.suggestedUse}\n    → Evidence: ${c.structuredEvidence || c.suggestedUse}`;
       }).join("\n")}\n\nFOOTAGE OVERVIEW: ${input.videoAnalysis.footageSummary ?? ""}\n`
     : "";
 
-  const prompt = `You are a video editor. Read the brief and build ONLY what it describes — nothing extra.
+  const prompt = `You are a professional video editor. Select and sequence the best candidate media segments to fulfill the brief.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 USER'S EXACT REQUEST — the only authority:
 ${input.prompt}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-ABSOLUTE RULES:
-1. USE ALL uploaded clips — every clip in CLIP INVENTORY must appear as exactly one scene. Never skip a clip.
-2. ONE scene per clip — never split one clip into multiple scenes.
-3. ORDERING IS CRITICAL — this is the most important rule. When the brief names specific people for specific positions:
-   a. FIRST read every entry in CLIP ANALYSIS above to find WHICH clipIndex matches each named person.
-      Look for: gender (girl/boy/man/woman), accessories (sunglasses, hat, earrings), clothing color, background.
-      Also look at the frames provided — they show multiple moments in each clip.
-   b. The brief's "start with X" → that person's clipIndex MUST be scene order=0.
-      The brief's "end with Y" → that person's clipIndex MUST be the LAST scene (highest order).
-   c. Cross-check: after building clipAssignments, verify the first sceneId maps to the "start" person
-      and the last sceneId maps to the "end" person. If not, swap until they do.
-   d. Never rely on clip filename or upload order to infer who is in a clip — use the CLIP ANALYSIS descriptions.
-4. clipTrimEnd MUST be ≤ the clip's exact duration shown in CLIP INVENTORY — exceeding it causes looping.
-5. For "complete / natural / full answer" — clipTrimStart=0.0, clipTrimEnd=<exact clip duration as a double/decimal e.g. 8.53, NOT 9>.
-6. ALL time values (clipTrimStart, clipTrimEnd, duration) MUST be doubles/decimals — never integers. Write 8.53 not 9, write 12.07 not 12.
-7. Each clipAssignment must have a UNIQUE clipIndex — never assign the same clipIndex to two scenes.
-8. SPEED: If the brief specifies a playback speed (e.g. "2x", "slow motion"), set "playbackSpeed" on EVERY scene AND set duration = (clipTrimEnd - clipTrimStart) / playbackSpeed.
-9. EFFECTS: If the brief specifies a visual effect or filter, set "visualEffect" on EVERY scene to the effect name (e.g. "black-and-white", "vignette", "warm", "cinematic").
-10. TRANSITIONS: If the brief specifies transitions, set "transition.type" accordingly — valid values: "cut","fade","dissolve","wipe-left","wipe-right","zoom-in","zoom-out","slide-left","slide-right","cinematic-fade".
+CANDIDATE SEGMENT INVENTORY (Pre-verified media segments with exact source boundaries):
+${candidateList}
 
-CLIP INVENTORY:
-${clipList}
-${analysisSummary}
+EDITORIAL RULES & SELECTION:
+1. SELECT BY CANDIDATE ID:
+   - Select candidate IDs from the CANDIDATE SEGMENT INVENTORY above.
+   - Choose only the best, most compelling moments that serve the brief.
+   - You MAY omit unnecessary, blurry, repetitive, or irrelevant candidate segments.
+   - You MAY select multiple distinct candidate segments from the same source clip (sub-clipping).
+2. ORDERING & NARRATIVE STRUCTURE:
+   - Hook candidates belong at the start (scene 0).
+   - Sequence candidates to build natural rhythm, progression, and a clear call-to-action payoff.
+   - When the brief specifies ordering (e.g. "start with X", "end with Y"), place matching candidates at those positions.
+3. AUDIO & SPEECH CONTINUITY:
+   - Preserves complete spoken sentences without chopping words mid-phrase.
+   - B-roll / silence candidates can be cut shorter or used as cutaways.
+4. TRANSITIONS & PACING:
+   - Default to "cut" for high-energy or vox-pop pacing; use "fade" or "dissolve" for atmospheric/cinematic transitions.
+
 BRAND: ${input.brand.name} | Aspect ratio: ${ratio} | Color grade: ${input.overrides?.colorGrade ?? colorGradeDefault ?? input.brand.colorGrade.name}
 Captions: ${input.brand.captionStyle.position}, max ${input.brand.captionStyle.maxCharsPerLine} chars/line
 ${overrideLines}
 TONE: ${input.classification.tone} | PLATFORM: ${input.classification.platform}
 ${hookSection}
 
-Return ONLY this JSON. Create ONE scene per clip. Every clip in CLIP INVENTORY must appear exactly once. Each clipAssignment must have a different clipIndex (0, 1, 2, 3…):
+Return ONLY this JSON schema with "selectedCandidates" specifying the ordered sequence:
 {
   "timeline": {
-    "id":"<uuid>","title":"<title>","brandWorkspaceId":"${input.brand.id}",
-    "createdAt":"<ISO>","updatedAt":"<ISO>",
-    "totalDuration":<sum of scene durations>,"aspectRatio":"${ratio}","targetPlatform":"${input.classification.platform}",
-    "scenes": [
+    "title":"<title>",
+    "aspectRatio":"${ratio}",
+    "targetPlatform":"${input.classification.platform}",
+    "selectedCandidates": [
       {
-        "id":"<uuid>","order":0,
-        "label":"<who is in this clip>",
-        "description":"<what happens in this clip>",
-        "duration":<(clipTrimEnd - clipTrimStart) divided by playbackSpeed if speed≠1, else clipTrimEnd - clipTrimStart>,
-        "clipTrimStart":0.0,"clipTrimEnd":<exact clip duration as double e.g. 8.53 — copy from CLIP INVENTORY, never round to integer>,
-        "playbackSpeed":<1.0 normally; use speed from brief if specified e.g. 2.0 for 2x>,
-        "visualEffect":<"effect-name" if brief specifies one, else null>,
-        "transition":{"type":"<cut by default; use brief's transition type if specified>","duration":0.3},
-        "captions":[{"id":"<uuid>","text":"<caption>","startTime":0.5,"endTime":2.5,"style":"brand-default"}],
-        "overlays":[],"motionStyle":"static","mood":"${input.classification.tone}"
+        "candidateId": "cand_c0_s0",
+        "role": "hook",
+        "label": "<brief description>",
+        "captionText": "<punchy on-screen caption>",
+        "transitionType": "cut",
+        "playbackSpeed": 1.0
       }
-    ],
-    "audioLayers":[{"id":"<uuid>","type":"bgm","startTime":0,"endTime":<total>,"volume":0.5,"fadeIn":1,"fadeOut":2}],
-    "globalColorGrade":"${input.overrides?.colorGrade ?? colorGradeDefault ?? input.brand.colorGrade.name}",
-    "meta":{"generatedBy":"${model}","promptUsed":"${input.prompt.slice(0, 120).replace(/"/g, "'")}","brandWorkspaceId":"${input.brand.id}","version":1,"cluster":"${input.clusterConfig.clusterId}"},
-    "isLocked":false
+    ]
   },
-  "clipAssignments":[{"sceneId":"<uuid>","clipIndex":<0-based>,"trimStart":0,"trimEnd":<exact clip duration>}],
+  "clipAssignments":[{"sceneId":"<uuid>","clipIndex":0,"trimStart":0,"trimEnd":5.0}],
   "suggestions":{"captionTiming":"...","transitionRationale":"...","brandNotes":"...","improvements":[]}
 }`;
 
@@ -322,16 +329,64 @@ Return ONLY this JSON. Create ONE scene per clip. Every clip in CLIP INVENTORY m
   const raw = extractText(data);
   const parsed = JSON.parse(cleanJson(raw)) as Record<string, unknown>;
 
-  const clipAssignments: ClipAssignment[] = Array.isArray(parsed.clipAssignments)
+  const parsedTimeline = (parsed.timeline ?? {}) as Record<string, unknown>;
+  const rawSelections = (parsedTimeline.selectedCandidates ?? parsed.selectedCandidates) as SelectedCandidateOrder[] | undefined;
+
+  let clipAssignments: ClipAssignment[] = Array.isArray(parsed.clipAssignments)
     ? (parsed.clipAssignments as ClipAssignment[])
     : [];
 
   const sanitized = validateAndSanitizeLineup(parsed, input.brand, input.aspectRatio);
 
-  if (clipAssignments.length && sanitized.timeline.scenes?.length) {
-    sanitized.timeline.scenes = sanitized.timeline.scenes.map(scene => {
-      const a = clipAssignments.find(ca => ca.sceneId === scene.id);
-      return a ? { ...scene, clipTrimStart: a.trimStart ?? scene.clipTrimStart, clipTrimEnd: a.trimEnd ?? scene.clipTrimEnd } : scene;
+  // Candidate-based deterministic resolution: map selected candidate IDs to exact media bounds
+  if (Array.isArray(rawSelections) && rawSelections.length > 0) {
+    const resolved = resolveSelectedCandidatesToScenes({
+      selections: rawSelections,
+      inventory: candidateInventory,
+      clips,
+      brand: input.brand,
+      aspectRatio: ratio,
+      targetDuration: sanitized.timeline.totalDuration,
+    });
+
+    if (resolved.scenes.length > 0) {
+      sanitized.timeline.scenes = resolved.scenes;
+      clipAssignments = resolved.clipAssignments;
+      sanitized.timeline.totalDuration = resolved.totalDuration;
+    }
+  } else if (clipAssignments.length && sanitized.timeline.scenes?.length) {
+    sanitized.timeline.scenes = sanitized.timeline.scenes.map((scene, idx) => {
+      const a = clipAssignments.find(ca => ca.sceneId === scene.id)
+        ?? (idx < clipAssignments.length ? clipAssignments[idx] : undefined);
+      const sourceClip = a && a.clipIndex >= 0 && a.clipIndex < clips.length ? clips[a.clipIndex] : undefined;
+      let trimStart = a?.trimStart ?? scene.clipTrimStart ?? 0;
+      let trimEnd = a?.trimEnd ?? scene.clipTrimEnd ?? sourceClip?.duration;
+
+      // Audio-aware trimming: align trims to natural sentence and speech pauses
+      if (sourceClip?.speechSegments?.length && sourceClip.duration) {
+        const snapped = snapTrimToSpeechBoundaries(
+          trimStart,
+          trimEnd ?? sourceClip.duration,
+          sourceClip.speechSegments,
+          sourceClip.duration
+        );
+        trimStart = snapped.trimStart;
+        trimEnd = snapped.trimEnd;
+      }
+
+      const speed = scene.playbackSpeed ?? 1.0;
+      const dur = trimEnd != null && trimEnd > trimStart
+        ? parseFloat(((trimEnd - trimStart) / speed).toFixed(3))
+        : scene.duration;
+
+      return {
+        ...scene,
+        clipSrc: scene.clipSrc || sourceClip?.src || undefined,
+        clipType: scene.clipType || (sourceClip?.mimeType?.startsWith("image") ? "image" : "video"),
+        clipTrimStart: trimStart,
+        clipTrimEnd: trimEnd,
+        duration: Math.max(0.5, dur),
+      };
     });
   }
 

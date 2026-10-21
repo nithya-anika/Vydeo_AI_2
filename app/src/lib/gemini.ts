@@ -2,15 +2,20 @@ import crypto from "crypto";
 import type { BrandWorkspace } from "@/types/brand";
 import type { Timeline, LineupResponse } from "@/types/timeline";
 import { v4 as uuidv4 } from "uuid";
+import { getModel } from "@/lib/ai-router";
 
-const GEMINI_MODEL = "gemini-2.5-pro";
-const GEMINI_PRO_MODEL = "gemini-2.5-pro";
+const GEMINI_MODEL = getModel("planning");
+const GEMINI_PRO_MODEL = getModel("storyboard");
 
-// Vertex AI endpoint — uses GOOGLE_PROJECT_ID + GOOGLE_LOCATION from .env.local
+// Vertex AI endpoint — supports regional (e.g. us-central1) and global endpoints
 function vertexUrl(model: string) {
   const project = process.env.GOOGLE_PROJECT_ID!;
-  const location = process.env.GOOGLE_LOCATION ?? "us-central1";
-  return `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`;
+  const useGlobal = process.env.GOOGLE_VERTEX_LOCATION === "global" ||
+    model.startsWith("gemini-3") ||
+    model.startsWith("gemini-4");
+  const location = useGlobal ? "global" : (process.env.GOOGLE_LOCATION ?? "us-central1");
+  const host = useGlobal ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+  return `https://${host}/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`;
 }
 
 export interface BrandOverrides {
@@ -20,7 +25,21 @@ export interface BrandOverrides {
   colorGrade?: string;
 }
 
+export type TranscriptionStatus =
+  | "completed_with_speech"
+  | "completed_no_speech"
+  | "failed"
+  | "not_attempted";
+
+export interface SpeechSegment {
+  text: string;
+  startTime: number;
+  endTime: number;
+}
+
 export interface GeminiClip {
+  id?: string;                 // Source clip ID if available
+  src?: string;                // Source blob or remote URL
   data?: string;               // base64-encoded file bytes (legacy — single file)
   frames?: string[];           // preferred — base64 JPEG keyframes extracted client-side
   frameTimestamps?: number[];  // timestamp in seconds for each frame in frames[]
@@ -28,11 +47,16 @@ export interface GeminiClip {
   name: string;
   duration?: number;
   index: number;
+  speechSegments?: SpeechSegment[]; // Timestamped speech segments from audio transcription
+  transcript?: string;              // Full text transcript
+  transcriptionStatus?: TranscriptionStatus; // Explicit status distinguishing failure from silence
+  transcriptionError?: string;      // Diagnostic failure message if failed
 }
 
 export interface ClipAssignment {
   sceneId: string;
   clipIndex: number;
+  clipId?: string;
   trimStart?: number;
   trimEnd?: number;
 }
@@ -61,11 +85,13 @@ export function createStorageJWT(): string {
   return `${signingInput}.${sig}`;
 }
 
-export function createVertexJWT(): string {
+export function createVertexJWT(forGlobal = false): string {
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL!;
   const privateKey = (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n");
   const location = process.env.GOOGLE_LOCATION ?? "us-central1";
-  const audience = `https://${location}-aiplatform.googleapis.com/`;
+  const audience = forGlobal || process.env.GOOGLE_VERTEX_LOCATION === "global"
+    ? "https://aiplatform.googleapis.com/"
+    : `https://${location}-aiplatform.googleapis.com/`;
 
   const now = Math.floor(Date.now() / 1000);
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
@@ -88,15 +114,34 @@ export async function geminiRequest(
   model: string,
   payload: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const token = createVertexJWT();
+  const isGlobal = process.env.GOOGLE_VERTEX_LOCATION === "global" ||
+    model.startsWith("gemini-3") ||
+    model.startsWith("gemini-4");
+  const token = createVertexJWT(isGlobal);
+  const url = vertexUrl(model);
 
-  const res = await fetch(vertexUrl(model), {
+  // Normalize thinkingConfig for Gemini 3 and 4 models
+  let finalPayload = payload;
+  if (isGlobal && payload.generationConfig) {
+    const genConfig = { ...(payload.generationConfig as Record<string, unknown>) };
+    if (genConfig.thinkingConfig && typeof genConfig.thinkingConfig === "object") {
+      const tc = genConfig.thinkingConfig as Record<string, unknown>;
+      if (typeof tc.thinkingBudget === "number" && !tc.thinkingLevel) {
+        const budget = tc.thinkingBudget;
+        const level = budget <= 2000 ? "LOW" : budget <= 6000 ? "MEDIUM" : "HIGH";
+        genConfig.thinkingConfig = { thinkingLevel: level };
+        finalPayload = { ...payload, generationConfig: genConfig };
+      }
+    }
+  }
+
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(finalPayload),
   });
 
   if (!res.ok) {
@@ -273,7 +318,7 @@ Lineup: ${JSON.stringify(lineup)}
 
 Return JSON only: { "score": <0-100>, "notes": "<overall assessment>", "issues": ["<issue1>"] }`;
 
-  const data = await geminiRequest(GEMINI_MODEL, {
+  const data = await geminiRequest(getModel("evaluate"), {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
   });

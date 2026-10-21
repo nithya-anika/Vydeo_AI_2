@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { geminiRequest } from "@/lib/gemini";
+import { getModel } from "@/lib/ai-router";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
@@ -73,7 +74,7 @@ CRITICAL INSTRUCTIONS:
       contents.push({ role, parts });
     }
 
-    const response = await geminiRequest("gemini-2.5-pro", {
+    const response = await geminiRequest(getModel("chat"), {
       contents,
       generationConfig: {
         temperature: 0.7,

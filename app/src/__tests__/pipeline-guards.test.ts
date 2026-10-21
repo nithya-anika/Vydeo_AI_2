@@ -1,50 +1,23 @@
 /**
- * Tests for agent pipeline guards applied after timeline-generator runs.
- *
- * Guard 1: trim excess scenes (never more than uploaded clips)
- * Guard 3: clamp clipTrimEnd to exact clip duration, recalculate scene duration
- *
- * These are extracted as pure helper functions to make them testable without
- * spinning up the full agent pipeline (which requires Vertex AI credentials).
+ * Comprehensive tests for the professional pipeline validation and repair engine:
+ * - Unnecessary footage can be skipped (no forced inclusion of all clips).
+ * - One source clip can contribute multiple segments (sub-clipping).
+ * - Important clips can appear anywhere in the sequence (order preservation).
+ * - Duplicate clip references are preserved (never arbitrarily reassigned).
+ * - Invalid timestamps are rejected and clamped safely.
+ * - Scene durations are calculated accurately with playback speeds.
+ * - Scene IDs are deduplicated safely.
  */
 import { describe, it, expect } from "vitest";
-import type { Scene } from "@/types/timeline";
-import type { GeminiClip } from "@/lib/gemini";
-
-// ── Pure implementations of the guards (mirrored from agent-pipeline.ts) ─────
-
-interface ClipAssignment { sceneId: string; clipIndex: number; }
-
-function applyGuard1(scenes: Scene[], clips: GeminiClip[]): Scene[] {
-  if (scenes.length > clips.length) return scenes.slice(0, clips.length);
-  return scenes;
-}
-
-function applyGuard3(
-  scenes: Scene[],
-  clips: GeminiClip[],
-  assignments: ClipAssignment[]
-): Scene[] {
-  return scenes.map((scene, sceneIdx) => {
-    const assignment = assignments.find((a) => a.sceneId === scene.id);
-    const clipIdx = assignment?.clipIndex ?? sceneIdx;
-    const sourceClip = clips[clipIdx] ?? clips[sceneIdx];
-    const exactDuration = sourceClip?.duration;
-    if (!exactDuration || exactDuration <= 0) return scene;
-
-    const trimStart = Math.max(0, scene.clipTrimStart ?? 0);
-    const trimEnd = Math.min(scene.clipTrimEnd ?? exactDuration, exactDuration);
-    const resolvedTrimEnd = trimEnd > trimStart ? trimEnd : exactDuration;
-    return {
-      ...scene,
-      clipTrimStart: trimStart,
-      clipTrimEnd: resolvedTrimEnd,
-      duration: parseFloat((resolvedTrimEnd - trimStart).toFixed(3)),
-    };
-  });
-}
-
-// ── Fixtures ─────────────────────────────────────────────────────────────────
+import type { Scene, Timeline } from "@/types/timeline";
+import type { GeminiClip, ClipAssignment } from "@/lib/gemini";
+import {
+  validateAndRepairTimeline,
+  deduplicateSceneIds,
+  preserveSceneSequence,
+  validateClipAssignments,
+  validateTrimBoundaries,
+} from "@/lib/pipeline-guards";
 
 function makeScene(id: string, overrides: Partial<Scene> = {}): Scene {
   return {
@@ -63,199 +36,232 @@ function makeScene(id: string, overrides: Partial<Scene> = {}): Scene {
   };
 }
 
-function makeClip(duration: number): GeminiClip {
-  return { duration } as GeminiClip;
+function makeClip(duration: number, index = 0, name = `clip_${index}.mp4`): GeminiClip {
+  return {
+    id: `clip-${index}`,
+    name,
+    duration,
+    index,
+    mimeType: "video/mp4",
+  };
 }
 
-// ── Guard 1: scene count capping ─────────────────────────────────────────────
-
-describe("Guard 1 — scene count must not exceed uploaded clip count", () => {
-  it("passes through when scene count equals clip count", () => {
-    const scenes = [makeScene("s1"), makeScene("s2"), makeScene("s3")];
-    const clips  = [makeClip(5), makeClip(5), makeClip(5)];
-    expect(applyGuard1(scenes, clips)).toHaveLength(3);
-  });
-
-  it("passes through when scene count is less than clip count", () => {
-    const scenes = [makeScene("s1"), makeScene("s2")];
-    const clips  = [makeClip(5), makeClip(5), makeClip(5)];
-    expect(applyGuard1(scenes, clips)).toHaveLength(2);
-  });
-
-  it("trims excess scenes when model returns more scenes than clips (the 4→3 bug)", () => {
-    const scenes = [makeScene("s1"), makeScene("s2"), makeScene("s3"), makeScene("s4")];
-    const clips  = [makeClip(5), makeClip(5), makeClip(5)]; // only 3 clips
-    const result = applyGuard1(scenes, clips);
-    expect(result).toHaveLength(3);
-    expect(result.map((s) => s.id)).toEqual(["s1", "s2", "s3"]);
-  });
-
-  it("handles edge case: 1 clip, model returned 4 scenes", () => {
-    const scenes = [makeScene("s1"), makeScene("s2"), makeScene("s3"), makeScene("s4")];
-    const clips  = [makeClip(5)];
-    expect(applyGuard1(scenes, clips)).toHaveLength(1);
-  });
-
-  it("returns empty array when clips array is empty", () => {
-    const scenes = [makeScene("s1")];
-    const clips: GeminiClip[] = [];
-    expect(applyGuard1(scenes, clips)).toHaveLength(0);
-  });
-});
-
-// ── Guard 2: fix duplicate clipIndex ─────────────────────────────────────────
-
-function applyGuard2(assignments: ClipAssignment[], totalClips: number): ClipAssignment[] {
-  const result = assignments.map(a => ({ ...a }));
-  const usedIndices = new Set<number>();
-  for (const a of result) {
-    if (!usedIndices.has(a.clipIndex)) {
-      usedIndices.add(a.clipIndex);
-    } else {
-      let next = 0;
-      while (usedIndices.has(next) && next < totalClips) next++;
-      if (next < totalClips) { a.clipIndex = next; usedIndices.add(next); }
-    }
-  }
-  return result;
+function makeTimeline(scenes: Scene[]): Timeline {
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "Test Timeline",
+    brandWorkspaceId: "asaya",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    totalDuration: scenes.reduce((sum, s) => sum + (s.duration || 0), 0),
+    aspectRatio: "9:16",
+    scenes,
+    audioLayers: [{ id: "audio-1", type: "bgm", startTime: 0, endTime: 20, volume: 0.6 }],
+    isLocked: false,
+  };
 }
 
-describe("Guard 2 — duplicate clipIndex → reassign to unused clip", () => {
-  it("passes through assignments with all unique clipIndexes unchanged", () => {
-    const assignments = [
-      { sceneId: "s1", clipIndex: 0 },
-      { sceneId: "s2", clipIndex: 1 },
-      { sceneId: "s3", clipIndex: 2 },
-    ];
-    const result = applyGuard2(assignments, 3);
-    expect(result.map(a => a.clipIndex)).toEqual([0, 1, 2]);
+describe("Pipeline Validation & Repair Engine", () => {
+  // ── Objective 1 & 2: Sub-clipping & no arbitrary reassignment ──────────────
+  describe("Sub-clipping: Multiple segments from the same source clip", () => {
+    it("preserves multiple scenes referencing the same clipIndex without reassigning", () => {
+      const clips = [makeClip(12, 0), makeClip(15, 1)];
+      const scenes = [
+        makeScene("s1", { order: 0, clipTrimStart: 0, clipTrimEnd: 4, duration: 4 }),
+        makeScene("s2", { order: 1, clipTrimStart: 1, clipTrimEnd: 5, duration: 4 }),
+        makeScene("s3", { order: 2, clipTrimStart: 6, clipTrimEnd: 10, duration: 4 }), // segment 2 of clip 0!
+      ];
+      const assignments: ClipAssignment[] = [
+        { sceneId: "s1", clipIndex: 0, trimStart: 0, trimEnd: 4 },
+        { sceneId: "s2", clipIndex: 1, trimStart: 1, trimEnd: 5 },
+        { sceneId: "s3", clipIndex: 0, trimStart: 6, trimEnd: 10 },
+      ];
+
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
+
+      expect(report.valid).toBe(true);
+      expect(report.timeline.scenes).toHaveLength(3);
+      // Verify clip 0 is used for both s1 and s3 without reassignment
+      expect(report.clipAssignments.find((a) => a.sceneId === "s1")!.clipIndex).toBe(0);
+      expect(report.clipAssignments.find((a) => a.sceneId === "s2")!.clipIndex).toBe(1);
+      expect(report.clipAssignments.find((a) => a.sceneId === "s3")!.clipIndex).toBe(0);
+    });
+
+    it("does NOT slice scenes down to clip count when scenes > clips", () => {
+      const clips = [makeClip(20, 0)]; // Only 1 clip uploaded
+      const scenes = [
+        makeScene("s1", { order: 0, clipTrimStart: 0, clipTrimEnd: 3, duration: 3 }),
+        makeScene("s2", { order: 1, clipTrimStart: 5, clipTrimEnd: 8, duration: 3 }),
+        makeScene("s3", { order: 2, clipTrimStart: 10, clipTrimEnd: 14, duration: 4 }),
+      ];
+      const assignments: ClipAssignment[] = [
+        { sceneId: "s1", clipIndex: 0, trimStart: 0, trimEnd: 3 },
+        { sceneId: "s2", clipIndex: 0, trimStart: 5, trimEnd: 8 },
+        { sceneId: "s3", clipIndex: 0, trimStart: 10, trimEnd: 14 },
+      ];
+
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
+
+      expect(report.valid).toBe(true);
+      // All 3 scenes must be preserved! Never chopped down to 1 scene!
+      expect(report.timeline.scenes).toHaveLength(3);
+      expect(report.timeline.totalDuration).toBe(10);
+    });
   });
 
-  it("reassigns a duplicate clipIndex to the next unused index (the same-clip-twice bug)", () => {
-    const assignments = [
-      { sceneId: "s1", clipIndex: 0 },
-      { sceneId: "s2", clipIndex: 0 }, // duplicate!
-      { sceneId: "s3", clipIndex: 2 },
-    ];
-    const result = applyGuard2(assignments, 3);
-    const indices = result.map(a => a.clipIndex);
-    // Each index should be unique
-    expect(new Set(indices).size).toBe(3);
-    // s1 keeps its original index
-    expect(result.find(a => a.sceneId === "s1")!.clipIndex).toBe(0);
-    // s2 gets reassigned to the next available (1)
-    expect(result.find(a => a.sceneId === "s2")!.clipIndex).toBe(1);
+  // ── Objective 1 & 2: Skipping unnecessary clips ─────────────────────────────
+  describe("Editorial Selection: Unnecessary footage can be skipped", () => {
+    it("allows fewer scenes than clips when irrelevant clips are skipped", () => {
+      const clips = [
+        makeClip(10, 0, "hook.mp4"),
+        makeClip(10, 1, "blurry_take.mp4"),
+        makeClip(10, 2, "main_action.mp4"),
+        makeClip(10, 3, "redundant_angle.mp4"),
+        makeClip(10, 4, "cta.mp4"),
+      ];
+      // Model selected only clips 0, 2, and 4
+      const scenes = [
+        makeScene("s1", { order: 0, label: "Hook", clipTrimStart: 0, clipTrimEnd: 3, duration: 3 }),
+        makeScene("s2", { order: 1, label: "Main", clipTrimStart: 2, clipTrimEnd: 6, duration: 4 }),
+        makeScene("s3", { order: 2, label: "CTA", clipTrimStart: 1, clipTrimEnd: 4, duration: 3 }),
+      ];
+      const assignments: ClipAssignment[] = [
+        { sceneId: "s1", clipIndex: 0, trimStart: 0, trimEnd: 3 },
+        { sceneId: "s2", clipIndex: 2, trimStart: 2, trimEnd: 6 },
+        { sceneId: "s3", clipIndex: 4, trimStart: 1, trimEnd: 4 },
+      ];
+
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
+
+      expect(report.valid).toBe(true);
+      // Timeline retains exactly the 3 curated scenes, clips 1 and 3 remain skipped
+      expect(report.timeline.scenes).toHaveLength(3);
+      expect(report.clipAssignments.map((a) => a.clipIndex)).toEqual([0, 2, 4]);
+    });
   });
 
-  it("handles all scenes assigned to clipIndex 0 (worst-case model failure)", () => {
-    const assignments = [
-      { sceneId: "s1", clipIndex: 0 },
-      { sceneId: "s2", clipIndex: 0 },
-      { sceneId: "s3", clipIndex: 0 },
-      { sceneId: "s4", clipIndex: 0 },
-    ];
-    const result = applyGuard2(assignments, 4);
-    const indices = result.map(a => a.clipIndex).sort((a, b) => a - b);
-    expect(indices).toEqual([0, 1, 2, 3]);
+  // ── Objective 2: Order preservation ─────────────────────────────────────────
+  describe("Ordering: Important clips can appear anywhere in sequence", () => {
+    it("preserves non-monotonic clip order (e.g. clip 2 first, clip 0 last)", () => {
+      const clips = [makeClip(8, 0), makeClip(8, 1), makeClip(8, 2)];
+      const scenes = [
+        makeScene("s-first", { order: 0, label: "Girl with glasses" }),
+        makeScene("s-mid", { order: 1, label: "Product demo" }),
+        makeScene("s-last", { order: 2, label: "Intro person concluding" }),
+      ];
+      // Clip 2 is first, Clip 1 is second, Clip 0 is last
+      const assignments: ClipAssignment[] = [
+        { sceneId: "s-first", clipIndex: 2 },
+        { sceneId: "s-mid", clipIndex: 1 },
+        { sceneId: "s-last", clipIndex: 0 },
+      ];
+
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
+
+      expect(report.valid).toBe(true);
+      expect(report.timeline.scenes[0].id).toBe("s-first");
+      expect(report.timeline.scenes[1].id).toBe("s-mid");
+      expect(report.timeline.scenes[2].id).toBe("s-last");
+      expect(report.clipAssignments.map((a) => a.clipIndex)).toEqual([2, 1, 0]);
+    });
   });
 
-  it("preserves sceneId on reassigned entries", () => {
-    const assignments = [
-      { sceneId: "aaa", clipIndex: 1 },
-      { sceneId: "bbb", clipIndex: 1 }, // duplicate
-    ];
-    const result = applyGuard2(assignments, 3);
-    expect(result.find(a => a.sceneId === "bbb")!.clipIndex).toBe(0);
+  // ── Objective 2: Timestamp validation and boundary clamping ─────────────────
+  describe("Timestamp Safety: Invalid timestamps are rejected, clamped safely, and logged for evaluation", () => {
+    it("clamps clipTrimEnd to actual clip duration when it overshoots and logs violation", () => {
+      const clips = [makeClip(7.5, 0, "interview.mp4")];
+      const scenes = [
+        makeScene("s1", { label: "Interview take", clipTrimStart: 0, clipTrimEnd: 99, duration: 99 }),
+      ];
+      const assignments: ClipAssignment[] = [{ sceneId: "s1", clipIndex: 0, trimStart: 0, trimEnd: 99 }];
+
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
+
+      expect(report.timeline.scenes[0].clipTrimEnd).toBe(7.5);
+      expect(report.timeline.scenes[0].duration).toBe(7.5);
+      expect(report.repaired).toBe(true);
+
+      // Verify that the violation was captured for evaluation rather than silently buried
+      expect(report.timestampViolations).toHaveLength(1);
+      expect(report.timestampViolations[0].violationType).toBe("overshoot_end");
+      expect(report.timestampViolations[0].modelTrimEnd).toBe(99);
+      expect(report.timestampViolations[0].sourceDuration).toBe(7.5);
+      expect(report.timestampViolations[0].clampedTrimEnd).toBe(7.5);
+      expect(report.timestampViolations[0].details).toContain("exceeds clip duration (7.5s)");
+    });
+
+    it("clamps negative clipTrimStart to 0 and logs violation", () => {
+      const clips = [makeClip(10, 0)];
+      const scenes = [
+        makeScene("s1", { clipTrimStart: -3.5, clipTrimEnd: 5, duration: 8.5 }),
+      ];
+      const assignments: ClipAssignment[] = [{ sceneId: "s1", clipIndex: 0, trimStart: -3.5, trimEnd: 5 }];
+
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
+
+      expect(report.timeline.scenes[0].clipTrimStart).toBe(0);
+      expect(report.timeline.scenes[0].clipTrimEnd).toBe(5);
+      expect(report.timeline.scenes[0].duration).toBe(5);
+
+      expect(report.timestampViolations).toHaveLength(1);
+      expect(report.timestampViolations[0].violationType).toBe("negative_start");
+      expect(report.timestampViolations[0].modelTrimStart).toBe(-3.5);
+      expect(report.timestampViolations[0].clampedTrimStart).toBe(0);
+    });
+
+    it("repairs inverted trim (trimStart >= trimEnd) and logs violation", () => {
+      const clips = [makeClip(10, 0)];
+      const scenes = [
+        makeScene("s1", { clipTrimStart: 8, clipTrimEnd: 4 }),
+      ];
+      const assignments: ClipAssignment[] = [{ sceneId: "s1", clipIndex: 0, trimStart: 8, trimEnd: 4 }];
+
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
+
+      expect(report.timeline.scenes[0].clipTrimStart).toBeLessThan(report.timeline.scenes[0].clipTrimEnd!);
+      expect(report.timeline.scenes[0].clipTrimEnd).toBe(10);
+
+      expect(report.timestampViolations).toHaveLength(1);
+      expect(report.timestampViolations[0].violationType).toBe("inverted_bounds");
+      expect(report.timestampViolations[0].details).toContain("inverted/zero trim range");
+    });
+
+    it("calculates duration with playback speed correctly", () => {
+      const clips = [makeClip(12, 0)];
+      const scenes = [
+        makeScene("s1", { clipTrimStart: 2, clipTrimEnd: 8, playbackSpeed: 2.0 }),
+      ];
+      const assignments: ClipAssignment[] = [{ sceneId: "s1", clipIndex: 0, trimStart: 2, trimEnd: 8 }];
+
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
+
+      // (8 - 2) / 2.0 = 3.0 seconds
+      expect(report.timeline.scenes[0].duration).toBe(3);
+    });
   });
 
-  it("does not panic when assignments.length > totalClips", () => {
-    const assignments = [
-      { sceneId: "s1", clipIndex: 0 },
-      { sceneId: "s2", clipIndex: 0 },
-      { sceneId: "s3", clipIndex: 0 }, // only 2 clips available
-    ];
-    // last one can't be reassigned (no clip available), stays as-is or unchanged
-    const result = applyGuard2(assignments, 2);
-    // at least first two should be unique
-    expect(result[0].clipIndex).not.toBe(result[1].clipIndex);
-  });
-});
+  // ── Objective 2: Deduplication and sequence preservation ────────────────────
+  describe("Structural Repairs: Deduplicate scene IDs", () => {
+    it("deduplicates identical scene UUIDs without dropping scenes or misaligning assignments", () => {
+      const clips = [makeClip(10, 0), makeClip(10, 1)];
+      const duplicateId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+      const scenes = [
+        makeScene(duplicateId, { label: "Scene A" }),
+        makeScene(duplicateId, { label: "Scene B" }), // duplicate!
+      ];
+      const assignments: ClipAssignment[] = [
+        { sceneId: duplicateId, clipIndex: 0 },
+        { sceneId: duplicateId, clipIndex: 1 },
+      ];
 
-// ── Guard 3: clipTrimEnd clamping ─────────────────────────────────────────────
+      const report = validateAndRepairTimeline(makeTimeline(scenes), clips, assignments);
 
-describe("Guard 3 — clipTrimEnd must not exceed actual clip file duration", () => {
-  it("leaves trim unchanged when within bounds", () => {
-    const scenes = [makeScene("s1", { clipTrimStart: 1, clipTrimEnd: 4, duration: 3 })];
-    const clips  = [makeClip(10)];
-    const result = applyGuard3(scenes, clips, []);
-    expect(result[0].clipTrimEnd).toBe(4);
-    expect(result[0].clipTrimStart).toBe(1);
-    expect(result[0].duration).toBe(3);
-  });
-
-  it("clamps clipTrimEnd to exact clip duration when it overshoots", () => {
-    const scenes = [makeScene("s1", { clipTrimStart: 0, clipTrimEnd: 15, duration: 15 })];
-    const clips  = [makeClip(8.5)]; // actual file is only 8.5s
-    const result = applyGuard3(scenes, clips, []);
-    expect(result[0].clipTrimEnd).toBe(8.5);
-    expect(result[0].duration).toBeCloseTo(8.5, 3);
-  });
-
-  it("recalculates duration = clipTrimEnd - clipTrimStart after clamping", () => {
-    const scenes = [makeScene("s1", { clipTrimStart: 2, clipTrimEnd: 20, duration: 18 })];
-    const clips  = [makeClip(10)];
-    const result = applyGuard3(scenes, clips, []);
-    expect(result[0].clipTrimEnd).toBe(10);
-    expect(result[0].clipTrimStart).toBe(2);
-    expect(result[0].duration).toBeCloseTo(8, 3);
-  });
-
-  it("preserves clipTrimStart — only caps the end", () => {
-    const scenes = [makeScene("s1", { clipTrimStart: 3, clipTrimEnd: 99, duration: 96 })];
-    const clips  = [makeClip(7)];
-    const result = applyGuard3(scenes, clips, []);
-    expect(result[0].clipTrimStart).toBe(3);   // unchanged
-    expect(result[0].clipTrimEnd).toBe(7);      // clamped to clip max
-  });
-
-  it("uses clipAssignment to map scene to correct clip (not just scene index)", () => {
-    const scenes = [
-      makeScene("s-a", { clipTrimStart: 0, clipTrimEnd: 20, duration: 20 }),
-      makeScene("s-b", { clipTrimStart: 0, clipTrimEnd: 20, duration: 20 }),
-    ];
-    const clips = [makeClip(6), makeClip(12)];
-    // scene s-a uses clip index 1 (12s), scene s-b uses clip index 0 (6s)
-    const assignments: ClipAssignment[] = [
-      { sceneId: "s-a", clipIndex: 1 },
-      { sceneId: "s-b", clipIndex: 0 },
-    ];
-    const result = applyGuard3(scenes, clips, assignments);
-    expect(result[0].clipTrimEnd).toBe(12);  // s-a uses clip 1 (12s)
-    expect(result[1].clipTrimEnd).toBe(6);   // s-b uses clip 0 (6s)
-  });
-
-  it("falls back to scene index when no assignment found", () => {
-    const scenes = [
-      makeScene("s1", { clipTrimEnd: 99 }),
-      makeScene("s2", { clipTrimEnd: 99 }),
-    ];
-    const clips = [makeClip(5), makeClip(8)];
-    const result = applyGuard3(scenes, clips, []);
-    expect(result[0].clipTrimEnd).toBe(5); // scene[0] → clips[0]
-    expect(result[1].clipTrimEnd).toBe(8); // scene[1] → clips[1]
-  });
-
-  it("does not crash when clip has no duration (undefined)", () => {
-    const scenes = [makeScene("s1", { clipTrimEnd: 99 })];
-    const clips  = [{ duration: undefined } as unknown as GeminiClip];
-    const result = applyGuard3(scenes, clips, []);
-    expect(result[0]).toMatchObject({ id: "s1" }); // unchanged, no crash
-  });
-
-  it("handles precise decimal durations without floating-point drift", () => {
-    const scenes = [makeScene("s1", { clipTrimStart: 1.1, clipTrimEnd: 99 })];
-    const clips  = [makeClip(7.777)];
-    const result = applyGuard3(scenes, clips, []);
-    expect(result[0].duration).toBe(parseFloat((7.777 - 1.1).toFixed(3)));
+      expect(report.timeline.scenes).toHaveLength(2);
+      expect(report.timeline.scenes[0].id).not.toBe(report.timeline.scenes[1].id);
+      expect(report.repaired).toBe(true);
+      // Each scene keeps its respective assignment
+      expect(report.clipAssignments[0].sceneId).toBe(report.timeline.scenes[0].id);
+      expect(report.clipAssignments[1].sceneId).toBe(report.timeline.scenes[1].id);
+    });
   });
 });
