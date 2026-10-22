@@ -219,7 +219,6 @@ export default function FootagePage() {
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [aspectRatio, setAspectRatioLocal] = useState<AspectRatio>("9:16");
-  const [targetDuration, setTargetDuration] = useState(-1);
   const [processing, setProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -565,8 +564,7 @@ export default function FootagePage() {
 
       // Step 2: Build scenes applying the AI plan
       setProcessingStep("Building your timeline...");
-      const effectiveDuration = targetDuration === -1 ? -1 : targetDuration;
-      const clipScenes = buildScenesFromPlan(clips, plan, effectiveDuration, prompt.trim());
+      const clipScenes = buildScenesFromPlan(clips, plan, -1, prompt.trim());
 
       setProcessingStep("Loading into editor...");
 
@@ -1019,34 +1017,6 @@ export default function FootagePage() {
                   >
                     <div style={{ fontSize: 13, fontWeight: 800 }}>{opt.label}</div>
                     <div style={{ fontSize: 9, opacity: 0.7, marginTop: 1 }}>{opt.sub}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Target Duration */}
-            <div style={{
-              background: "var(--bg-elevated)", border: "1px solid var(--border)",
-              borderRadius: "var(--r-xl)", padding: "16px",
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
-                Target Length
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {DURATION_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setTargetDuration(opt.value)}
-                    style={{
-                      padding: "6px 12px", borderRadius: "var(--r-full)",
-                      background: targetDuration === opt.value ? "var(--accent-subtle)" : "var(--bg-base)",
-                      border: `1.5px solid ${targetDuration === opt.value ? "var(--accent-border)" : "var(--border)"}`,
-                      color: targetDuration === opt.value ? "var(--accent-light)" : "var(--text-secondary)",
-                      fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      transition: "all 0.12s",
-                    }}
-                  >
-                    {opt.label}
                   </button>
                 ))}
               </div>
