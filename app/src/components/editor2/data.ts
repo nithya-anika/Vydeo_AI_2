@@ -27,18 +27,27 @@ export const TOOL_SECTIONS: { id: ToolSection; label: string; Icon: LucideIcon; 
 ]
 
 /* ── Music library (royalty-free demo set) ─────────────────────────────────*/
-export interface MusicTrackMeta { name: string; dur: string; genre: string; bpm: number; energy: string; mood: string }
+export interface MusicTrackMeta {
+  name: string;
+  dur: string;
+  genre: string;
+  bpm: number;
+  energy: string;
+  mood: string;
+  src: string;
+  duration: number;
+}
 export const MUSIC_TRACKS: MusicTrackMeta[] = [
-  { name: 'Cinematic Rise', dur: '2:34', genre: 'Cinematic', bpm: 92, energy: 'High', mood: 'Epic' },
-  { name: 'Deep Focus', dur: '3:12', genre: 'Ambient', bpm: 72, energy: 'Low', mood: 'Calm' },
-  { name: 'Upbeat Drive', dur: '1:58', genre: 'Pop', bpm: 128, energy: 'High', mood: 'Energetic' },
-  { name: 'Lo-Fi Chill', dur: '4:01', genre: 'Lo-Fi', bpm: 85, energy: 'Low', mood: 'Relaxed' },
-  { name: 'Epic Trailer', dur: '2:20', genre: 'Cinematic', bpm: 110, energy: 'High', mood: 'Intense' },
-  { name: 'Luxury Brand', dur: '1:45', genre: 'Ambient', bpm: 60, energy: 'Low', mood: 'Premium' },
-  { name: 'Tech Corporate', dur: '2:10', genre: 'Electronic', bpm: 120, energy: 'Medium', mood: 'Professional' },
-  { name: 'Summer Vibes', dur: '2:55', genre: 'Pop', bpm: 115, energy: 'High', mood: 'Happy' },
-  { name: 'Dark Minimal', dur: '3:30', genre: 'Electronic', bpm: 95, energy: 'Medium', mood: 'Mysterious' },
-  { name: 'Acoustic Warm', dur: '2:48', genre: 'Acoustic', bpm: 80, energy: 'Low', mood: 'Friendly' },
+  { name: 'Cinematic Rise', dur: '3:00', genre: 'Cinematic', bpm: 92, energy: 'High', mood: 'Epic', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', duration: 180 },
+  { name: 'Deep Focus', dur: '2:34', genre: 'Ambient', bpm: 72, energy: 'Low', mood: 'Calm', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', duration: 154 },
+  { name: 'Upbeat Drive', dur: '3:12', genre: 'Pop', bpm: 128, energy: 'High', mood: 'Energetic', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', duration: 192 },
+  { name: 'Lo-Fi Chill', dur: '2:30', genre: 'Lo-Fi', bpm: 85, energy: 'Low', mood: 'Relaxed', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', duration: 150 },
+  { name: 'Epic Trailer', dur: '2:20', genre: 'Cinematic', bpm: 110, energy: 'High', mood: 'Intense', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3', duration: 140 },
+  { name: 'Luxury Brand', dur: '1:50', genre: 'Ambient', bpm: 60, energy: 'Low', mood: 'Premium', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3', duration: 110 },
+  { name: 'Tech Corporate', dur: '2:45', genre: 'Electronic', bpm: 120, energy: 'Medium', mood: 'Professional', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3', duration: 165 },
+  { name: 'Summer Vibes', dur: '2:55', genre: 'Pop', bpm: 115, energy: 'High', mood: 'Happy', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3', duration: 175 },
+  { name: 'Dark Minimal', dur: '3:30', genre: 'Electronic', bpm: 95, energy: 'Medium', mood: 'Mysterious', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3', duration: 210 },
+  { name: 'Acoustic Warm', dur: '2:48', genre: 'Acoustic', bpm: 80, energy: 'Low', mood: 'Friendly', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3', duration: 168 },
 ]
 export const MUSIC_GENRES = ['All', 'Cinematic', 'Ambient', 'Pop', 'Electronic', 'Lo-Fi', 'Acoustic']
 

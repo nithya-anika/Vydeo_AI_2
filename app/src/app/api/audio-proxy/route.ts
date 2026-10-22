@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_HOSTS = ["www.bensound.com", "bensound.com", "cdn.pixabay.com", "assets.mixkit.co", "incompetech.com", "freemusicarchive.org", "files.freemusicarchive.org"];
+const ALLOWED_HOSTS = [
+  "www.bensound.com",
+  "bensound.com",
+  "cdn.pixabay.com",
+  "assets.mixkit.co",
+  "incompetech.com",
+  "freemusicarchive.org",
+  "files.freemusicarchive.org",
+  "www.soundhelix.com",
+  "soundhelix.com",
+];
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");

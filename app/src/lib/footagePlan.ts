@@ -283,17 +283,18 @@ export function buildScenesFromPlan(
     );
     const sceneDuration = parseFloat(Math.max(0.5, finalTrimEnd - finalTrimStart).toFixed(3));
 
-    // Determine transition
+    // Determine transition: unless a transition is explicitly requested by the user, prefer zoom-in!
     let transitionType: StoreTransitionType = i < finalDraftsWithDurations.length - 1
-      ? (requestedTransition ?? "fade")
+      ? (requestedTransition ?? "zoom-in")
       : "cut";
     let transitionDuration = 0.5;
 
     if (i < finalDraftsWithDurations.length - 1) {
-      const t = transitionAfter.get(origIdx);
-      if (!requestedTransition && t && VALID_TRANSITIONS.has(t.type)) {
-        transitionType = t.type as StoreTransitionType;
-        transitionDuration = Math.max(0.1, Math.min(2.0, t.duration));
+      if (requestedTransition) {
+        transitionType = requestedTransition;
+      } else {
+        // Unless user explicitly requested another transition, keep zoom-in preferred
+        transitionType = "zoom-in";
       }
     }
 

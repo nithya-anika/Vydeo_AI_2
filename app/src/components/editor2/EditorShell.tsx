@@ -326,55 +326,46 @@ function MusicStudio({
   const { audioTracks, updateAudioTrack, removeAudioTrack, addAudioTrack } = useEditorStore();
   const [genreFilter, setGenreFilter] = useState("All");
   const [previewingTrack, setPreviewingTrack] = useState<string | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const beatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const filteredTracks = MUSIC_TRACKS.filter(
     (t) => genreFilter === "All" || t.genre === genreFilter
   );
 
   function stopPreviewAudio() {
-    if (beatTimerRef.current) clearTimeout(beatTimerRef.current);
-    beatTimerRef.current = null;
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
-      audioCtxRef.current = null;
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current.src = "";
+      previewAudioRef.current = null;
     }
   }
 
-  function handlePreview(trackName: string, bpm: number, energy: string) {
-    if (previewingTrack === trackName) {
+  function handlePreview(t: typeof MUSIC_TRACKS[0]) {
+    if (previewingTrack === t.name) {
       stopPreviewAudio();
       setPreviewingTrack(null);
       return;
     }
     stopPreviewAudio();
-    setPreviewingTrack(trackName);
+    setPreviewingTrack(t.name);
 
-    try {
-      const ctx = new AudioContext();
-      audioCtxRef.current = ctx;
-      const beatInterval = 60 / bpm;
-      const freq = energy === "High" ? 880 : energy === "Medium" ? 660 : 440;
-      let nextBeat = ctx.currentTime + 0.05;
-
-      function scheduleBeat() {
-        if (!audioCtxRef.current || ctx.state === "closed") return;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.setValueAtTime(freq, nextBeat);
-        gain.gain.setValueAtTime(0.08, nextBeat);
-        gain.gain.exponentialRampToValueAtTime(0.001, nextBeat + 0.06);
-        osc.start(nextBeat);
-        osc.stop(nextBeat + 0.06);
-        nextBeat += beatInterval;
-        const delayMs = Math.max(10, (nextBeat - ctx.currentTime - 0.3) * 1000);
-        beatTimerRef.current = setTimeout(scheduleBeat, delayMs);
-      }
-      scheduleBeat();
-    } catch {
+    if (t.src) {
+      const audio = new Audio(t.src);
+      audio.volume = 0.7;
+      audio.onended = () => {
+        setPreviewingTrack(null);
+        previewAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        setPreviewingTrack(null);
+        previewAudioRef.current = null;
+      };
+      audio.play().catch(() => {
+        setPreviewingTrack(null);
+        previewAudioRef.current = null;
+      });
+      previewAudioRef.current = audio;
+    } else {
       setPreviewingTrack(null);
     }
   }
@@ -382,14 +373,16 @@ function MusicStudio({
   // Cleanup on unmount
   useEffect(() => () => stopPreviewAudio(), []);
 
-
   function handleAddToTimeline(t: typeof MUSIC_TRACKS[0]) {
+    stopPreviewAudio();
+    const trackSrc = t.src || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+    const trackDur = t.duration || 120;
     addAudioTrack({
       id: crypto.randomUUID(),
       name: t.name,
-      src: t.src,
+      src: trackSrc,
       file: new File([], `${t.name}.mp3`, { type: "audio/mpeg" }),
-      duration: t.duration,
+      duration: trackDur,
       volume: 0.8,
       fadeIn: 0.5,
       fadeOut: 1.0,
@@ -529,7 +522,7 @@ function MusicStudio({
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {/* Preview button */}
               <button
-                onClick={() => handlePreview(t.name, t.bpm, t.energy)}
+                onClick={() => handlePreview(t)}
                 style={{
                   width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
                   background: previewingTrack === t.name ? "#10B981" : "var(--bg-panel)",

@@ -269,7 +269,7 @@ EDITORIAL RULES & SELECTION:
    - Preserves complete spoken sentences without chopping words mid-phrase.
    - B-roll / silence candidates can be cut shorter or used as cutaways.
 4. TRANSITIONS & PACING:
-   - Default to "cut" for high-energy or vox-pop pacing; use "fade" or "dissolve" for atmospheric/cinematic transitions.
+   - Unless a specific transition is requested in the user brief, prefer "zoom-in" transitions between scenes.
 
 BRAND: ${input.brand.name} | Aspect ratio: ${ratio} | Color grade: ${input.overrides?.colorGrade ?? colorGradeDefault ?? input.brand.colorGrade.name}
 Captions: ${input.brand.captionStyle.position}, max ${input.brand.captionStyle.maxCharsPerLine} chars/line
@@ -289,7 +289,7 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
         "role": "hook",
         "label": "<brief description>",
         "captionText": "<punchy on-screen caption>",
-        "transitionType": "cut",
+        "transitionType": "zoom-in",
         "playbackSpeed": 1.0
       }
     ]

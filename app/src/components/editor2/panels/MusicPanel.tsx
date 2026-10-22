@@ -10,42 +10,34 @@ export function MusicPanel() {
   const { audioTracks, updateAudioTrack, removeAudioTrack, addAudioTrack } = useEditorStore()
   const [genre, setGenre] = useState('All')
   const [previewing, setPreviewing] = useState<string | null>(null)
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const beatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null)
   const uploadRef = useRef<HTMLInputElement>(null)
 
   const tracks = MUSIC_TRACKS.filter((t) => genre === 'All' || t.genre === genre)
 
   function stopPreview() {
-    if (beatTimerRef.current) clearTimeout(beatTimerRef.current)
-    beatTimerRef.current = null
-    if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null }
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause()
+      previewAudioRef.current.src = ''
+      previewAudioRef.current = null
+    }
   }
   useEffect(() => () => stopPreview(), [])
 
-  function preview(name: string, bpm: number, energy: string) {
-    if (previewing === name) { stopPreview(); setPreviewing(null); return }
+  function preview(t: MusicTrackMeta) {
+    if (previewing === t.name) { stopPreview(); setPreviewing(null); return }
     stopPreview()
-    setPreviewing(name)
-    try {
-      const ctx = new AudioContext()
-      audioCtxRef.current = ctx
-      const beat = 60 / bpm
-      const freq = energy === 'High' ? 880 : energy === 'Medium' ? 660 : 440
-      let next = ctx.currentTime + 0.05
-      const schedule = () => {
-        if (!audioCtxRef.current || ctx.state === 'closed') return
-        const osc = ctx.createOscillator(); const gain = ctx.createGain()
-        osc.connect(gain); gain.connect(ctx.destination)
-        osc.frequency.setValueAtTime(freq, next)
-        gain.gain.setValueAtTime(0.08, next)
-        gain.gain.exponentialRampToValueAtTime(0.001, next + 0.06)
-        osc.start(next); osc.stop(next + 0.06)
-        next += beat
-        beatTimerRef.current = setTimeout(schedule, Math.max(10, (next - ctx.currentTime - 0.3) * 1000))
-      }
-      schedule()
-    } catch { setPreviewing(null) }
+    setPreviewing(t.name)
+    if (t.src) {
+      const a = new Audio(t.src)
+      a.volume = 0.7
+      a.onended = () => { setPreviewing(null); previewAudioRef.current = null }
+      a.onerror = () => { setPreviewing(null); previewAudioRef.current = null }
+      a.play().catch(() => { setPreviewing(null); previewAudioRef.current = null })
+      previewAudioRef.current = a
+    } else {
+      setPreviewing(null)
+    }
   }
 
   function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -63,9 +55,12 @@ export function MusicPanel() {
   }
 
   function addLibraryTrack(t: MusicTrackMeta) {
+    stopPreview()
+    const trackSrc = t.src || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
+    const trackDur = t.duration || 120
     addAudioTrack({
-      id: crypto.randomUUID(), name: t.name, src: '', file: null as unknown as File,
-      duration: 150, volume: 0.8, fadeIn: 0.5, fadeOut: 1.0, startTime: 0, muted: false, type: 'bgm',
+      id: crypto.randomUUID(), name: t.name, src: trackSrc, file: null as unknown as File,
+      duration: trackDur, volume: 0.8, fadeIn: 0.5, fadeOut: 1.0, startTime: 0, muted: false, type: 'bgm',
     })
     setPreviewing(null)
   }
@@ -123,7 +118,7 @@ export function MusicPanel() {
           {tracks.map((t) => (
             <div key={t.name} className={`track-card${previewing === t.name ? ' is-previewing' : ''}`}>
               <div className="track-row">
-                <IconButton label={previewing === t.name ? 'Stop preview' : 'Preview'} variant={previewing === t.name ? 'primary' : 'secondary'} size="sm" round onClick={() => preview(t.name, t.bpm, t.energy)}>
+                <IconButton label={previewing === t.name ? 'Stop preview' : 'Preview'} variant={previewing === t.name ? 'primary' : 'secondary'} size="sm" round onClick={() => preview(t)}>
                   {previewing === t.name ? <Pause size={11} /> : <Play size={11} />}
                 </IconButton>
                 <div className="grow-min">

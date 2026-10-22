@@ -92,26 +92,18 @@ Assign the best transition FROM each scene to the next based on the brief above.
 Valid transitionType values: "cut" | "fade" | "dissolve" | "cinematic-fade" | "wipe-left" | "wipe-right" | "slide-left" | "slide-right" | "zoom-in" | "zoom-out"
 Rules:
 - Last scene → no transition needed (set "cut")
-- If brief mentions a specific transition type, use it for most/all scenes
-- Every transition must feel synchronized with the expected music beat, voiceover phrase ending, UI tap, camera motion, or emotional shift.
-- Prefer motivated transitions: match cut from gesture to gesture, push-in on confidence shift, cut on tap/click, slide/wipe only when screen/UI movement justifies it.
-- No off-beat, decorative, random, or delayed transitions. If sync is uncertain, use a clean cut timed at the scene's strongest action.
-- Keep transition durations tight: 0.2-0.4s for fast ads, 0.4-0.7s for premium cinematic moments, never longer unless the brief asks.
-- Conversational/interview/natural → prefer "cut"
-- Fast-paced, energetic → "cut" or "zoom-in"
-- Cinematic/atmospheric → "cinematic-fade" or "dissolve"
-- Emotional moments → "dissolve" or "cinematic-fade"
-- Travel/motion → "slide-left" or "wipe-right"
-- Default to "cut" when in doubt — clean cuts are always better than over-produced transitions
+- If the brief mentions a specific transition type (e.g. "fade", "dissolve", "cut"), use that requested type for the scenes.
+- UNLESS a specific transition is explicitly requested in the user brief, ALWAYS prefer and assign "zoom-in" for transitions between scenes.
+- Keep transition durations tight: 0.3-0.5s for snappy pacing, never sluggish.
 
 Return ONLY JSON:
 {
   "transitions": [
     {
       "sceneId": "<scene id>",
-      "transitionType": "cut",
-      "duration": 0.3,
-      "rationale": "Energy spike from product reveal to lifestyle shot"
+      "transitionType": "zoom-in",
+      "duration": 0.5,
+      "rationale": "Dynamic zoom-in transition"
     }
   ],
   "overallFlowScore": 0.82,

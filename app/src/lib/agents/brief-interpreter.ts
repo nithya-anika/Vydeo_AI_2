@@ -91,7 +91,7 @@ Return ONLY valid JSON:
   "mustNots": ["do not cut mid-answer", "do not add generic captions"],
   "globalPlaybackSpeed": 1.0,
   "visualEffects": [],
-  "transitionStyle": "cut",
+  "transitionStyle": "zoom-in",
   "energyLevel": "medium",
   "platform": "instagram",
   "tone": "fun and casual",
@@ -100,7 +100,7 @@ Return ONLY valid JSON:
 
 Speed examples: "2x speed" → globalPlaybackSpeed: 2.0, "slow motion" → 0.5, "normal" → 1.0
 visualEffects examples: "black and white" → ["black-and-white"], "add vignette and warm tones" → ["vignette","warm"]
-transitionStyle examples: "fade between clips" → "fade", "smooth dissolves" → "dissolve", default → "cut"
+transitionStyle examples: "fade between clips" → "fade", "smooth dissolves" → "dissolve", "hard cuts" → "cut", default (unless requested) → "zoom-in"
 
 pacingIntent options: "very-fast" | "fast" | "natural" | "slow" | "cinematic"
 captionTone options: "all-caps-punchy" | "natural-speech" | "narrative" | "minimal" | "none"
@@ -137,7 +137,7 @@ If the brief doesn't specify something, infer it from the overall context.`;
       mustNots: [],
       globalPlaybackSpeed: 1.0,
       visualEffects: [],
-      transitionStyle: "cut",
+      transitionStyle: "zoom-in",
       energyLevel: "medium",
       platform: "instagram",
       tone: "casual",

@@ -235,7 +235,7 @@ const DEFAULT_CAPTION: Omit<Caption, "id" | "startTime" | "endTime" | "text"> = 
   stroke: false, strokeColor: "#000000", shadow: true,
 };
 
-const DEFAULT_TRANSITION: Transition = { type: "fade", duration: 0.5 };
+const DEFAULT_TRANSITION: Transition = { type: "zoom-in", duration: 0.5 };
 const DEFAULT_BRAND_KIT: BrandKit = {
   id: "default-brand",
   name: "Brand Kit",

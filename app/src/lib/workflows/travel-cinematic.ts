@@ -49,7 +49,7 @@ export const travelCinematicWorkflow: WorkflowDefinition = {
 
   clusterConfig: {
     pacingStyle: "cinematic-slow",
-    defaultTransitions: ["cinematic-fade", "dissolve", "cut"],
+    defaultTransitions: ["zoom-in", "cinematic-fade", "dissolve"],
     captionStyle: "storytelling",
     colorGradeDefault: "cinematic-warm",
     sceneCountRange: [3, 6],
