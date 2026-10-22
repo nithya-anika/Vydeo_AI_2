@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { v4 as uuidv4 } from "uuid";
 import { useEditorStore } from "@/store/editorStore";
-import { Button, useToast, Icons } from "@/components/ui";
+import { Button, useToast, Icons, Spinner } from "@/components/ui";
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -81,14 +81,53 @@ function Svg({ d, size = 13 }: { d: string | string[]; size?: number }) {
   );
 }
 
+function uploadBinaryWithProgress(
+  file: Blob,
+  ext: string,
+  onProgress?: (percent: number) => void
+): Promise<{ filepath: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("ext", ext);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        const pct = Math.round((event.loaded / event.total) * 100);
+        onProgress(pct);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data);
+        } catch {
+          reject(new Error("Invalid server response"));
+        }
+      } else {
+        reject(new Error(`Server returned ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Upload network error"));
+    xhr.open("POST", "/api/upload-binary");
+    xhr.send(formData);
+  });
+}
+
 export default function TopBar({ projectId }: { projectId?: string }) {
   const { projectName, isDirty, setProjectName, scenes, audioTracks, aspectRatio, clips } = useEditorStore();
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(projectName);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportStatusText, setExportStatusText] = useState("");
   const toast = useToast();
 
-  const buildRenderScene = async (scene: any) => {
+  const buildRenderScene = async (scene: any, onUploadProgress?: (percent: number) => void) => {
     const clip = scene.clipId ? clips.find((item) => item.id === scene.clipId) : null;
     let clipData: string | null = null;
     let clipMime = clip?.file?.type ?? "";
@@ -136,24 +175,11 @@ export default function TopBar({ projectId }: { projectId?: string }) {
     if (rawMediaBlob) {
       console.log(`[Export] Media detected for scene "${scene.label}" (${(rawMediaBlob.size / 1024 / 1024).toFixed(2)} MB). Streaming directly to EC2 server...`);
       try {
-        const formData = new FormData();
-        formData.append("file", rawMediaBlob);
-        formData.append("ext", clipExt || "mp4");
-
-        const uploadRes = await fetch("/api/upload-binary", {
-          method: "POST",
-          body: formData,
-        });
-        
-        if (uploadRes.ok) {
-          const data = await uploadRes.json();
-          scene.clipSrc = `local://${data.filepath}`;
-          console.log(`[Export] Stream to EC2 successful for "${scene.label}" -> ${data.filepath}`);
-          rawMediaBlob = null;
-          clipData = null;
-        } else {
-          throw new Error(`Server returned ${uploadRes.status}`);
-        }
+        const data = await uploadBinaryWithProgress(rawMediaBlob, clipExt || "mp4", onUploadProgress);
+        scene.clipSrc = `local://${data.filepath}`;
+        console.log(`[Export] Stream to EC2 successful for "${scene.label}" -> ${data.filepath}`);
+        rawMediaBlob = null;
+        clipData = null;
       } catch (err) {
         console.warn(`[Export] Direct stream to EC2 crashed for scene "${scene.label}".`, err);
         throw new Error(`Failed to upload scene "${scene.label}". Network dropped or file too large.`);
@@ -237,12 +263,24 @@ export default function TopBar({ projectId }: { projectId?: string }) {
 
   const handleExport = async () => {
     setExporting(true);
+    setExportProgress(0);
+    setExportStatusText("Preparing clips...");
     try {
       const payloadScenes = [];
+      const totalScenes = scenes.length;
+
       // Process scenes sequentially (one-by-one) instead of Promise.all
       // to prevent the browser from holding multiple multi-gigabyte blobs in RAM simultaneously.
-      for (const scene of scenes) {
-        payloadScenes.push(await buildRenderScene(scene));
+      for (let i = 0; i < totalScenes; i++) {
+        const scene = scenes[i];
+        setExportStatusText(`Uploading clip ${i + 1}/${totalScenes} (0%)`);
+        setExportProgress(0);
+
+        const renderedScene = await buildRenderScene(scene, (percent) => {
+          setExportStatusText(`Uploading clip ${i + 1}/${totalScenes} (${percent}%)`);
+          setExportProgress(percent);
+        });
+        payloadScenes.push(renderedScene);
       }
 
       let audioPayload = undefined;
@@ -271,7 +309,8 @@ export default function TopBar({ projectId }: { projectId?: string }) {
 
         if (audioData) {
           if (audioData.startsWith("data:")) {
-            console.log(`[Export] Local audio detected (${(audioData.length / 1024 / 1024).toFixed(2)} MB). Streaming audio directly to EC2 server...`);
+            setExportStatusText("Uploading background audio (0%)...");
+            setExportProgress(0);
             try {
               const b64Data = audioData.split(",")[1];
               const byteCharacters = atob(b64Data);
@@ -282,22 +321,13 @@ export default function TopBar({ projectId }: { projectId?: string }) {
               const byteArray = new Uint8Array(byteNumbers);
               const uploadBlob = new Blob([byteArray], { type: "audio/mpeg" });
 
-              const formData = new FormData();
-              formData.append("file", uploadBlob);
-              formData.append("ext", "mp3");
-
-              const uploadRes = await fetch("/api/upload-binary", {
-                method: "POST",
-                body: formData,
+              const data = await uploadBinaryWithProgress(uploadBlob, "mp3", (percent) => {
+                setExportStatusText(`Uploading audio (${percent}%)`);
+                setExportProgress(percent);
               });
 
-              if (uploadRes.ok) {
-                const data = await uploadRes.json();
-                audioData = `local://${data.filepath}`;
-                console.log(`[Export] Stream audio to EC2 successful -> ${data.filepath}`);
-              } else {
-                console.warn(`[Export] Direct audio stream to EC2 returned ${uploadRes.status}, falling back to base64`);
-              }
+              audioData = `local://${data.filepath}`;
+              console.log(`[Export] Stream audio to EC2 successful -> ${data.filepath}`);
             } catch (err) {
               console.warn(`[Export] Direct audio upload failed, falling back to base64.`, err);
             }
@@ -311,6 +341,9 @@ export default function TopBar({ projectId }: { projectId?: string }) {
           };
         }
       }
+
+      setExportStatusText("Submitting render job...");
+      setExportProgress(0);
 
       const payload = {
         scenes: payloadScenes,
@@ -331,8 +364,6 @@ export default function TopBar({ projectId }: { projectId?: string }) {
           })
         : payloadText;
 
-      const estimatedPayloadBytes = new Blob([requestBody]).size;
-
       const res = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -341,6 +372,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({}));
         console.error("Export failed", errorBody);
+        toast.error("Failed to start video rendering. Please try again.");
         return;
       }
       const contentType = res.headers.get("content-type") || "";
@@ -363,15 +395,17 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       
       if (data.jobId && (!data.downloadUrl || data.status === "pending" || data.status === "processing")) {
         console.log(`[Export] Server is rendering asynchronously. Entering browser polling loop for jobId: ${data.jobId}`);
-        
+        setExportStatusText("Rendering video: 0%");
+        setExportProgress(0);
+
         let attempts = 0;
-        const maxAttempts = 400; // 400 * 3s = 1200 seconds = 20 minutes!
+        const maxAttempts = 400; // 400 * 2.5s = 1000 seconds
         let completed = false;
         
         while (attempts < maxAttempts) {
           attempts++;
           
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await new Promise((resolve) => setTimeout(resolve, 2500));
           
           const statusRes = await fetch(`/api/render/status?jobId=${data.jobId}`);
           if (statusRes.ok) {
@@ -379,9 +413,15 @@ export default function TopBar({ projectId }: { projectId?: string }) {
             if (statusData.status === "completed") {
               finalJob = statusData;
               completed = true;
+              setExportStatusText("Complete! Downloading...");
+              setExportProgress(100);
               break;
             } else if (statusData.status === "failed") {
               throw new Error(statusData.error || "The render worker failed to compile the video.");
+            } else {
+              const renderPct = typeof statusData.progress === "number" ? statusData.progress : 0;
+              setExportProgress(renderPct);
+              setExportStatusText(`Rendering video: ${renderPct}%`);
             }
           }
         }
@@ -402,6 +442,8 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       toast.error(err.message || "An unexpected error occurred during export. Please check your network and try again.");
     } finally {
       setExporting(false);
+      setExportProgress(0);
+      setExportStatusText("");
     }
   };
 
@@ -489,6 +531,30 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         {aspectRatio}
       </div>
 
+      {/* Live Export Status Badge */}
+      {exporting && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "4px 10px", borderRadius: "var(--r-md)",
+          background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.35)",
+        }}>
+          <Spinner size="xs" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#C7D2FE", whiteSpace: "nowrap" }}>
+              {exportStatusText || "Processing..."}
+            </span>
+            <div style={{ width: 120, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                width: `${Math.max(3, exportProgress)}%`,
+                background: "linear-gradient(90deg, #6366F1, #10B981)",
+                transition: "width 0.25s ease",
+              }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Export */}
       <Button
         variant="primary"
@@ -497,7 +563,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         leftIcon={<Icons.Download size={14} />}
         onClick={handleExport}
       >
-        Export
+        {exporting ? `${exportProgress}%` : "Export"}
       </Button>
     </header>
   );
