@@ -326,28 +326,12 @@ import http from 'http';
 import fs from 'fs';
 
 async function downloadFile(url: string, outputPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http;
-    client.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`Failed to download ${url}. HTTP ${res.statusCode}`));
-        return;
-      }
-      const fileStream = fs.createWriteStream(outputPath);
-      res.pipe(fileStream);
-      fileStream.on('finish', () => {
-        fileStream.close();
-        resolve();
-      });
-      fileStream.on('error', (err) => {
-        fs.unlink(outputPath, () => {}); 
-        reject(err);
-      });
-    }).on('error', (err) => {
-      fs.unlink(outputPath, () => {});
-      reject(err);
-    });
-  });
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) {
+    throw new Error(`Failed to download ${url}. HTTP ${res.status}`);
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  await writeFile(outputPath, buffer);
 }
 
 async function fetchMediaDataUrl(url: string): Promise<string> {
@@ -1489,16 +1473,24 @@ export async function renderWithFfmpeg(
         )
       );
 
-      const audioFile =
-        await saveBase64(
+      let audioFile = "";
+      if (audio.src.startsWith("local://")) {
+        audioFile = audio.src.replace("local://", "");
+        console.log(`[FFmpeg Audio] Using local EC2 audio: ${audioFile}`);
+      } else if (audio.src.startsWith("http://") || audio.src.startsWith("https://")) {
+        const ext = audio.src.includes(".wav") ? "wav" : audio.src.includes(".ogg") ? "ogg" : "mp3";
+        audioFile = path.join(tmpDir, `bgm-${uuidv4()}.${ext}`);
+        console.log(`[FFmpeg Audio] Downloading remote audio: ${audio.src}`);
+        await downloadFile(audio.src, audioFile);
+        tempFiles.push(audioFile);
+      } else {
+        audioFile = await saveBase64(
           audio.src,
           "m4a",
           tmpDir
         );
-
-      tempFiles.push(
-        audioFile
-      );
+        tempFiles.push(audioFile);
+      }
 
       const totalDur =
         params.totalDuration ??

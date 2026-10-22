@@ -72,7 +72,6 @@ function StockTrackRow({ track, onAdd }: {
   const toggle = useCallback(() => {
     if (!audioRef.current) {
       const a = new Audio(track.src);
-      a.crossOrigin = "anonymous";
       a.volume = 0.6;
       a.onended = () => setPlaying(false);
       audioRef.current = a;
