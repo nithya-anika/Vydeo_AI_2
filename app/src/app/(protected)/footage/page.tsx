@@ -13,6 +13,7 @@ import { useEditorStore, type AspectRatio } from "@/store/editorStore";
 import { inferRequestedColorAdjustments, inferRequestedColorGrade, inferRequestedTransition } from "@/lib/footagePromptControls";
 
 import { buildScenesFromPlan, type UploadedClip, type EditPlan } from "@/lib/footagePlan";
+import { extractAudioTrackAsWav } from "@/lib/audioExtractor";
 
 // ── Prompt suggestions ────────────────────────────────────────────────────────
 
@@ -491,33 +492,65 @@ export default function FootagePage() {
     setProcessing(true);
 
     try {
-      // Step 1: Ask AI to interpret the prompt
-      setProcessingStep("Reading your prompt...");
-      const clipInfos = clips.map((c, i) => ({
-        index: i,
-        name: c.name,
-        duration: c.duration,
-      }));
+      // Step 1: Transcribe dialogues and speech segments for every clip
+      const clipInfosWithDialogue = [];
 
-      // Attach up to 2 frames per clip for Gemini Vision (keep payload size reasonable)
-      const clipInfosWithFrames = clips.map((c, i) => ({
-        index: i,
-        name: c.name,
-        duration: c.duration,
-        frames: (c.frames ?? []).slice(0, 2),
-      }));
+      for (let i = 0; i < clips.length; i++) {
+        const c = clips[i];
+        setProcessingStep(`Transcribing dialogue (${i + 1}/${clips.length}): "${c.name}"...`);
+
+        let speechSegments: any[] = [];
+        let fullTranscript = "";
+        let silenceWindows: any[] = [];
+
+        try {
+          if (c.file instanceof File && c.file.size > 0) {
+            const audioWav = await extractAudioTrackAsWav(c.file);
+            if (audioWav && audioWav.size > 500) {
+              const formData = new FormData();
+              formData.append("file", audioWav, "audio.wav");
+              formData.append("duration", String(c.duration));
+
+              const transRes = await fetch("/api/transcribe-clip", {
+                method: "POST",
+                body: formData,
+              });
+
+              if (transRes.ok) {
+                const transData = await transRes.json();
+                speechSegments = transData.captions ?? [];
+                fullTranscript = transData.fullTranscript ?? "";
+                silenceWindows = transData.silenceWindows ?? [];
+                console.log(`[Footage] Clip ${i} ("${c.name}") transcribed: ${speechSegments.length} dialogue segments, ${silenceWindows.length} silence windows.`);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`[Footage] Dialogue transcription skipped for "${c.name}":`, err);
+        }
+
+        clipInfosWithDialogue.push({
+          index: i,
+          name: c.name,
+          duration: c.duration,
+          frames: (c.frames ?? []).slice(0, 2),
+          speechSegments,
+          transcript: fullTranscript,
+          silenceWindows,
+        });
+      }
 
       let plan: EditPlan | null = null;
       let score: number | null = null;
       let feedback: string | null = null;
 
       if (prompt.trim()) {
-        setProcessingStep("AI is analysing your clips...");
+        setProcessingStep("AI is analyzing dialogues, cuts & narrative flow...");
         try {
           const res = await fetch("/api/edit-footage", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: prompt.trim(), clips: clipInfosWithFrames }),
+            body: JSON.stringify({ prompt: prompt.trim(), clips: clipInfosWithDialogue }),
           });
           const data = await res.json();
           if (data.success && data.plan) {

@@ -114,6 +114,9 @@ interface ClipInfo {
   name: string;
   duration: number;
   frames?: string[]; // base64 JPEG data URLs for Gemini Vision
+  transcript?: string;
+  speechSegments?: Array<{ text: string; startTime: number; endTime: number }>;
+  silenceWindows?: Array<{ startTime: number; endTime: number; duration?: number }>;
 }
 
 interface EditPlan {
@@ -204,8 +207,31 @@ Below are sample frames from each clip so you can identify who is in them and wh
 ` });
 
       for (const clip of clips) {
+        userParts.push({ text: `\n=== Clip ${clip.index}: "${clip.name}" (${clip.duration.toFixed(1)}s) ===` });
+
+        // Include timestamped dialogue if available
+        if (clip.speechSegments && clip.speechSegments.length > 0) {
+          const dialogueText = clip.speechSegments
+            .map((seg) => `  [${seg.startTime.toFixed(1)}s - ${seg.endTime.toFixed(1)}s]: "${seg.text}"`)
+            .join("\n");
+          userParts.push({
+            text: `TIMED SPOKEN DIALOGUE (Inspect carefully! Identify recording cues, mistakes, false starts, and real core answers):\n${dialogueText}\n`,
+          });
+        } else if (clip.transcript) {
+          userParts.push({ text: `DIALOGUE TRANSCRIPT:\n"${clip.transcript}"\n` });
+        } else {
+          userParts.push({ text: `AUDIO: No audible dialogue detected (ambient sound, b-roll, music, or silence).\n` });
+        }
+
+        if (clip.silenceWindows && clip.silenceWindows.length > 0) {
+          const silenceText = clip.silenceWindows
+            .map((sw) => `  [${sw.startTime.toFixed(1)}s - ${sw.endTime.toFixed(1)}s] (${(sw.duration ?? sw.endTime - sw.startTime).toFixed(1)}s silence)`)
+            .join("\n");
+          userParts.push({ text: `DETECTED SILENCE GAPS (Trim these out):\n${silenceText}\n` });
+        }
+
         if (clip.frames && clip.frames.length > 0) {
-          userParts.push({ text: `\n--- Clip ${clip.index}: "${clip.name}" (${clip.duration.toFixed(1)}s) ---` });
+          userParts.push({ text: `Visual keyframes for Clip ${clip.index}:` });
           for (const frame of clip.frames) {
             const base64 = frame.replace(/^data:image\/\w+;base64,/, "");
             if (base64) {
