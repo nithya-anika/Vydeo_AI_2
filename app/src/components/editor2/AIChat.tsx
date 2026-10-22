@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useEditorStore } from "@/store/editorStore";
 
 interface Message {
@@ -82,13 +83,13 @@ async function processCommand(text: string, store: ReturnType<typeof useEditorSt
     if (!res.ok) throw new Error(data.message ?? "Generation failed");
     if (data.lineup?.timeline?.scenes) {
       const newScenes = data.lineup.timeline.scenes.map((s: Record<string, unknown>, i: number) => ({
-        id: (s.id as string) ?? crypto.randomUUID(),
+        id: (s.id as string) ?? uuidv4(),
         order: i,
         label: (s.label as string) ?? `Scene ${i + 1}`,
         description: (s.description as string) ?? "",
         duration: (s.duration as number) ?? 4,
         clipId: null, clipSrc: null, clipType: null,
-        captions: [], transition: { type: "fade", duration: 0.5 },
+        captions: [], transition: { type: "zoom-in", duration: 0.5 },
         mood: (s.mood as string) ?? "luxury",
         colorGrade: null, effects: [], colorAdjustments: { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 },
       }));
@@ -122,16 +123,16 @@ export default function AIChat() {
 
   const send = useCallback(async (text: string) => {
     if (!text.trim() || loading) return;
-    const userMsg: Message = { id: crypto.randomUUID(), role: "user", text: text.trim(), ts: Date.now() };
+    const userMsg: Message = { id: uuidv4(), role: "user", text: text.trim(), ts: Date.now() };
     setMessages(m => [...m, userMsg]);
     setInput("");
     setLoading(true);
     try {
       const reply = await processCommand(text.trim(), store());
-      setMessages(m => [...m, { id: crypto.randomUUID(), role: "assistant", text: reply, ts: Date.now() }]);
+      setMessages(m => [...m, { id: uuidv4(), role: "assistant", text: reply, ts: Date.now() }]);
     } catch (e) {
       setMessages(m => [...m, {
-        id: crypto.randomUUID(), role: "assistant",
+        id: uuidv4(), role: "assistant",
         text: e instanceof Error ? e.message : "Something went wrong.",
         ts: Date.now(), isError: true,
       }]);

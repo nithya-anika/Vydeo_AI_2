@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { v4 as uuidv4 } from "uuid";
 
 interface Asset {
   id: string;
@@ -74,7 +75,7 @@ export default function AssetsPage() {
         type = "image";
       }
       setAssets(prev => [...prev, {
-        id: crypto.randomUUID(), name: file.name,
+        id: uuidv4(), name: file.name,
         type, src: URL.createObjectURL(file),
         size: file.size, added: Date.now(),
       }]);

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import { Upload, Volume2, VolumeX, Trash2, Play, Pause, Plus } from 'lucide-react'
 import { useEditorStore } from '@/store/editorStore'
 import { Slider, IconButton } from '@/components/ui'
@@ -47,7 +48,7 @@ export function MusicPanel() {
     const audio = document.createElement('audio')
     audio.preload = 'metadata'
     audio.onloadedmetadata = () => addAudioTrack({
-      id: crypto.randomUUID(), name: file.name.replace(/\.[^.]+$/, ''), src, file,
+      id: uuidv4(), name: file.name.replace(/\.[^.]+$/, ''), src, file,
       duration: audio.duration, volume: 0.8, fadeIn: 0.5, fadeOut: 0.5, startTime: 0, muted: false, type: 'bgm',
     })
     audio.src = src
@@ -59,7 +60,7 @@ export function MusicPanel() {
     const trackSrc = t.src || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
     const trackDur = t.duration || 120
     addAudioTrack({
-      id: crypto.randomUUID(), name: t.name, src: trackSrc, file: null as unknown as File,
+      id: uuidv4(), name: t.name, src: trackSrc, file: null as unknown as File,
       duration: trackDur, volume: 0.8, fadeIn: 0.5, fadeOut: 1.0, startTime: 0, muted: false, type: 'bgm',
     })
     setPreviewing(null)

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import { Sparkles, ArrowUp } from 'lucide-react'
 import { useEditorStore } from '@/store/editorStore'
 import { IconButton } from '@/components/ui'
@@ -21,16 +22,16 @@ export function AIPanel() {
 
   const send = useCallback(async (text: string) => {
     if (!text.trim() || loading) return
-    setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'user', text: text.trim() }])
+    setMessages((m) => [...m, { id: uuidv4(), role: 'user', text: text.trim() }])
     setInput('')
     setLoading(true)
     setIsGenerating(true)
     try {
       const reply = await processAICommand(text.trim(), useEditorStore.getState())
-      setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'assistant', text: reply }])
+      setMessages((m) => [...m, { id: uuidv4(), role: 'assistant', text: reply }])
     } catch (e) {
       setMessages((m) => [...m, {
-        id: crypto.randomUUID(), role: 'assistant', isError: true,
+        id: uuidv4(), role: 'assistant', isError: true,
         text: e instanceof Error ? e.message : 'Something went wrong — try rephrasing, or adjust it manually in the tools on the left.',
       }])
     } finally {

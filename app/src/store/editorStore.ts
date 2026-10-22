@@ -415,9 +415,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateBrandKit: (patch) => {
     const current = get().brandKit ?? {
       ...DEFAULT_BRAND_KIT,
-      id: typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : uuidv4(),
+      id: uuidv4(),
     };
     set({ brandKit: { ...current, ...patch }, isDirty: true });
   },

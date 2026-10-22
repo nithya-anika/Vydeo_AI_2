@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useRouter } from "next/navigation";
 import { useEditorStore } from "@/store/editorStore";
 import { Badge, useToast } from "@/components/ui";
@@ -137,14 +138,14 @@ export default function AIToolsPage() {
         if (!res.ok) throw new Error(data.error ?? data.message ?? "Generation failed");
         if (data.lineup?.timeline?.scenes?.length) {
           const scenes = data.lineup.timeline.scenes.map((s: Record<string, unknown>, i: number) => ({
-            id: (s.id as string) ?? crypto.randomUUID(),
+            id: (s.id as string) ?? uuidv4(),
             order: i,
             label: (s.label as string) ?? `Scene ${i + 1}`,
             description: (s.description as string) ?? "",
             duration: (s.duration as number) ?? 4,
             clipId: null, clipSrc: null, clipType: null,
             captions: [],
-            transition: { type: "fade" as const, duration: 0.5 },
+            transition: { type: "zoom-in" as const, duration: 0.5 },
             mood: (s.mood as string) ?? "calm",
             colorGrade: null, effects: [], colorAdjustments: { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 },
           }));

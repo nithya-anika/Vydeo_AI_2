@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { v4 as uuidv4 } from "uuid";
 import { useEditorStore } from "@/store/editorStore";
 import { Button, useToast, Icons } from "@/components/ui";
 
@@ -284,7 +285,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
               const uploadInitRes = await fetch("/api/upload-media", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ filename: `audio_${activeAudio.id || crypto.randomUUID()}.mp3`, contentType: "audio/mpeg" }),
+                body: JSON.stringify({ filename: `audio_${activeAudio.id || uuidv4()}.mp3`, contentType: "audio/mpeg" }),
               });
 
               if (uploadInitRes.ok) {

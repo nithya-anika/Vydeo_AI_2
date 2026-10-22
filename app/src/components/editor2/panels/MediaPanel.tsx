@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import { useRouter } from 'next/navigation'
 import { Film, Scissors, HardDrive } from 'lucide-react'
 import { useEditorStore } from '@/store/editorStore'
@@ -19,7 +20,7 @@ export function MediaPanel() {
     files.forEach((file) => {
       const src = URL.createObjectURL(file)
       const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|avi|webm|mkv)$/i.test(file.name)
-      const id = crypto.randomUUID()
+      const id = uuidv4()
       const doAssign = () => {
         const empty = useEditorStore.getState().scenes.find((s) => !s.clipId)
         if (empty) { setActiveScene(empty.id); assignClip(id, empty.id) }

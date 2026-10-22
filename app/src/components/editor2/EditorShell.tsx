@@ -38,6 +38,7 @@ import {
   Sliders,
   Scissors,
 } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 import {
   useEditorStore,
   type LeftTab,
@@ -378,7 +379,7 @@ function MusicStudio({
     const trackSrc = t.src || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
     const trackDur = t.duration || 120;
     addAudioTrack({
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       name: t.name,
       src: trackSrc,
       file: new File([], `${t.name}.mp3`, { type: "audio/mpeg" }),
@@ -774,7 +775,7 @@ function LeftPanelContent({ tab, onOpenInspector }: { tab: LeftTab; onOpenInspec
     files.forEach(file => {
       const src = URL.createObjectURL(file);
       const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|avi|webm|mkv)$/i.test(file.name);
-      const id = crypto.randomUUID();
+      const id = uuidv4();
 
       const doAssign = () => {
         const { scenes: ss } = useEditorStore.getState();
@@ -810,7 +811,7 @@ function LeftPanelContent({ tab, onOpenInspector }: { tab: LeftTab; onOpenInspec
     const file = e.target.files?.[0];
     if (!file) return;
     const src = URL.createObjectURL(file);
-    const trackId = crypto.randomUUID();
+    const trackId = uuidv4();
     let added = false;
     const addTrack = (duration: number) => {
       if (added) return;
@@ -2139,7 +2140,7 @@ async function transcribeSceneCaptions(scene: Scene): Promise<Caption[]> {
   if (!res.ok) throw new Error(data.error ?? `Could not transcribe ${scene.label}`);
   const rate = scene.playbackRate ?? 1;
   return (data.captions ?? []).map((caption) => ({
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     text: caption.text,
     startTime: Math.max(0, Number((caption.startTime / rate).toFixed(2))),
     endTime: Math.min(scene.duration, Math.max(0.2, Number((caption.endTime / rate).toFixed(2)))),
@@ -2398,7 +2399,7 @@ function AIChatPanel() {
       if (!text.trim() || loading) return;
       setMessages((m) => [
         ...m,
-        { id: crypto.randomUUID(), role: "user", text: text.trim(), ts: Date.now() },
+        { id: uuidv4(), role: "user", text: text.trim(), ts: Date.now() },
       ]);
       setInput("");
       setLoading(true);
@@ -2409,13 +2410,13 @@ function AIChatPanel() {
         );
         setMessages((m) => [
           ...m,
-          { id: crypto.randomUUID(), role: "assistant", text: reply, ts: Date.now() },
+          { id: uuidv4(), role: "assistant", text: reply, ts: Date.now() },
         ]);
       } catch (e) {
         setMessages((m) => [
           ...m,
           {
-            id: crypto.randomUUID(),
+            id: uuidv4(),
             role: "assistant",
             isError: true,
             text: e instanceof Error ? e.message : "Something went wrong.",
@@ -3571,7 +3572,7 @@ export default function EditorShell({
             for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
             videoSrc = URL.createObjectURL(new Blob([arr], { type: mime }));
           }
-          const clipId = crypto.randomUUID();
+          const clipId = uuidv4();
           const store = useEditorStore.getState();
           store.addClip({ id: clipId, name: scene.label, src: videoSrc, file: new File([], scene.label), type: "video", duration: scene.duration });
           store.assignClip(clipId, scene.id);
@@ -4379,7 +4380,7 @@ export default function EditorShell({
               const uploadInitRes = await fetch("/api/upload-media", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ filename: `audio_${activeAudio.id || crypto.randomUUID()}.mp3`, contentType: "audio/mpeg" }),
+                body: JSON.stringify({ filename: `audio_${activeAudio.id || uuidv4()}.mp3`, contentType: "audio/mpeg" }),
               });
 
               if (uploadInitRes.ok) {

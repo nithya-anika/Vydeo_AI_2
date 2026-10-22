@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@/components/ui";
 import { MUSIC_LIBRARY } from "@/types/music";
 
@@ -65,7 +66,7 @@ export default function MusicPage() {
       const src = URL.createObjectURL(file);
       const el = document.createElement("audio");
       el.preload = "metadata";
-      const id = crypto.randomUUID();
+      const id = uuidv4();
       el.onloadedmetadata = () => {
         setCustomTracks(prev => [...prev, {
           id, name: file.name.replace(/\.[^.]+$/, ""),

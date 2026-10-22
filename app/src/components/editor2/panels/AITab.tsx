@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useEditorStore } from "@/store/editorStore";
 
 const QUICK_ACTIONS = [
@@ -49,7 +50,7 @@ export default function AITab() {
           captions: (s.captions as unknown[])?.map((c: unknown) => {
             const cap = c as Record<string, unknown>;
             return {
-              id: (cap.id as string) ?? crypto.randomUUID(),
+              id: (cap.id as string) ?? uuidv4(),
               text: (cap.text as string) ?? "",
               startTime: (cap.startTime as number) ?? 0,
               endTime: (cap.endTime as number) ?? 3,
@@ -60,7 +61,7 @@ export default function AITab() {
               stroke: false, strokeColor: "#000000", shadow: true,
             };
           }) ?? [],
-          transition: (s.transition as Record<string, unknown>) ?? { type: "fade", duration: 0.5 },
+          transition: (s.transition as Record<string, unknown>) ?? { type: "zoom-in", duration: 0.5 },
           mood: (s.mood as string) ?? "luxury",
           colorGrade: null, effects: [], colorAdjustments: { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 },
         }));
