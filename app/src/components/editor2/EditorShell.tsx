@@ -3273,6 +3273,7 @@ export default function EditorShell({
   // Export
   const [exporting, setExporting] = useState(false);
   const [renderStatus, setRenderStatus] = useState("");
+  const [renderProgress, setRenderProgress] = useState(0);
 
   // Per-scene AI video generation progress
   const [genProgress, setGenProgress] = useState<Record<string, "generating" | "done" | "error">>({});
@@ -3934,7 +3935,36 @@ export default function EditorShell({
     }
   }
 
-  const buildRenderScene = async (scene: any) => {
+  function uploadBlobWithProgress(
+    url: string,
+    method: "PUT" | "POST",
+    headers: Record<string, string>,
+    body: Blob,
+    onProgress?: (percent: number, loaded: number, total: number) => void
+  ): Promise<{ ok: boolean; status: number; text: string }> {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(method, url);
+      for (const [k, v] of Object.entries(headers)) {
+        xhr.setRequestHeader(k, v);
+      }
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const pct = Math.round((event.loaded / event.total) * 100);
+          onProgress(pct, event.loaded, event.total);
+        }
+      };
+      xhr.onload = () => {
+        resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, text: xhr.responseText });
+      };
+      xhr.onerror = () => {
+        resolve({ ok: false, status: xhr.status || 0, text: "Network error" });
+      };
+      xhr.send(body);
+    });
+  }
+
+  const buildRenderScene = async (scene: any, onProgress?: (percent: number, loaded: number, total: number) => void) => {
   const clip = scene.clipId
     ? clips.find((item) => item.id === scene.clipId)
     : null;
@@ -4156,20 +4186,25 @@ export default function EditorShell({
         const initData = await uploadInitRes.json();
         const { url, gcsPath, token, isS3, publicUrl } = initData;
 
-        let uploadRes;
-        if (isS3) {
-          uploadRes = await fetch(url, {
-            method: "PUT",
-            headers: { "Content-Type": clipMime },
-            body: uploadBlob,
-          });
-        } else {
-          uploadRes = await fetch(url, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${token}`, "Content-Type": clipMime, "Content-Length": String(uploadBlob.size) },
-            body: uploadBlob,
-          });
-        }
+        let lastLoggedPct = -1;
+        const uploadRes = await uploadBlobWithProgress(
+          url,
+          isS3 ? "PUT" : "POST",
+          isS3 ? { "Content-Type": clipMime } : { "Authorization": `Bearer ${token}`, "Content-Type": clipMime, "Content-Length": String(uploadBlob.size) },
+          uploadBlob,
+          (pct, loaded, total) => {
+            const step = 5;
+            if (pct >= lastLoggedPct + step || pct === 100) {
+              lastLoggedPct = pct;
+              const loadedMB = (loaded / 1024 / 1024).toFixed(1);
+              const totalMB = (total / 1024 / 1024).toFixed(1);
+              console.log(`[Export] Uploading "${scene.label}": ${pct}% (${loadedMB} / ${totalMB} MB)`);
+            }
+            if (onProgress) {
+              onProgress(pct, loaded, total);
+            }
+          }
+        );
 
         if (uploadRes.ok) {
           if (isS3) {
@@ -4333,7 +4368,20 @@ export default function EditorShell({
       console.log("[Export] Starting export process. Compiling scenes...");
 
       const scenesToExport = isSingleScene ? scenes.filter(s => s.id === sceneIdToExport) : scenes;
-      const payloadScenes = await Promise.all(scenesToExport.map(buildRenderScene));
+      const payloadScenes = [];
+      const totalClips = scenesToExport.length;
+
+      for (let i = 0; i < totalClips; i++) {
+        const sc = scenesToExport[i];
+        setRenderStatus(`Uploading clip ${i + 1}/${totalClips} (0%)`);
+        setRenderProgress(0);
+        const built = await buildRenderScene(sc, (percent) => {
+          setRenderProgress(percent);
+          setRenderStatus(`Uploading clip ${i + 1}/${totalClips} (${percent}%)`);
+        });
+        payloadScenes.push(built);
+      }
+
       if (!payloadScenes.some((scene) => scene.clipData || scene.clipSrc)) {
         toast.error("No media found to export.");
         return;
@@ -4499,10 +4547,11 @@ export default function EditorShell({
             } else if (statusData.status === "failed") {
               throw new Error(statusData.error || "The render worker failed to compile the video.");
             } else {
-              console.log(`[Export] Polling status: ${statusData.status}. Progress: ${statusData.progress}%`);
+              const pct = typeof statusData.progress === "number" ? statusData.progress : 0;
+              setRenderProgress(pct);
+              console.log(`[Export] Polling status: ${statusData.status}. Progress: ${pct}%`);
               if (statusData.status === "rendering") {
-                const progressText = statusData.progress ? ` (${statusData.progress}%)` : "";
-                setRenderStatus(`Rendering video on background worker${progressText}...`);
+                setRenderStatus(`Rendering video: ${pct}%`);
               } else {
                 setRenderStatus(`In queue (waiting for worker)...`);
               }
@@ -4515,7 +4564,8 @@ export default function EditorShell({
         }
       }
 
-      setRenderStatus("Downloading video...");
+      setRenderStatus("Complete! Downloading video...");
+      setRenderProgress(100);
       console.log("[Export] Render complete! Initiating download...");
 
       if (!finalJob.downloadUrl) {
@@ -4535,6 +4585,7 @@ export default function EditorShell({
       toast.error(message || "Export failed. Please try again.");
     } finally {
       setExporting(false);
+      setRenderProgress(0);
       setRenderStatus("");
     }
   };
@@ -4843,22 +4894,39 @@ export default function EditorShell({
             <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 500 }}>⌘K</span>
           </button>
           <VDivider />
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => handleExport()}
-              isLoading={exporting}
-              leftIcon={<Download size={13} />}
-            >
-              Export
-            </Button>
-            {renderStatus && (
-              <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 600, position: "absolute", top: "calc(100% - 10px)", whiteSpace: "nowrap" }}>
-                {renderStatus}
+          {/* Live Export Status Badge */}
+          {exporting && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "4px 10px", borderRadius: "var(--r-md)",
+              background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.35)",
+            }}>
+              <Spinner size="xs" />
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "#C7D2FE", whiteSpace: "nowrap" }}>
+                  {renderStatus || "Processing..."}
+                </span>
+                <div style={{ width: 120, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%",
+                    width: `${Math.max(3, renderProgress)}%`,
+                    background: "linear-gradient(90deg, #6366F1, #10B981)",
+                    transition: "width 0.25s ease",
+                  }} />
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => handleExport()}
+            isLoading={exporting}
+            leftIcon={<Download size={13} />}
+          >
+            {exporting ? `${renderProgress}%` : "Export"}
+          </Button>
         </div>
       </header>
 
