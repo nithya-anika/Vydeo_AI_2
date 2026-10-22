@@ -72,7 +72,32 @@ export function findSystemFont(): string | null {
 }
 
 export function findFfmpeg(): string {
-  // 1. Check if @ffmpeg-installer binary exists (compiled with libfreetype & libass)
+  // 1. Prioritize modern system FFmpeg builds (Ubuntu EC2 / Debian / Homebrew) with xfade & libass
+  const candidates = [
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/opt/homebrew/bin/ffmpeg",
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // 2. Check if ffmpeg is in PATH
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { execSync } = require("child_process");
+    const whichPath = execSync("which ffmpeg", { encoding: "utf8" }).trim();
+    if (whichPath && existsSync(whichPath)) {
+      return whichPath;
+    }
+  } catch {
+    // Ignore
+  }
+
+  // 3. Fallback to bundled installer if no system ffmpeg is installed
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const installer = require("@ffmpeg-installer/ffmpeg");
@@ -81,19 +106,6 @@ export function findFfmpeg(): string {
     }
   } catch {
     // Fall back to system paths
-  }
-
-  const candidates = [
-    "/opt/homebrew/bin/ffmpeg",
-    "/usr/local/bin/ffmpeg",
-    "/usr/bin/ffmpeg",
-    "ffmpeg",
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
   }
 
   return "ffmpeg";

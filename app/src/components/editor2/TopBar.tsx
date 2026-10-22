@@ -271,7 +271,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
 
         if (audioData) {
           if (audioData.startsWith("data:")) {
-            console.log(`[Export] Local audio detected (${(audioData.length / 1024 / 1024).toFixed(2)} MB). Bypassing audio payload via direct upload...`);
+            console.log(`[Export] Local audio detected (${(audioData.length / 1024 / 1024).toFixed(2)} MB). Streaming audio directly to EC2 server...`);
             try {
               const b64Data = audioData.split(",")[1];
               const byteCharacters = atob(b64Data);
@@ -282,44 +282,21 @@ export default function TopBar({ projectId }: { projectId?: string }) {
               const byteArray = new Uint8Array(byteNumbers);
               const uploadBlob = new Blob([byteArray], { type: "audio/mpeg" });
 
-              const uploadInitRes = await fetch("/api/upload-media", {
+              const formData = new FormData();
+              formData.append("file", uploadBlob);
+              formData.append("ext", "mp3");
+
+              const uploadRes = await fetch("/api/upload-binary", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ filename: `audio_${activeAudio.id || uuidv4()}.mp3`, contentType: "audio/mpeg" }),
+                body: formData,
               });
 
-              if (uploadInitRes.ok) {
-                const initData = await uploadInitRes.json();
-                const { url, gcsPath, token, isS3, publicUrl } = initData;
-
-                let uploadRes;
-                if (isS3) {
-                  uploadRes = await fetch(url, {
-                    method: "PUT",
-                    headers: { "Content-Type": "audio/mpeg" },
-                    body: uploadBlob,
-                  });
-                } else {
-                  uploadRes = await fetch(url, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "audio/mpeg", "Content-Length": String(uploadBlob.size) },
-                    body: uploadBlob,
-                  });
-                }
-
-                if (uploadRes.ok) {
-                  if (isS3) {
-                    console.log(`[Export] Direct S3 (Storj) audio upload successful: ${publicUrl}`);
-                    audioData = publicUrl;
-                  } else {
-                    console.log(`[Export] Direct GCS audio upload successful: gs://${gcsPath}`);
-                    audioData = `gs://${gcsPath}`;
-                  }
-                } else {
-                  console.warn(`[Export] Direct audio upload failed with status ${uploadRes.status}`);
-                }
+              if (uploadRes.ok) {
+                const data = await uploadRes.json();
+                audioData = `local://${data.filepath}`;
+                console.log(`[Export] Stream audio to EC2 successful -> ${data.filepath}`);
               } else {
-                console.warn(`[Export] Direct audio upload init failed`);
+                console.warn(`[Export] Direct audio stream to EC2 returned ${uploadRes.status}, falling back to base64`);
               }
             } catch (err) {
               console.warn(`[Export] Direct audio upload failed, falling back to base64.`, err);
