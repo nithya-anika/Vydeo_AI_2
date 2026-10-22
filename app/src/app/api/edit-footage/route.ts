@@ -147,12 +147,61 @@ interface EditPlan {
   muteSourceAudio?: boolean;
 }
 
+function safeParseJson<T>(raw: string): T {
+  let clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  // 1. Standard parse
+  try {
+    return JSON.parse(clean) as T;
+  } catch {}
+
+  // 2. Extract outermost { ... }
+  const firstBrace = clean.indexOf("{");
+  const lastBrace = clean.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    clean = clean.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(clean) as T;
+    } catch {}
+  }
+
+  // 3. Fix trailing commas and unescaped newlines
+  let fixed = clean
+    .replace(/,\s*([\]}])/g, "$1")
+    .replace(/[\u0000-\u001F]+/g, (m) => (m === "\n" ? "\\n" : m === "\r" ? "\\r" : m === "\t" ? "\\t" : ""));
+
+  try {
+    return JSON.parse(fixed) as T;
+  } catch {}
+
+  // 4. Sanitize unescaped quotes inside reasoning
+  fixed = clean.replace(/"reasoning"\s*:\s*"([\s\S]*?)"\s*,\s*"sceneOrder"/, (_m, content) => {
+    const escaped = content.replace(/"/g, "'").replace(/\n/g, " ");
+    return `"reasoning": "${escaped}", "sceneOrder"`;
+  });
+
+  return JSON.parse(fixed) as T;
+}
+
 function defaultPlan(clips: ClipInfo[]): EditPlan {
   return {
-    reasoning: "Using default ordering due to AI unavailability.",
+    reasoning: "Smart audio-trimmed fallback plan.",
     sceneOrder: clips.map(c => c.index),
-    trimInstructions: clips.map(c => ({ clipIndex: c.index, trimStart: 0, trimEnd: null, note: "" })),
-    transitions: clips.slice(0, -1).map(c => ({ afterClipIndex: c.index, type: "fade", duration: 0.5 })),
+    trimInstructions: clips.map(c => {
+      let start = 0;
+      let end: number | null = null;
+      if (c.silenceWindows && c.silenceWindows.length > 0) {
+        if (c.silenceWindows[0].startTime <= 0.3) {
+          start = parseFloat(Math.min(c.duration - 0.5, c.silenceWindows[0].endTime).toFixed(3));
+        }
+        const lastSw = c.silenceWindows[c.silenceWindows.length - 1];
+        if (lastSw.endTime >= c.duration - 0.4 && lastSw.startTime > start) {
+          end = parseFloat(lastSw.startTime.toFixed(3));
+        }
+      }
+      return { clipIndex: c.index, trimStart: start, trimEnd: end, note: "trimmed" };
+    }),
+    transitions: clips.slice(0, -1).map(c => ({ afterClipIndex: c.index, type: "zoom-in", duration: 0.5 })),
     globalColorAdjustments: { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 },
     captions: [],
     targetDuration: null,
@@ -259,9 +308,8 @@ Below are sample frames from each clip so you can identify who is in them and wh
         const raw = (response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
           ?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 
-        // Strip markdown fences if present
-        const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
-        plan = JSON.parse(cleaned) as EditPlan;
+        // Parse response safely
+        plan = safeParseJson<EditPlan>(raw);
 
         // Ensure optional fields always exist before validating the AI response.
         if (plan.muteSourceAudio === undefined) {
@@ -271,19 +319,26 @@ Below are sample frames from each clip so you can identify who is in them and wh
         plan.trimInstructions = Array.isArray(plan.trimInstructions) ? plan.trimInstructions : [];
         plan.globalColorAdjustments = normalizeColorAdjustments(plan.globalColorAdjustments);
 
-        // Keep each valid clip exactly once, then append anything Gemini omitted.
+        // Validate sceneOrder
         const inputIndices = new Set(clips.map(c => c.index));
         const seen = new Set<number>();
         plan.sceneOrder = (Array.isArray(plan.sceneOrder) ? plan.sceneOrder : [])
           .filter(i => inputIndices.has(i) && !seen.has(i) && seen.add(i));
-        const outputIndices = new Set(plan.sceneOrder);
-        const missing = [...inputIndices].filter(i => !outputIndices.has(i));
-        if (missing.length) {
-          plan.sceneOrder = [...plan.sceneOrder, ...missing];
+
+        // Only append missing clips if user did NOT ask to remove retakes, mistakes, or repetitive scenes
+        const promptWantsRemoval = /remove|cut\s+out|delete|omit|exclude|retake|mistake|pause|silence|clean|repetitive|unnecessary|redundant/i.test(prompt);
+        if (!promptWantsRemoval && plan.sceneOrder.length < clips.length) {
+          const outputIndices = new Set(plan.sceneOrder);
+          const missing = [...inputIndices].filter(i => !outputIndices.has(i));
+          if (missing.length) {
+            plan.sceneOrder = [...plan.sceneOrder, ...missing];
+          }
+        } else if (plan.sceneOrder.length === 0) {
+          plan.sceneOrder = clips.map(c => c.index);
         }
 
         const fallbackTransition = requestedTransition
-          ?? normalizeTransitionType(plan.transitions[0]?.type, "cinematic-fade");
+          ?? normalizeTransitionType(plan.transitions[0]?.type, "zoom-in");
         const transitionByClip = new Map(
           plan.transitions.map(t => [
             t.afterClipIndex,
@@ -349,8 +404,12 @@ Return ONLY a JSON object:
         });
 
         const evalRaw = (evalResponse as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-        const evalCleaned = evalRaw.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
-        const evalData = JSON.parse(evalCleaned);
+        let evalData: any = {};
+        try {
+          evalData = safeParseJson<any>(evalRaw);
+        } catch {
+          evalData = { checkpoints: [] };
+        }
         
         const checkpoints = (evalData.checkpoints ?? []) as Array<{ point: string, passed: boolean }>;
         const totalCheckpoints = checkpoints.length;

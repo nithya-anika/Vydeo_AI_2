@@ -359,8 +359,23 @@ Rules:
 
     const text = (response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
       ?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-    const clean = text.replace(/^```json\s*/i, "").replace(/\s*```$/, "").trim();
-    const parsed = JSON.parse(clean) as { captions?: unknown };
+    const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+    let parsed: { captions?: unknown } = { captions: [] };
+    try {
+      parsed = JSON.parse(clean) as { captions?: unknown };
+    } catch {
+      try {
+        const fixed = clean.replace(/,\s*([\]}])/g, "$1").replace(/[\u0000-\u001F]+/g, " ");
+        parsed = JSON.parse(fixed) as { captions?: unknown };
+      } catch {
+        const match = clean.match(/\{[\s\S]*\}/);
+        if (match) {
+          try {
+            parsed = JSON.parse(match[0]) as { captions?: unknown };
+          } catch {}
+        }
+      }
+    }
 
     const segments = normalizeSpeechSegments(parsed.captions, duration);
     const hasSpeech = segments.length > 0;
