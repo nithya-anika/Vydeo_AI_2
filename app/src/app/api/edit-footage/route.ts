@@ -42,11 +42,17 @@ B. DIRECT EDITOR CONTROLS:
 D. AUDIO MUTING — when prompt says "remove audio", "mute clips", "no original sound":
    • Set "muteSourceAudio": true
 
-E. TRIM — when prompt says "cut pauses" or "remove repeats":
-   • Set trimStart > 0 to skip silence at the beginning of the clip
+E. EDITORIAL TRIMMING & CONTENT PURIFICATION:
+   • SILENCE & DEAD PAUSES: Detect silence, awkward pauses, and dead air before action or dialogue starts. Set trimStart to the exact moment meaningful dialogue or action begins. Set trimEnd to trim off trailing dead air or post-action pauses.
+   • RECORDING CUES: Automatically detect and cut out setup cues, slate claps, countdowns, and director speech (e.g., "start", "action", "rolling", "cut", "let's do that again", or reaching to start/stop the camera).
+   • RETAKES, MISTAKES & FALSE STARTS: When a speaker stumbles, makes a mistake, or restarts a line, identify the failed take and retain ONLY the cleanest, final successful take.
+   • REPETITIVE & UNNECESSARY SCENES: If two clips depict the same redundant action or failed attempts, omit the redundant clip index from sceneOrder entirely, keeping only the essential narrative beats.
+   • PRESERVE ESSENTIAL CONTENT: Protect core dialogue, natural conversational cadence, key visual demonstrations, and punchlines. Never cut mid-word or mid-sentence.
+   • BOUNDARIES: Set explicit numeric trimStart and trimEnd in seconds in trimInstructions for each clip to deliver clean audio-visual continuity.
 
 STEP 3 — VALIDATE (before outputting):
-□ sceneOrder contains every clip index exactly once
+□ sceneOrder contains only the essential clips (omits completely redundant or discarded takes)
+□ trimInstructions provides clean trimStart and trimEnd boundaries in seconds
 □ transitions use "cut" and globalColorAdjustments contains zeros
 □ do not choose LUT/color presets; the browser applies requested presets directly
 □ muteSourceAudio is set correctly

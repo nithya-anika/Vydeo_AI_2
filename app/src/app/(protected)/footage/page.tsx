@@ -17,6 +17,7 @@ import { buildScenesFromPlan, type UploadedClip, type EditPlan } from "@/lib/foo
 // ── Prompt suggestions ────────────────────────────────────────────────────────
 
 const PROMPT_EXAMPLES = [
+  "Remove silent parts, retakes, and recording cues, keeping only essential dialogue and actions",
   "Cut to the best moments and add smooth transitions",
   "Create a cinematic highlight reel with slow motion",
   "Arrange clips chronologically with text overlays",
