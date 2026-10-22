@@ -5,6 +5,7 @@ import {
   inferRequestedColorAdjustments,
   inferRequestedColorGrade,
   inferRequestedTransition,
+  inferRequestedSpeed,
   type FootageTransitionType,
 } from "./footagePromptControls";
 
@@ -179,6 +180,7 @@ export function buildScenesFromPlan(
   const requestedColor = inferRequestedColorAdjustments(prompt);
   const requestedColorGrade = inferRequestedColorGrade(prompt);
   const requestedTransition = inferRequestedTransition(prompt);
+  const requestedSpeed = inferRequestedSpeed(prompt);
   const colorAdj = { ...DEFAULT_ADJ, ...(plan?.globalColorAdjustments ?? {}), ...(requestedColor ?? {}) };
   const muteSourceAudio = plan?.muteSourceAudio ?? false;
 
@@ -232,13 +234,11 @@ export function buildScenesFromPlan(
 
     const sourceDuration = Math.max(0.5, clip.duration);
 
-    // Validate trimStart within [0, sourceDuration - 0.1]
     let start = typeof trim?.trimStart === "number" && !isNaN(trim.trimStart)
       ? trim.trimStart
       : 0;
     start = Math.max(0, Math.min(sourceDuration - 0.1, start));
 
-    // Validate trimEnd within [start + 0.1, sourceDuration]
     let end = typeof trim?.trimEnd === "number" && !isNaN(trim.trimEnd) && trim.trimEnd !== null
       ? trim.trimEnd
       : sourceDuration;
@@ -255,7 +255,7 @@ export function buildScenesFromPlan(
     });
   }
 
-  // Apply editorial duration budgeting if a target duration is specified
+  // Apply editorial duration budgeting only if a positive target duration is explicitly requested
   const naturalDurations = drafts.map((d) => d.naturalDuration);
   const budgetedDurations = targetDuration > 0
     ? budgetEditorialDurations(naturalDurations, targetDuration)
@@ -273,15 +273,19 @@ export function buildScenesFromPlan(
     }
   }
 
+  const speed = requestedSpeed ?? 1;
+
   return finalDraftsWithDurations.map(({ draft, budgetedDuration }, i) => {
     const { clip, origIdx, trimStart, naturalTrimEnd } = draft;
 
-    // Guaranteed trim boundaries: 0 <= trimStart < trimEnd <= clip.duration
     const finalTrimStart = parseFloat(trimStart.toFixed(3));
-    const finalTrimEnd = parseFloat(
-      Math.min(clip.duration, Math.max(finalTrimStart + 0.1, finalTrimStart + budgetedDuration)).toFixed(3)
-    );
-    const sceneDuration = parseFloat(Math.max(0.5, finalTrimEnd - finalTrimStart).toFixed(3));
+    // If targetDuration <= 0, preserve the complete natural dialogue without artificial truncation!
+    const finalTrimEnd = targetDuration > 0
+      ? parseFloat(Math.min(clip.duration, Math.max(finalTrimStart + 0.1, finalTrimStart + budgetedDuration)).toFixed(3))
+      : parseFloat(naturalTrimEnd.toFixed(3));
+
+    const rawSceneDur = Math.max(0.5, finalTrimEnd - finalTrimStart);
+    const sceneDuration = parseFloat((rawSceneDur / speed).toFixed(3));
 
     // Determine transition: unless a transition is explicitly requested by the user, prefer zoom-in!
     let transitionType: StoreTransitionType = i < finalDraftsWithDurations.length - 1
@@ -304,7 +308,7 @@ export function buildScenesFromPlan(
       label: clip.name,
       description: clip.name,
       duration: sceneDuration,
-      playbackRate: 1,
+      playbackRate: speed,
       clipId: clip.id,
       clipSrc: clip.src,
       clipType: "video" as const,

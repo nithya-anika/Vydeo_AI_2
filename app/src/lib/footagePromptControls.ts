@@ -138,6 +138,52 @@ export function inferRequestedColorGrade(prompt: string): FootageColorGrade | nu
   return null;
 }
 
+export function inferRequestedSpeed(prompt: string): number | null {
+  const normalized = prompt.toLowerCase();
+
+  // Multiplier pattern (e.g. "1.5x", "2x", "0.5x speed", "2.5x")
+  const multMatch = normalized.match(/\b(\d+(?:\.\d+)?)\s*x\b/);
+  if (multMatch) {
+    const val = parseFloat(multMatch[1]);
+    if (!isNaN(val) && val >= 0.25 && val <= 4.0) {
+      return val;
+    }
+  }
+
+  // Explicit slow motion keywords
+  if (
+    normalized.includes("slow motion") ||
+    normalized.includes("slow-motion") ||
+    normalized.includes("slowmo") ||
+    normalized.includes("slow-mo") ||
+    normalized.includes("half speed")
+  ) {
+    return 0.5;
+  }
+
+  // Explicit fast motion / double speed
+  if (
+    normalized.includes("fast motion") ||
+    normalized.includes("fast-motion") ||
+    normalized.includes("double speed")
+  ) {
+    return 2.0;
+  }
+
+  // Fast paced / speed up
+  if (
+    normalized.includes("fast paced") ||
+    normalized.includes("fast-paced") ||
+    normalized.includes("speed up") ||
+    normalized.includes("quick cuts") ||
+    normalized.includes("fast cuts")
+  ) {
+    return 1.35;
+  }
+
+  return null;
+}
+
 export function stripDirectEditorControls(prompt: string): string {
   const transitionNames = "cross[ -]?zoom|crosszoom|zoom[ -]?in|zoomin|zoom[ -]?out|zoomout|light[ -]?leak|lightleak|cinematic[ -]?fade|wipe[ -]?(?:left|right)|wipe(?:left|right)|slide[ -]?(?:left|right)|slide(?:left|right)|whip(?:[ -]?pan)?|whippan|glitch|blur|flash|dissolve|fade|hard[ -]?cut|jump[ -]?cut";
   const transitionWord = "trans(?:i|a)?tions?|trsations?|trsition|transation|transactions?";

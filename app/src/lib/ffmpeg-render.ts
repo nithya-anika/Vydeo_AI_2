@@ -967,6 +967,7 @@ export async function renderWithFfmpeg(
 
       const speed =
         scene.playbackSpeed ??
+        (scene as any).playbackRate ??
         1;
 
       const transition =

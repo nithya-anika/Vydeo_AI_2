@@ -3,7 +3,11 @@ import {
   inferRequestedColorAdjustments,
   inferRequestedTransition,
 } from "@/app/api/edit-footage/route";
-import { inferRequestedColorGrade, stripDirectEditorControls } from "@/lib/footagePromptControls";
+import {
+  inferRequestedColorGrade,
+  inferRequestedSpeed,
+  stripDirectEditorControls,
+} from "@/lib/footagePromptControls";
 
 describe("footage prompt controls", () => {
   it("keeps an explicitly requested transition type", () => {
@@ -76,6 +80,16 @@ describe("footage prompt controls", () => {
       saturation: 20,
       contrast: 20,
     });
+  });
+
+  it("infers requested speed from prompt keywords and multipliers", () => {
+    expect(inferRequestedSpeed("create a slow motion highlight reel")).toBe(0.5);
+    expect(inferRequestedSpeed("make it slow-mo")).toBe(0.5);
+    expect(inferRequestedSpeed("double speed for all scenes")).toBe(2.0);
+    expect(inferRequestedSpeed("speed up 1.5x")).toBe(1.5);
+    expect(inferRequestedSpeed("fast paced montage with quick cuts")).toBe(1.35);
+    expect(inferRequestedSpeed("0.75x speed")).toBe(0.75);
+    expect(inferRequestedSpeed("regular footage without speed changes")).toBeNull();
   });
 
   it("keeps direct controls out of the Gemini creative prompt", () => {

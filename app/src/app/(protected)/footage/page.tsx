@@ -565,7 +565,7 @@ export default function FootagePage() {
 
       // Step 2: Build scenes applying the AI plan
       setProcessingStep("Building your timeline...");
-      const effectiveDuration = targetDuration === -1 ? totalFootageDuration : targetDuration;
+      const effectiveDuration = targetDuration === -1 ? -1 : targetDuration;
       const clipScenes = buildScenesFromPlan(clips, plan, effectiveDuration, prompt.trim());
 
       setProcessingStep("Loading into editor...");
