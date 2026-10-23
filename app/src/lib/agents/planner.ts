@@ -19,6 +19,7 @@ import { listWorkflows, getDefaultWorkflow } from "@/lib/workflows/registry";
 import type { ExecutionPlan, WorkflowCluster, EditMode } from "@/lib/tools/types";
 import type { ToolName } from "@/lib/tools";
 import { getModel } from "@/lib/ai-router";
+import { safeParseJson } from "@/lib/json-repair";
 
 export interface PlannerInput {
   prompt: string;
@@ -107,7 +108,7 @@ tools[].toolName must be valid tool names from the registry above.`;
 
     const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
       .candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-    const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as PlannerOutput;
+    const parsed = safeParseJson<PlannerOutput>(raw);
 
     // Ensure tools is always a valid array regardless of model output
     if (!Array.isArray(parsed.tools) || parsed.tools.length === 0) {

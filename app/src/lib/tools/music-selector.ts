@@ -17,6 +17,7 @@
 import { geminiRequest } from "@/lib/gemini";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { getModel } from "@/lib/ai-router";
+import { safeParseJson } from "@/lib/json-repair";
 
 const MODEL = getModel("chat");
 
@@ -127,7 +128,7 @@ Return ONLY JSON:
 
       const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
         .candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-      const result = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as MusicSelectorOutput;
+      const result = safeParseJson<MusicSelectorOutput>(raw);
 
       return { success: true, data: result, durationMs: Date.now() - start, modelUsed: MODEL };
     } catch (e) {

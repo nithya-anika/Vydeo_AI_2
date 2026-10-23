@@ -18,6 +18,7 @@ import { geminiRequest } from "@/lib/gemini";
 import type { Timeline } from "@/types/timeline";
 import type { Tool, ToolContext, ToolResult } from "./types";
 import { getModel } from "@/lib/ai-router";
+import { safeParseJson } from "@/lib/json-repair";
 
 const MODEL = getModel("chat");
 
@@ -136,7 +137,7 @@ Return ONLY JSON:
 
       const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
         .candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-      const result = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as CaptionGeneratorOutput;
+      const result = safeParseJson<CaptionGeneratorOutput>(raw);
 
       // Enforce max char limit
       for (const scene of result.scenes ?? []) {

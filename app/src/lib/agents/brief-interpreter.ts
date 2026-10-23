@@ -11,6 +11,7 @@
 
 import { geminiRequest } from "@/lib/gemini";
 import { getModel } from "@/lib/ai-router";
+import { safeParseJson } from "@/lib/json-repair";
 
 export interface StructuredBrief {
   // What the user fundamentally wants this video to achieve
@@ -119,7 +120,7 @@ If the brief doesn't specify something, infer it from the overall context.`;
 
     const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
       .candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-    const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as StructuredBrief;
+    const parsed = safeParseJson<StructuredBrief>(raw);
 
     console.log(`[brief-interpreter] "${parsed.coreIntent}" | pacing: ${parsed.pacingIntent} | ${parsed.sceneOrder?.length ?? 0} ordered scenes | ${Date.now() - start}ms`);
     return parsed;

@@ -18,6 +18,7 @@ import type { BrandWorkspace } from "@/types/brand";
 import type { WorkflowDefinition, EvaluationCriterion } from "@/lib/workflows/types";
 import type { TimestampViolation } from "@/lib/pipeline-guards";
 import { getModel } from "@/lib/ai-router";
+import { safeParseJson } from "@/lib/json-repair";
 
 export interface EvaluationInput {
   timeline: Timeline;
@@ -177,7 +178,8 @@ Note: Do NOT include overallScore or passedQA in the JSON. They are computed pro
 
     const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
       .candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-    const parsed = JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim()) as Omit<EvaluationOutput, "overallScore" | "passedQA" | "evalModel" | "platformScores"> & { platformScores?: PlatformScore[], promptCheckpoints?: PromptCheckpoint[] };
+    type ParsedOutput = Omit<EvaluationOutput, "overallScore" | "passedQA" | "evalModel" | "platformScores"> & { platformScores?: PlatformScore[], promptCheckpoints?: PromptCheckpoint[] };
+    const parsed = safeParseJson<ParsedOutput>(raw);
 
     const promptCheckpoints = parsed.promptCheckpoints ?? [];
     const violations = input.timestampViolations ?? [];
