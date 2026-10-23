@@ -77,10 +77,8 @@ STEP 3 — VALIDATE (before outputting):
   },
   "muteSourceAudio": false,
   "trimInstructions": [
-    {"clipIndex": 0, "trimStart": 0, "trimEnd": null},
-    {"clipIndex": 1, "trimStart": 0, "trimEnd": null},
-    {"clipIndex": 2, "trimStart": 0, "trimEnd": null},
-    {"clipIndex": 3, "trimStart": 0, "trimEnd": null}
+    {"clipIndex": 0, "trimStart": 2.1, "trimEnd": 15.5},
+    {"clipIndex": 1, "trimStart": 0.5, "trimEnd": 8.0}
   ],
   "targetDuration": null
 }
