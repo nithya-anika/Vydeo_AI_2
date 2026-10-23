@@ -78,20 +78,55 @@ export default function BrandKitPage() {
   const [saved, setSaved] = useState(false);
   const logoRef = useRef<HTMLInputElement>(null);
 
-  // Load from localStorage on mount
+  // Load from backend on mount (falling back to localStorage if offline)
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(LS_KEY_KITS);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Kit[];
-        if (parsed.length > 0) {
-          setKits(parsed);
-          const storedActive = localStorage.getItem(LS_KEY_ACTIVE);
-          const validActive = storedActive && parsed.find(k => k.id === storedActive);
-          setActiveId(validActive ? storedActive! : parsed[0].id);
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/brand-kits");
+        if (res.ok) {
+          const { kits: backendKits } = await res.json();
+          if (!cancelled && backendKits && backendKits.length > 0) {
+            const mapped: Kit[] = backendKits.map((bk: any) => ({
+              id: bk.id,
+              name: bk.name,
+              logo: bk.logo,
+              primary: bk.primary_color,
+              secondary: bk.secondary_color,
+              accent: bk.accent_color,
+              fontHeading: bk.font_heading,
+              fontBody: bk.font_body,
+              captionPreset: bk.caption_preset
+            }));
+            setKits(mapped);
+            const storedActive = localStorage.getItem(LS_KEY_ACTIVE);
+            const validActive = storedActive && mapped.find(k => k.id === storedActive);
+            setActiveId(validActive ? storedActive! : mapped[0].id);
+            return;
+          }
         }
+      } catch (err) {
+        console.warn("Failed to load brand kits from backend:", err);
       }
-    } catch { /* ignore */ }
+      
+      if (cancelled) return;
+
+      // Fallback to local storage
+      try {
+        const stored = localStorage.getItem(LS_KEY_KITS);
+        if (stored) {
+          const parsed = JSON.parse(stored) as Kit[];
+          if (parsed.length > 0) {
+            setKits(parsed);
+            const storedActive = localStorage.getItem(LS_KEY_ACTIVE);
+            const validActive = storedActive && parsed.find(k => k.id === storedActive);
+            setActiveId(validActive ? storedActive! : parsed[0].id);
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const kit = kits.find(k => k.id === activeId) ?? kits[0];
@@ -111,12 +146,28 @@ export default function BrandKitPage() {
     setSaved(false);
   };
 
-  const handleSave = () => {
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
     setSaved(false);
-    // Persist kits to localStorage. Strip only blob: URLs (they don't survive a
-    // refresh); data: URL logos are serializable and ARE kept.
+    
+    const toStore = kits.map(k => ({ ...k, logo: k.logo?.startsWith("blob:") ? null : k.logo }));
+    
+    // Save to backend
     try {
-      const toStore = kits.map(k => ({ ...k, logo: k.logo?.startsWith("blob:") ? null : k.logo }));
+      await fetch("/api/brand-kits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveAll", kits: toStore, activeId }),
+      });
+    } catch (err) {
+      console.warn("Failed to persist brand kit to backend:", err);
+    }
+
+    // Persist kits to localStorage as a fast-cache fallback
+    try {
       localStorage.setItem(LS_KEY_KITS, JSON.stringify(toStore));
       localStorage.setItem(LS_KEY_ACTIVE, activeId);
     } catch { /* quota */ }
@@ -124,15 +175,14 @@ export default function BrandKitPage() {
     // Sync active kit to editor store, mapping the chosen caption preset into
     // the caption style payload so it actually reaches the editor.
     setBrandKit({
-      id: kit.id, name: kit.name, logo: kit.logo,
+      id: kit.id, name: kit.name, logo: kit.logo?.startsWith("blob:") ? null : kit.logo,
       primaryColor: kit.primary, secondaryColor: kit.secondary, accentColor: kit.accent,
       fontHeading: kit.fontHeading, fontBody: kit.fontBody,
       captionStyle: captionStyleForPreset(kit.captionPreset), watermark: null, intro: null, outro: null,
     });
 
-    // This is a local save (localStorage + in-memory editor store), not a
-    // server round-trip — message accordingly.
     setSaved(true);
+    setSaving(false);
     setTimeout(() => setSaved(false), 2500);
   };
 

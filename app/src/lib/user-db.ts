@@ -48,6 +48,57 @@ export interface DbDraft {
   created_at: string;
 }
 
+export interface DbBrandKit {
+  id: string;
+  user_id: string;
+  name: string;
+  logo: string | null;
+  primary_color: string;
+  secondary_color: string;
+  accent_color: string;
+  font_heading: string;
+  font_body: string;
+  caption_preset: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Brand Kit queries ────────────────────────────────────────────────────────
+
+export const brandKitQueries = {
+  list: async (userId: string): Promise<DbBrandKit[]> => {
+    const db = await getDb();
+    const docs = await db.collection("brand_kits")
+      .find({ user_id: userId }, { projection: { _id: 0 } })
+      .sort({ created_at: 1 })
+      .toArray();
+    return docs as unknown as DbBrandKit[];
+  },
+
+  upsert: async (kit: Omit<DbBrandKit, "created_at" | "updated_at">): Promise<void> => {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.collection("brand_kits").updateOne(
+      { id: kit.id, user_id: kit.user_id },
+      {
+        $set: {
+          ...kit,
+          updated_at: now,
+        },
+        $setOnInsert: {
+          created_at: now,
+        }
+      },
+      { upsert: true }
+    );
+  },
+
+  delete: async (id: string, userId: string): Promise<void> => {
+    const db = await getDb();
+    await db.collection("brand_kits").deleteOne({ id, user_id: userId });
+  }
+};
+
 // ── User queries ──────────────────────────────────────────────────────────────
 
 export const userQueries = {
