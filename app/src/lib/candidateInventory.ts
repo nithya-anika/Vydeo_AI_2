@@ -213,6 +213,10 @@ export function resolveSelectedCandidatesToScenes(params: {
   const usedCandidateIds = new Set<string>();
 
   selections.forEach((sel, orderIndex) => {
+    if (!sel || !sel.candidateId) {
+      throw new Error(`Missing candidateId at scene order ${orderIndex + 1}.`);
+    }
+
     let candidate = inventory.candidateLookup.get(sel.candidateId);
 
     // Fallback: if candidateId was slightly malformed, try matching by clipIndex
@@ -227,7 +231,9 @@ export function resolveSelectedCandidatesToScenes(params: {
       }
     }
 
-    if (!candidate) return;
+    if (!candidate) {
+      throw new Error(`Invalid or unknown candidate ID requested: "${sel.candidateId}". Pipeline cannot securely infer boundaries.`);
+    }
 
     usedCandidateIds.add(candidate.candidateId);
     const sourceClip = clips[candidate.clipIndex];

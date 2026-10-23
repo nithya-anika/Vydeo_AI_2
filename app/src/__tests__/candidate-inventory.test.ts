@@ -244,7 +244,7 @@ describe("Candidate-Based Editorial Planning Inventory", () => {
     expect(result.scenes[0].clipTrimEnd).toBe(5.5);
   });
 
-  it("safely handles invalid or hallucinated candidate IDs without crashing", () => {
+  it("fails securely when provided with invalid or hallucinated candidate IDs", () => {
     const inventory = buildCandidateSegmentInventory(mockClips, mockAnalysis);
 
     const selections: SelectedCandidateOrder[] = [
@@ -252,15 +252,11 @@ describe("Candidate-Based Editorial Planning Inventory", () => {
       { candidateId: "cand_c0_s0" },
     ];
 
-    const result = resolveSelectedCandidatesToScenes({
+    expect(() => resolveSelectedCandidatesToScenes({
       selections,
       inventory,
       clips: mockClips,
       brand: mockBrand,
-    });
-
-    // Only the valid candidate was resolved
-    expect(result.scenes).toHaveLength(1);
-    expect(result.scenes[0].clipTrimStart).toBe(0.5);
+    })).toThrowError(/Invalid or unknown candidate ID requested/);
   });
 });

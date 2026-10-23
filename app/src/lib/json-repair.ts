@@ -34,23 +34,7 @@ export function safeParseJson<T>(raw: string): T {
   let fixed = extracted.replace(/,\s*([\]}])/g, "$1");
   try { return JSON.parse(fixed) as T; } catch {}
 
-  // 4b. Fix missing brackets for truncated arrays (rudimentary truncation recovery)
-  // Example: [ { "a": 1 }, { "b": 2
-  if (extracted.startsWith("[")) {
-    const unclosedArrayMatch = fixed.match(/\[\s*\{.*\}\s*(,\s*\{[^}]*)?$/s);
-    if (unclosedArrayMatch) {
-       let attempt = fixed;
-       const openBraces = (attempt.match(/\{/g) || []).length;
-       const closeBraces = (attempt.match(/\}/g) || []).length;
-       for (let i = 0; i < openBraces - closeBraces; i++) attempt += "}";
-       attempt += "]";
-       // Clean trailing commas again just in case
-       attempt = attempt.replace(/,\s*([\]}])/g, "$1");
-       try { return JSON.parse(attempt) as T; } catch {}
-    }
-  }
-
-  // 4c. Fix unescaped quotes specifically within known text fields like "reasoning"
+  // 4b. Fix unescaped quotes specifically within known text fields like "reasoning"
   // e.g. "reasoning": "He said "action" loudly", "sceneOrder"
   fixed = fixed.replace(/"reasoning"\s*:\s*"([\s\S]*?)"\s*,\s*"/g, (_m, content, offset, fullString) => {
     // Escape internal quotes
@@ -64,5 +48,5 @@ export function safeParseJson<T>(raw: string): T {
   fixed = fixed.replace(/[\u0000-\u001F]+/g, (m) => (m === "\n" ? "\\n" : m === "\r" ? "\\r" : m === "\t" ? "\\t" : ""));
   try { return JSON.parse(fixed) as T; } catch {}
 
-  throw new Error("Failed to parse AI output into valid JSON safely");
+  throw new Error("Failed to parse AI output into valid JSON safely. The response may be truncated or unrecoverable.");
 }

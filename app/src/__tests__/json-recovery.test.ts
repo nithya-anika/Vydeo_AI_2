@@ -45,12 +45,8 @@ describe("safeParseJson", () => {
     expect(() => safeParseJson(invalid)).toThrow("Failed to parse AI output into valid JSON safely");
   });
 
-  it("recovers truncated array structures", () => {
+  it("fails safely when intended timeline is truncated and unrecoverable without dropping data", () => {
     const truncated = `[{"clipIndex":0,"trimStart":1.2,"trimEnd":4.5},{"clipIndex":1,"trimStart":1.2`;
-    const parsed = safeParseJson<any>(truncated);
-    expect(Array.isArray(parsed)).toBe(true);
-    expect(parsed[0].clipIndex).toBe(0);
-    expect(parsed[1].clipIndex).toBe(1);
-    expect(parsed[1].trimStart).toBe(1.2);
+    expect(() => safeParseJson<any>(truncated)).toThrow("Failed to parse AI output into valid JSON safely. The response may be truncated or unrecoverable.");
   });
 });
