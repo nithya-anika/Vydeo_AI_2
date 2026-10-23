@@ -119,7 +119,7 @@ function uploadBinaryWithProgress(
 }
 
 export default function TopBar({ projectId }: { projectId?: string }) {
-  const { projectName, isDirty, setProjectName, scenes, audioTracks, aspectRatio, clips } = useEditorStore();
+  const { projectName, isDirty, setProjectName, scenes, audioTracks, aspectRatio, clips, brandKit } = useEditorStore();
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(projectName);
   const [exporting, setExporting] = useState(false);
@@ -348,6 +348,12 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       const payload = {
         scenes: payloadScenes,
         audio: audioPayload,
+        brand: brandKit ? {
+          logoData: brandKit.logo || undefined,
+          logoOpacity: 0.85, // Default professional opacity
+          primaryColor: brandKit.primaryColor,
+          fontFamily: brandKit.fontHeading,
+        } : undefined,
         aspectRatio,
         totalDuration: scenes.reduce((s, sc) => s + sc.duration, 0),
         outputFilename: `${projectName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,

@@ -38,8 +38,18 @@ export function escapeFontPathForFfmpeg(filePath: string): string {
     .replace(/\]/g, "\\]");
 }
 
-export function findSystemFont(): string | null {
+export function findSystemFont(requestedFontFamily?: string): string | null {
   const fontCandidates = [
+    // 0. Explicit requested font lookup mapping
+    ...(requestedFontFamily?.toLowerCase().includes("playfair") ? [
+      path.join(process.cwd(), "public/fonts/PlayfairDisplay-Regular.ttf"),
+      "/usr/share/fonts/truetype/playfair/PlayfairDisplay-Regular.ttf",
+    ] : []),
+    ...(requestedFontFamily?.toLowerCase().includes("space") ? [
+      path.join(process.cwd(), "public/fonts/SpaceGrotesk-Regular.ttf"),
+      "/usr/share/fonts/truetype/space/SpaceGrotesk-Regular.ttf",
+    ] : []),
+
     // 1. Bundled production repository font (always present in app / container)
     path.join(process.cwd(), "public/fonts/Geist-Regular.ttf"),
     path.join(process.cwd(), "app/public/fonts/Geist-Regular.ttf"),
@@ -638,7 +648,7 @@ function captionToFilter(
       ? ":font='Inter:style=Bold'"
       : "";
 
-  const fontPath = findSystemFont();
+  const fontPath = findSystemFont(caption.fontFamily);
   const fontArg = fontPath ? `:fontfile='${escapeFontPathForFfmpeg(fontPath)}'` : "";
 
   return [
@@ -864,8 +874,8 @@ export async function renderWithFfmpeg(
   const {
     scenes,
     audio,
-    aspectRatio =
-      "9:16",
+    brand,
+    aspectRatio = "9:16",
     outputFilename,
   } = params;
 
@@ -935,6 +945,21 @@ export async function renderWithFfmpeg(
               .type
           ) !== ""
       );
+
+    /* ---------------------------------------------------------------------- */
+    /* Check brand assets                                                     */
+    /* ---------------------------------------------------------------------- */
+    let logoFile = "";
+    if (brand?.logoData) {
+      if (brand.logoData.startsWith("data:")) {
+        logoFile = await saveBase64(brand.logoData, "png", tmpDir);
+        tempFiles.push(logoFile);
+      } else if (brand.logoData.startsWith("http://") || brand.logoData.startsWith("https://")) {
+        logoFile = path.join(tmpDir, `logo-${uuidv4()}.png`);
+        await downloadFile(brand.logoData, logoFile);
+        tempFiles.push(logoFile);
+      }
+    }
 
     /* ---------------------------------------------------------------------- */
     /* Prepare clips                                                          */
@@ -1209,7 +1234,7 @@ export async function renderWithFfmpeg(
       const gradeFilter = scene.colorGrade ? effectToVfFilter(scene.colorGrade) : "";
       const effectFilter = [scene.visualEffect ? effectToVfFilter(scene.visualEffect) : "", gradeFilter, eqFilter].filter(Boolean).join(",");
 
-      const captionFilters = (scene.captions || []).map(c => captionToFilter(c, W, H)).filter(Boolean).join(",");
+      const captionFilters = (scene.captions || []).map(c => captionToFilter({ ...c, fontFamily: c.fontFamily || brand?.fontFamily, color: c.color || brand?.primaryColor }, W, H)).filter(Boolean).join(",");
 
       const vf = [
         scaleFilter,
@@ -1470,20 +1495,21 @@ export async function renderWithFfmpeg(
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Background audio                                                       */
+    /* Background audio & Brand Logo Watermark                                */
     /* ---------------------------------------------------------------------- */
 
     if (onProgress) onProgress(92);
 
     const hasOriginalAudio = params.scenes.some((s) => s.clipType === "video");
+    
+    // We will render to a pre-final file if a logo needs to be overlaid
+    const preFinal = logoFile ? path.join(tmpDir, `prefinal-${uuidv4()}.mp4`) : outPath;
+    if (logoFile) tempFiles.push(preFinal);
 
     if (audio?.src) {
       console.log(
         "[FFmpeg Audio]",
-        audio.src.slice(
-          0,
-          100
-        )
+        audio.src.slice(0, 100)
       );
 
       let audioFile = "";
@@ -1497,62 +1523,59 @@ export async function renderWithFfmpeg(
         await downloadFile(audio.src, audioFile);
         tempFiles.push(audioFile);
       } else {
-        audioFile = await saveBase64(
-          audio.src,
-          "m4a",
-          tmpDir
-        );
+        audioFile = await saveBase64(audio.src, "m4a", tmpDir);
         tempFiles.push(audioFile);
       }
 
-      const totalDur =
-        params.totalDuration ??
-        scaledFiles.reduce(
-          (sum, scene) => sum + scene.displayDuration, 0
-        );
-
+      const totalDur = params.totalDuration ?? scaledFiles.reduce((sum, scene) => sum + scene.displayDuration, 0);
       const volume = audio.volume ?? 0.7;
       const fadeIn = audio.fadeIn ?? 0.5;
       const fadeOut = audio.fadeOut ?? 1;
       const fadeOutStart = Math.max(0, totalDur - fadeOut);
 
       const mixFilter = hasOriginalAudio
-        ? `[0:a]volume=1.0[orig_a];` +
-          `[1:a]volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeOut}[bg_a];` +
-          `[orig_a][bg_a]amix=inputs=2:duration=first[a]`
+        ? `[0:a]volume=1.0[orig_a];[1:a]volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeOut}[bg_a];[orig_a][bg_a]amix=inputs=2:duration=first[a]`
         : `[1:a]volume=${volume},afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeOut}[a]`;
 
       await runFfmpeg([
-        "-i",
-        concatenated,
-        "-i",
-        audioFile,
-        "-filter_complex",
-        mixFilter,
-        "-map",
-        "0:v:0",
-        "-map",
-        "[a]",
-        "-c:v",
-        "copy",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
+        "-i", concatenated,
+        "-i", audioFile,
+        "-filter_complex", mixFilter,
+        "-map", "0:v:0",
+        "-map", "[a]",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-b:a", "192k",
         "-shortest",
         "-y",
-        outPath,
+        preFinal,
       ]);
     } else {
       await runFfmpeg([
-        "-i",
-        concatenated,
-        "-map",
-        "0:v:0",
+        "-i", concatenated,
+        "-map", "0:v:0",
         ...(hasOriginalAudio ? ["-map", "0:a:0"] : []),
-        "-c:v",
-        "copy",
+        "-c:v", "copy",
         ...(hasOriginalAudio ? ["-c:a", "copy"] : []),
+        "-y",
+        preFinal,
+      ]);
+    }
+    
+    // Apply Brand Logo Watermark if present
+    if (logoFile) {
+      console.log(`[FFmpeg] Applying brand logo watermark...`);
+      // Scale logo to 20% of video width, place in bottom right with 30px padding, apply opacity
+      const opacity = brand?.logoOpacity ?? 0.85;
+      const overlayFilter = `[1:v]scale=iw*0.2:-1,format=rgba,colorchannelmixer=aa=${opacity}[logo];[0:v][logo]overlay=W-w-30:H-h-30`;
+      
+      await runFfmpeg([
+        "-i", preFinal,
+        "-i", logoFile,
+        "-filter_complex", overlayFilter,
+        "-c:a", "copy",
+        "-c:v", "libx264",
+        "-preset", "ultrafast", // Use fast preset for the overlay pass
         "-y",
         outPath,
       ]);
