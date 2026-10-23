@@ -53,6 +53,7 @@ import { useRouter } from "next/navigation";
 import { Button, IconButton, useToast, Spinner } from "@/components/ui";
 import { AIAnalysisPanel } from "./right/AIAnalysisPanel";
 import { buildSceneVideoPrompt } from "@/lib/videoPrompt";
+import BrandTab from "./panels/BrandTab";
 import { inferRequestedColorAdjustments, inferRequestedColorGrade, inferRequestedTransition } from "@/lib/footagePromptControls";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1284,128 +1285,7 @@ function LeftPanelContent({ tab, onOpenInspector }: { tab: LeftTab; onOpenInspec
   if (tab === "brand")
     return (
       <div style={panelStyle}>
-        <div
-          style={{
-            padding: 12,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                color: "var(--text-tertiary)",
-                textTransform: "uppercase",
-                marginBottom: 6,
-              }}
-            >
-              Logo
-            </div>
-            <input ref={logoInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleLogoUpload} />
-            <div
-              onClick={() => logoInputRef.current?.click()}
-              style={{
-                height: 56,
-                borderRadius: "var(--r-md)",
-                border: "1.5px dashed var(--border-strong)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "var(--bg-hover)",
-                cursor: "pointer",
-                gap: 6,
-                overflow: "hidden",
-              }}
-            >
-              {brandKit?.logo ? (
-                <img src={brandKit.logo} style={{ maxHeight: "100%", maxWidth: "100%", objectFit: activeScene?.clipFit ?? "contain" }} alt="logo" />
-              ) : (
-                <>
-                  <Upload size={13} style={{ color: "var(--text-tertiary)" }} />
-                  <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Upload logo</span>
-                </>
-              )}
-            </div>
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                color: "var(--text-tertiary)",
-                textTransform: "uppercase",
-                marginBottom: 6,
-              }}
-            >
-              Brand Colors
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {["#6366F1", "#818CF8", "#F59E0B", "#10B981", "#EF4444", "#FFFFFF"].map((c) => (
-                <div
-                  key={c}
-                  title={`Apply ${c} to all captions`}
-                  onClick={() => {
-                    const store = useEditorStore.getState();
-                    store.scenes.forEach(s => s.captions.forEach(cap => store.updateCaption(s.id, cap.id, { color: c })));
-                  }}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "var(--r-sm)",
-                    background: c,
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                  }}
-                />
-              ))}
-            </div>
-            <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 4 }}>Click a color to apply to all captions</div>
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                color: "var(--text-tertiary)",
-                textTransform: "uppercase",
-                marginBottom: 6,
-              }}
-            >
-              Fonts
-            </div>
-            <select
-              onChange={(e) => {
-                const font = e.target.value;
-                const store = useEditorStore.getState();
-                store.scenes.forEach(s => s.captions.forEach(cap => store.updateCaption(s.id, cap.id, { fontFamily: font })));
-              }}
-              style={{
-                width: "100%",
-                padding: "6px 8px",
-                borderRadius: "var(--r-sm)",
-                background: "var(--bg-elevated)",
-                border: "1px solid var(--border)",
-                color: "var(--text-primary)",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
-            >
-              <option>Inter</option>
-              <option>Geist</option>
-              <option>Playfair Display</option>
-              <option>Bebas Neue</option>
-              <option>DM Sans</option>
-            </select>
-            <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 4 }}>Applies to all captions</div>
-          </div>
-        </div>
+        <BrandTab />
       </div>
     );
 
