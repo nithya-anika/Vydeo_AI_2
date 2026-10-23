@@ -92,9 +92,13 @@ Assign the best transition FROM each scene to the next based on the brief above.
 Valid transitionType values: "cut" | "fade" | "dissolve" | "cinematic-fade" | "wipe-left" | "wipe-right" | "slide-left" | "slide-right" | "zoom-in" | "zoom-out"
 Rules:
 - Last scene → no transition needed (set "cut")
-- If the brief mentions a specific transition type (e.g. "fade", "dissolve", "cut"), use that requested type for the scenes.
-- UNLESS a specific transition is explicitly requested in the user brief, ALWAYS prefer and assign "zoom-in" for transitions between scenes.
-- Keep transition durations tight: 0.3-0.5s for snappy pacing, never sluggish.
+- If the brief mentions a specific transition style (e.g. "fade", "dissolve", "hard cuts"), prioritize that.
+- A standard "cut" is often better than an unnecessary effect. Do NOT overuse zooms, wipes, or slides unless the motion and pacing justify it.
+- Match transitions to the genre:
+  - Fast-paced UGC / Ads → sharp "cut" or quick "zoom-in"
+  - Premium / Cinematic / Travel → smooth "cinematic-fade" or "dissolve"
+  - Talking head / Dialogue → "cut" (do not distract from speech)
+- Keep transition durations tight: 0.2s-0.3s for fast cuts, 0.4s-0.7s for cinematic fades.
 
 Return ONLY JSON:
 {

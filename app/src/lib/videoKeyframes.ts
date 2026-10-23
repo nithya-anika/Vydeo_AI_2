@@ -3,7 +3,6 @@
  * Combines FFmpeg visual scene-change detection with temporal coverage
  * to provide optimal multimodal video understanding without frame bloat.
  */
-import { spawn } from "child_process";
 
 export interface KeyframeTimestampPlan {
   clipDuration: number;
@@ -147,6 +146,14 @@ export async function detectVisualSceneChanges(
 ): Promise<number[]> {
   return new Promise((resolve) => {
     if (!filePath || duration <= 0) {
+      return resolve([]);
+    }
+
+    let spawn: any;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      spawn = require("child_process").spawn;
+    } catch {
       return resolve([]);
     }
 

@@ -269,7 +269,8 @@ EDITORIAL RULES & SELECTION:
    - Preserves complete spoken sentences without chopping words mid-phrase.
    - B-roll / silence candidates can be cut shorter or used as cutaways.
 4. TRANSITIONS & PACING:
-   - Unless a specific transition is requested in the user brief, prefer "zoom-in" transitions between scenes.
+   - Match pacing to the brief: fast-paced = sharp cuts; cinematic = smooth dissolves/fades; talking-head = clean cuts.
+   - Do NOT force every cut to a beat. Use transitions purposefully. Default to "cut" when in doubt.
 
 BRAND: ${input.brand.name} | Aspect ratio: ${ratio} | Color grade: ${input.overrides?.colorGrade ?? colorGradeDefault ?? input.brand.colorGrade.name}
 Captions: ${input.brand.captionStyle.position}, max ${input.brand.captionStyle.maxCharsPerLine} chars/line
@@ -289,7 +290,7 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
         "role": "hook",
         "label": "<brief description>",
         "captionText": "<punchy on-screen caption>",
-        "transitionType": "zoom-in",
+        "transitionType": "cut",
         "playbackSpeed": 1.0
       }
     ]

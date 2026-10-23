@@ -14,6 +14,7 @@ import { inferRequestedColorAdjustments, inferRequestedColorGrade, inferRequeste
 
 import { buildScenesFromPlan, type UploadedClip, type EditPlan } from "@/lib/footagePlan";
 import { extractAudioTrackAsWav } from "@/lib/audioExtractor";
+import { calculateSceneKeyframeTimestamps } from "@/lib/videoKeyframes";
 
 // ── Prompt suggestions ────────────────────────────────────────────────────────
 
@@ -98,8 +99,8 @@ async function getVideoMeta(
         });
       }
 
-      // Extract 4 keyframes: ~5%, 30%, 65%, 90% of duration
-      const timestamps = [0.05, 0.3, 0.65, 0.9].map(p => Math.min(dur - 0.1, dur * p));
+      // Extract adaptive, scene-aware keyframes based on duration
+      const { timestamps } = calculateSceneKeyframeTimestamps(dur, 8);
       const frames: string[] = [];
       for (const t of timestamps) {
         try { frames.push(await captureAt(t)); } catch { /* skip */ }
@@ -543,39 +544,52 @@ export default function FootagePage() {
           index: i,
           name: c.name,
           duration: c.duration,
-          frames: (c.frames ?? []).slice(0, 2),
+          frames: c.frames ?? [],
           speechSegments,
           transcript: fullTranscript,
           silenceWindows,
         });
       }
 
-      let plan: EditPlan | null = null;
+      let timelineData = null;
       let score: number | null = null;
       let feedback: string | null = null;
 
       if (prompt.trim()) {
         setProcessingStep("AI is analyzing dialogues, cuts & narrative flow...");
         try {
-          const res = await fetch("/api/edit-footage", {
+          const res = await fetch("/api/lineup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: prompt.trim(), clips: clipInfosWithDialogue }),
+            body: JSON.stringify({
+              prompt: prompt.trim(),
+              workspaceSlug: "asaya",
+              aspectRatio: aspectRatio,
+              geminiClips: clipInfosWithDialogue.map((c) => ({
+                id: clips[c.index].id,
+                mimeType: "video/mp4",
+                name: c.name,
+                index: c.index,
+                duration: c.duration,
+                frames: c.frames,
+                speechSegments: c.speechSegments,
+                transcript: c.transcript,
+                transcriptionStatus: c.speechSegments?.length ? "completed_with_speech" : "completed_no_speech"
+              }))
+            }),
           });
           const data = await res.json();
-          if (data.success && data.plan) {
-            plan = data.plan as EditPlan;
-            score = data.score ?? null;
-            feedback = data.feedback ?? null;
+          if (data.timeline) {
+            timelineData = data.timeline;
+            score = data.evaluation?.overallScore ?? null;
+            feedback = data.evaluation?.improvements?.join("\n") ?? null;
+          } else {
+            throw new Error(data.error || "Failed to generate timeline");
           }
         } catch (apiErr) {
           console.warn("AI edit plan failed, using defaults:", apiErr);
         }
       }
-
-      // Step 2: Build scenes applying the AI plan
-      setProcessingStep("Building your timeline...");
-      const clipScenes = buildScenesFromPlan(clips, plan, -1, prompt.trim());
 
       setProcessingStep("Loading into editor...");
 
@@ -593,12 +607,44 @@ export default function FootagePage() {
       useEditorStore.getState().setAiMetadata(prompt.trim(), score ?? 0, feedback ?? "");
 
       // 3. Load full timeline into store
-      loadTimeline({
-        scenes: clipScenes,
-        audioTracks: [],
-        totalDuration: clipScenes.reduce((s, sc) => s + sc.duration, 0),
-        aspectRatio,
-      });
+      if (timelineData) {
+        loadTimeline({
+          scenes: (timelineData as any).scenes.map((s: any) => ({
+            ...s,
+            // Restore any blob URLs that the Timeline type strips
+            clipSrc: clips.find(c => c.id === s.clipId)?.src || s.clipSrc
+          })),
+          audioTracks: (timelineData as any).audioLayers.map((a: any) => ({
+            id: a.id,
+            name: a.id,
+            src: a.src ?? "",
+            duration: a.endTime - a.startTime,
+            volume: a.volume ?? 0.8,
+            fadeIn: a.fadeIn ?? 0.5,
+            fadeOut: a.fadeOut ?? 1.0,
+            startTime: a.startTime,
+            muted: false,
+            type: "bgm"
+          })),
+          totalDuration: (timelineData as any).totalDuration,
+          aspectRatio,
+        });
+      } else {
+        // Fallback if AI fails: just load the clips raw
+        loadTimeline({
+          scenes: clips.map((c, i) => ({
+            id: uuidv4(), order: i, label: c.name, description: c.name,
+            duration: c.duration, playbackRate: 1, clipId: c.id, clipSrc: c.src,
+            clipType: "video", clipTrimStart: 0, clipTrimEnd: c.duration,
+            captions: [], transition: { type: "zoom-in", duration: 0.5 },
+            mood: "neutral", colorGrade: null, colorAdjustments: { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 },
+            effects: [], muted: false,
+          })),
+          audioTracks: [],
+          totalDuration: clips.reduce((s, c) => s + c.duration, 0),
+          aspectRatio,
+        });
+      }
       
       // Tell the editor to open the transition tab by default
       useEditorStore.getState().setLeftTab("transitions");
