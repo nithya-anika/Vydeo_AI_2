@@ -2215,10 +2215,120 @@ async function transcribeSceneCaptions(scene: Scene): Promise<Caption[]> {
 
 async function processAICommand(
   text: string,
-  store: ReturnType<typeof useEditorStore.getState>
+  store: ReturnType<typeof useEditorStore.getState>,
+  history: Array<{ role: string; text: string }> = []
 ): Promise<string> {
-  const lower = text.toLowerCase();
   const currentStore = () => useEditorStore.getState();
+
+  // 1. Send to true AI Creative Director endpoint backed by Gemini
+  try {
+    const res = await fetch("/api/ai-director", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: text,
+        timeline: {
+          scenes: currentStore().scenes,
+          totalDuration: currentStore().totalDuration,
+          aspectRatio: currentStore().aspectRatio,
+        },
+        brandKit: currentStore().brandKit,
+        history,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data.reply === "string" && Array.isArray(data.actions)) {
+        const st = currentStore();
+        for (const action of data.actions) {
+          switch (action.type) {
+            case "UPDATE_BRAND":
+              if (action.patch) {
+                st.updateBrandKit(action.patch);
+                if (action.patch.logoOverlay) {
+                  st.setInspectorTarget({ type: "logo" });
+                }
+              }
+              break;
+            case "SET_GLOBAL_TRANSITION":
+              if (action.value) {
+                const trans = typeof action.value === "string" ? { type: action.value as TransitionType, duration: 0.6 } : action.value as { type: TransitionType; duration: number };
+                st.scenes.forEach(s => st.updateScene(s.id, { transition: trans }));
+                st.setLeftTab("transitions");
+              }
+              break;
+            case "SET_GLOBAL_COLOR_GRADE":
+              st.scenes.forEach(s => st.updateScene(s.id, { colorGrade: action.value as string | null }));
+              st.setLeftTab("effects");
+              break;
+            case "SET_GLOBAL_MOOD":
+              st.scenes.forEach(s => st.updateScene(s.id, { mood: action.value as Mood }));
+              break;
+            case "SET_TIMELINE_PACING":
+              if (typeof action.value === "number" && action.value > 0) {
+                const multiplier = action.value;
+                st.scenes.forEach(s => {
+                  const newDur = Math.max(1, Number((s.duration * multiplier).toFixed(2)));
+                  st.updateScene(s.id, { duration: newDur });
+                });
+              }
+              break;
+            case "UPDATE_SCENE":
+              if (action.sceneId && action.patch) {
+                st.updateScene(action.sceneId, action.patch);
+              }
+              break;
+            case "ADD_CAPTION":
+              if (action.sceneId) {
+                const capId = uuidv4();
+                const scene = st.scenes.find(s => s.id === action.sceneId);
+                const captionData = {
+                  id: capId,
+                  text: (action.caption?.text as string) || "New Caption",
+                  startTime: (action.caption?.startTime as number) ?? 0.5,
+                  endTime: (action.caption?.endTime as number) ?? Math.max(1.5, (scene?.duration ?? 4) - 0.5),
+                  color: (action.caption?.color as string) || st.brandKit?.primaryColor || "#FFFFFF",
+                  fontFamily: (action.caption?.fontFamily as string) || st.brandKit?.fontBody || "Inter",
+                  fontSize: (action.caption?.fontSize as number) ?? 24,
+                  bold: (action.caption?.bold as boolean) ?? false,
+                  x: (action.caption?.x as number) ?? 50,
+                  y: (action.caption?.y as number) ?? 80,
+                  align: "center" as const,
+                  shadow: true,
+                };
+                if (scene) {
+                  st.updateScene(scene.id, { captions: [...scene.captions, captionData] });
+                  st.setLeftTab("text");
+                }
+              }
+              break;
+            case "UPDATE_CAPTION":
+              if (action.sceneId && action.captionId && action.patch) {
+                st.updateCaption(action.sceneId, action.captionId, action.patch);
+              }
+              break;
+            case "REMOVE_CAPTION":
+              if (action.sceneId && action.captionId) {
+                st.removeCaption(action.sceneId, action.captionId);
+              }
+              break;
+            case "REMOVE_SCENE":
+              if (action.sceneId) {
+                st.removeScene(action.sceneId);
+              }
+              break;
+          }
+        }
+        return data.reply;
+      }
+    }
+  } catch (err) {
+    console.warn("[AIChatPanel] AI director API call failed, falling back to local heuristic:", err);
+  }
+
+  // Fallback: Local offline heuristics
+  const lower = text.toLowerCase();
   const sceneCount = store.scenes.length;
 
   const speed = inferSpeedCommand(text);
@@ -2454,9 +2564,11 @@ function AIChatPanel() {
       setInput("");
       setLoading(true);
       try {
+        const history = messages.map(m => ({ role: m.role, text: m.text }));
         const reply = await processAICommand(
           text.trim(),
-          useEditorStore.getState()
+          useEditorStore.getState(),
+          history
         );
         setMessages((m) => [
           ...m,

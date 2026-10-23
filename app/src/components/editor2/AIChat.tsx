@@ -21,6 +21,49 @@ const STARTERS = [
 ];
 
 async function processCommand(text: string, store: ReturnType<typeof useEditorStore.getState>): Promise<string> {
+  // 1. Try true Gemini AI Creative Director
+  try {
+    const res = await fetch("/api/ai-director", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: text,
+        timeline: {
+          scenes: store.scenes,
+          totalDuration: store.totalDuration,
+          aspectRatio: store.aspectRatio,
+        },
+        brandKit: store.brandKit,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data.reply === "string" && Array.isArray(data.actions)) {
+        for (const action of data.actions) {
+          if (action.type === "UPDATE_BRAND" && action.patch) store.updateBrandKit(action.patch);
+          if (action.type === "SET_GLOBAL_TRANSITION" && action.value) {
+            const trans = typeof action.value === "string" ? { type: action.value, duration: 0.6 } : action.value;
+            store.scenes.forEach(s => store.updateScene(s.id, { transition: trans }));
+          }
+          if (action.type === "SET_GLOBAL_COLOR_GRADE") {
+            store.scenes.forEach(s => store.updateScene(s.id, { colorGrade: action.value }));
+          }
+          if (action.type === "SET_GLOBAL_MOOD" && action.value) {
+            store.scenes.forEach(s => store.updateScene(s.id, { mood: action.value }));
+          }
+          if (action.type === "SET_TIMELINE_PACING" && typeof action.value === "number") {
+            store.scenes.forEach(s => store.updateScene(s.id, { duration: Math.max(1, Number((s.duration * (action.value as number)).toFixed(2))) }));
+          }
+          if (action.type === "UPDATE_SCENE" && action.sceneId && action.patch) {
+            store.updateScene(action.sceneId, action.patch);
+          }
+        }
+        return data.reply;
+      }
+    }
+  } catch {}
+
   const lower = text.toLowerCase();
 
   // Detect intent
