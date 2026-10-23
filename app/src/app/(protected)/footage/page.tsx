@@ -224,6 +224,7 @@ export default function FootagePage() {
   const [error, setError] = useState<string | null>(null);
   const [driveUrl, setDriveUrl] = useState("");
   const [importing, setImporting] = useState(false);
+  const [ingesting, setIngesting] = useState<{ current: number; total: number; filename: string } | null>(null);
 
   // Suggestor state
   const [showSuggestor, setShowSuggestor] = useState(false);
@@ -423,19 +424,29 @@ export default function FootagePage() {
     if (!videoFiles.length) return;
 
     const newClips: UploadedClip[] = [];
-    for (const file of videoFiles) {
-      const src = URL.createObjectURL(file);
-      const meta = await getVideoMeta(file, src);
-      newClips.push({
-        id: uuidv4(), file, src,
-        name: file.name.replace(/\.[^.]+$/, ""),
-        duration: meta.duration,
-        thumbnail: meta.thumbnail,
-        frames: meta.frames,
-        width: meta.width,
-        height: meta.height,
-      });
+    const total = videoFiles.length;
+
+    for (let i = 0; i < total; i++) {
+      const file = videoFiles[i];
+      setIngesting({ current: i + 1, total, filename: file.name });
+      try {
+        const src = URL.createObjectURL(file);
+        const meta = await getVideoMeta(file, src);
+        newClips.push({
+          id: uuidv4(), file, src,
+          name: file.name.replace(/\.[^.]+$/, ""),
+          duration: meta.duration,
+          thumbnail: meta.thumbnail,
+          frames: meta.frames,
+          width: meta.width,
+          height: meta.height,
+        });
+      } catch (err) {
+        console.warn(`Failed to ingest ${file.name}:`, err);
+      }
     }
+
+    setIngesting(null);
 
     setClips(prev => {
       // Deduplicate by a content signature so two distinct files that happen to
@@ -766,6 +777,16 @@ export default function FootagePage() {
                             {formatDuration(totalFootageDuration)} total
                           </span>
                         </div>
+                        {ingesting && (
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: 6,
+                            padding: "2px 8px", borderRadius: "var(--r-sm)",
+                            background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.35)",
+                            fontSize: 11, fontWeight: 600, color: "#C7D2FE"
+                          }}>
+                            Processing {ingesting.current} / {ingesting.total}...
+                          </div>
+                        )}
                       </div>
                       
                       <button
