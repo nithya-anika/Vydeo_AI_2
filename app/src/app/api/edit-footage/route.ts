@@ -151,36 +151,30 @@ function safeParseJson<T>(raw: string): T {
   let clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
   // 1. Standard parse
-  try {
-    return JSON.parse(clean) as T;
-  } catch {}
+  try { return JSON.parse(clean) as T; } catch {}
 
   // 2. Extract outermost { ... }
   const firstBrace = clean.indexOf("{");
   const lastBrace = clean.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     clean = clean.slice(firstBrace, lastBrace + 1);
-    try {
-      return JSON.parse(clean) as T;
-    } catch {}
+    try { return JSON.parse(clean) as T; } catch {}
   }
 
-  // 3. Fix trailing commas and unescaped newlines
-  let fixed = clean
-    .replace(/,\s*([\]}])/g, "$1")
-    .replace(/[\u0000-\u001F]+/g, (m) => (m === "\n" ? "\\n" : m === "\r" ? "\\r" : m === "\t" ? "\\t" : ""));
-
+  // 3. Relaxed parsing for trailing commas, unescaped quotes, or bad markdown
   try {
-    return JSON.parse(fixed) as T;
+    // eslint-disable-next-line no-eval
+    const relaxed = eval(`(${clean})`);
+    if (relaxed && typeof relaxed === "object") {
+      return relaxed as T;
+    }
   } catch {}
 
-  // 4. Sanitize unescaped quotes inside reasoning
-  fixed = clean.replace(/"reasoning"\s*:\s*"([\s\S]*?)"\s*,\s*"sceneOrder"/, (_m, content) => {
-    const escaped = content.replace(/"/g, "'").replace(/\n/g, " ");
-    return `"reasoning": "${escaped}", "sceneOrder"`;
-  });
+  // 4. Force trailing comma removal and strict parse
+  const fixed = clean.replace(/,\s*([\]}])/g, "$1");
+  try { return JSON.parse(fixed) as T; } catch {}
 
-  return JSON.parse(fixed) as T;
+  throw new Error("Failed to parse AI output into valid JSON");
 }
 
 function defaultPlan(clips: ClipInfo[]): EditPlan {
@@ -299,8 +293,8 @@ Below are sample frames from each clip so you can identify who is in them and wh
           system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents: [{ role: "user", parts: userParts }],
           generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 4096,
+            temperature: 0.2,
+            maxOutputTokens: 8192,
             responseMimeType: "application/json",
           },
         });
