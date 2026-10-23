@@ -136,15 +136,45 @@ export default function BrandKitPage() {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const handleLogoUpload = (files: FileList | null) => {
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const handleLogoUpload = async (files: FileList | null) => {
     if (!files?.[0]) return;
-    // Read as a data: URL — these persist in localStorage and reach the editor
-    // store (blob: URLs don't survive a refresh).
+    const file = files[0];
+    
+    // Optimistic local preview
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") update({ logo: reader.result });
     };
-    reader.readAsDataURL(files[0]);
+    reader.readAsDataURL(file);
+
+    // Durable remote upload to S3
+    setUploadingLogo(true);
+    try {
+      const ext = file.name.split(".").pop() || "png";
+      const initRes = await fetch("/api/upload-media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: `brand_logo_${Date.now()}.${ext}`, contentType: file.type || "image/png" }),
+      });
+      
+      if (!initRes.ok) throw new Error("Failed to init logo upload");
+      const { url, publicUrl } = await initRes.json();
+      
+      const uploadRes = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "image/png" },
+        body: file,
+      });
+
+      if (!uploadRes.ok) throw new Error("Failed to upload logo bytes");
+      update({ logo: publicUrl });
+    } catch (err) {
+      console.warn("Logo upload to S3 failed, using local preview only:", err);
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   return (
@@ -237,7 +267,9 @@ export default function BrandKitPage() {
                   border: "1.5px dashed var(--border)", background: "var(--bg-inset)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   cursor: "pointer", overflow: "hidden", position: "relative",
+                  opacity: uploadingLogo ? 0.5 : 1,
                 }}>
+                {uploadingLogo && <div style={{position: "absolute", zIndex: 10, fontSize: 10, fontWeight: "bold"}}>Uploading...</div>}
                 {kit.logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={kit.logo} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain", padding: 8 }} />

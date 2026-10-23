@@ -1565,9 +1565,11 @@ export async function renderWithFfmpeg(
     // Apply Brand Logo Watermark if present
     if (logoFile) {
       console.log(`[FFmpeg] Applying brand logo watermark...`);
-      // Scale logo to 20% of video width, place in bottom right with 30px padding, apply opacity
+      // Scale logo to 20% of main video width, maintaining aspect ratio. 
+      // Place in bottom right with 30px padding, apply opacity.
+      // We use scale2ref to read the main video's width.
       const opacity = brand?.logoOpacity ?? 0.85;
-      const overlayFilter = `[1:v]scale=iw*0.2:-1,format=rgba,colorchannelmixer=aa=${opacity}[logo];[0:v][logo]overlay=W-w-30:H-h-30`;
+      const overlayFilter = `[1:v][0:v]scale2ref=w=main_w*0.20:h=ow/mdar[logo][main];[logo]format=rgba,colorchannelmixer=aa=${opacity}[logo_transparent];[main][logo_transparent]overlay=W-w-30:H-h-30`;
       
       await runFfmpeg([
         "-i", preFinal,

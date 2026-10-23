@@ -3432,6 +3432,7 @@ export default function EditorShell({
             audioTracks: st.audioTracks.map((t) => ({ ...t, file: undefined })),
             totalDuration: st.totalDuration,
           },
+          brandSettings: st.brandKit,
         }),
       });
       useEditorStore.setState({ isDirty: false });
@@ -3457,6 +3458,9 @@ export default function EditorShell({
         const t = draft?.timelineData;
         if (!cancelled && t?.scenes?.length) {
           loadTimeline({ scenes: t.scenes, audioTracks: t.audioTracks ?? [], totalDuration: t.totalDuration ?? 0, aspectRatio: draft.aspect_ratio });
+          if (draft.brandSettings) {
+            useEditorStore.setState({ brandKit: draft.brandSettings });
+          }
         }
       } catch {
         /* keep the current timeline on any error */
