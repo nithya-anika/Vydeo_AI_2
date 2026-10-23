@@ -19,6 +19,7 @@
  */
 
 import type { WorkflowDefinition } from "./types";
+import { getModel } from "@/lib/ai-router";
 
 const UGC_ADS_SYSTEM_PROMPT = `You are a high-performance social media video editor specializing in UGC ads and branded content.
 
@@ -41,9 +42,9 @@ export const ugcAdsWorkflow: WorkflowDefinition = {
   tools: ["video-analysis", "hook-detection", "timeline-generator", "transition-planner", "caption-generator", "music-selector"],
 
   models: {
-    planner:   "gemini-2.5-flash",
-    generator: "gemini-2.5-pro",    // Pro for editorial; Flash for concept
-    evaluator: "gemini-2.5-flash",
+    planner:   getModel("planning"),
+    generator: getModel("storyboard"),
+    evaluator: getModel("evaluate"),
   },
 
   clusterConfig: {

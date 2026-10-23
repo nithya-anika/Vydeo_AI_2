@@ -19,6 +19,7 @@
  */
 
 import type { WorkflowDefinition } from "./types";
+import { getModel } from "@/lib/ai-router";
 
 const TRAVEL_CINEMATIC_SYSTEM_PROMPT = `You are a cinematic video editor and documentary storyteller.
 
@@ -42,9 +43,9 @@ export const travelCinematicWorkflow: WorkflowDefinition = {
   tools: ["video-analysis", "hook-detection", "timeline-generator", "transition-planner", "caption-generator", "music-selector"],
 
   models: {
-    planner:   "gemini-2.5-flash",
-    generator: "gemini-2.5-pro",
-    evaluator: "gemini-2.5-flash",
+    planner:   getModel("planning"),
+    generator: getModel("storyboard"),
+    evaluator: getModel("evaluate"),
   },
 
   clusterConfig: {

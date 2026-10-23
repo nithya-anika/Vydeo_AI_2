@@ -129,7 +129,7 @@ export async function runAgentPipeline(params: {
   if (structuredBrief) {
     trace.push({
       stage: "Brief Interpreter",
-      model: "gemini-2.5-flash",
+      model: MODELS.PLANNER,
       durationMs: phase1Ms,
       decision: `${structuredBrief.coreIntent} | pacing: ${structuredBrief.pacingIntent} | ${structuredBrief.sceneOrder.length} scene directives`,
     });
