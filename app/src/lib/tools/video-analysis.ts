@@ -14,6 +14,7 @@ import { geminiRequest } from "@/lib/gemini";
 import type { GeminiClip } from "@/lib/gemini";
 import type { Tool, ToolContext, ToolResult, WorkflowCluster } from "./types";
 import { getModel } from "@/lib/ai-router";
+import { safeParseJson } from "@/lib/json-repair";
 
 export interface VideoAnalysisInput {
   clips: GeminiClip[];
@@ -133,7 +134,7 @@ export const videoAnalysisTool: Tool<VideoAnalysisInput, VideoAnalysisOutput> = 
       });
 
       const raw = extractText(data);
-      const result = JSON.parse(cleanJson(raw)) as VideoAnalysisOutput;
+      const result = safeParseJson<VideoAnalysisOutput>(raw);
 
       // Ensure clips array exists
       if (!Array.isArray(result.clips)) {
@@ -290,8 +291,4 @@ function buildFallbackAnalysis(clips: GeminiClip[]): VideoAnalysisOutput {
 function extractText(data: Record<string, unknown>): string {
   return (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
     .candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-}
-
-function cleanJson(raw: string): string {
-  return raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 }

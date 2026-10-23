@@ -22,6 +22,7 @@ import type { Tool, ToolContext, ToolResult } from "./types";
 import type { HookDetectionOutput } from "./hook-detection";
 import type { VideoAnalysisOutput } from "./video-analysis";
 import { getModel } from "@/lib/ai-router";
+import { safeParseJson } from "@/lib/json-repair";
 import { snapTrimToSpeechBoundaries } from "@/lib/transcription";
 import {
   buildCandidateSegmentInventory,
@@ -193,7 +194,7 @@ Return ONLY this JSON:
   });
 
   const raw = extractText(data);
-  const parsed = JSON.parse(cleanJson(raw)) as Record<string, unknown>;
+  const parsed = safeParseJson<Record<string, unknown>>(raw);
   const sanitized = validateAndSanitizeLineup(parsed, input.brand, input.aspectRatio);
 
   return {
@@ -328,7 +329,7 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
   });
 
   const raw = extractText(data);
-  const parsed = JSON.parse(cleanJson(raw)) as Record<string, unknown>;
+  const parsed = safeParseJson<Record<string, unknown>>(raw);
 
   const parsedTimeline = (parsed.timeline ?? {}) as Record<string, unknown>;
   const rawSelections = (parsedTimeline.selectedCandidates ?? parsed.selectedCandidates) as SelectedCandidateOrder[] | undefined;
@@ -418,8 +419,4 @@ function buildOverrideLines(overrides?: BrandOverrides): string {
 function extractText(data: Record<string, unknown>): string {
   return (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
     .candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-}
-
-function cleanJson(raw: string): string {
-  return raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 }

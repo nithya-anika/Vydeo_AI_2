@@ -423,9 +423,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // ── Bulk ──────────────────────────────────────────────────────────────────
   loadTimeline: ({ scenes, audioTracks, totalDuration, aspectRatio }) => {
     const DEFAULT_ADJ: ColorAdjustments = { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 };
-    const hydratedScenes = scenes.map(s => ({
+    const hydratedScenes = scenes.map((s: any) => ({
       ...s,
-      playbackRate: s.playbackRate ?? 1,
+      playbackRate: s.playbackRate ?? s.playbackSpeed ?? 1,
       colorAdjustments: s.colorAdjustments ?? DEFAULT_ADJ,
     }));
     set({

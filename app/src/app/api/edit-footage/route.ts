@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { geminiRequest } from "@/lib/gemini";
 import { getModel } from "@/lib/ai-router";
+import { safeParseJson } from "@/lib/json-repair";
 import {
   DEFAULT_PROMPT_COLOR,
   FOOTAGE_TRANSITION_TYPES,
@@ -143,62 +144,6 @@ interface EditPlan {
   captions: unknown[];
   targetDuration: number | null;
   muteSourceAudio?: boolean;
-}
-
-function safeParseJson<T>(raw: string): T {
-  let clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-
-  // 1. Standard parse
-  try { return JSON.parse(clean) as T; } catch {}
-
-  // 2. Extract outermost { ... }
-  const firstBrace = clean.indexOf("{");
-  const lastBrace = clean.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    clean = clean.slice(firstBrace, lastBrace + 1);
-    try { return JSON.parse(clean) as T; } catch {}
-  }
-
-  // 3. Relaxed parsing for trailing commas, unescaped quotes, or bad markdown
-  try {
-    // eslint-disable-next-line no-eval
-    const relaxed = eval(`(${clean})`);
-    if (relaxed && typeof relaxed === "object") {
-      return relaxed as T;
-    }
-  } catch {}
-
-  // 4. Force trailing comma removal and strict parse
-  const fixed = clean.replace(/,\s*([\]}])/g, "$1");
-  try { return JSON.parse(fixed) as T; } catch {}
-
-  throw new Error("Failed to parse AI output into valid JSON");
-}
-
-function defaultPlan(clips: ClipInfo[]): EditPlan {
-  return {
-    reasoning: "Smart audio-trimmed fallback plan.",
-    sceneOrder: clips.map(c => c.index),
-    trimInstructions: clips.map(c => {
-      let start = 0;
-      let end: number | null = null;
-      if (c.silenceWindows && c.silenceWindows.length > 0) {
-        if (c.silenceWindows[0].startTime <= 0.3) {
-          start = parseFloat(Math.min(c.duration - 0.5, c.silenceWindows[0].endTime).toFixed(3));
-        }
-        const lastSw = c.silenceWindows[c.silenceWindows.length - 1];
-        if (lastSw.endTime >= c.duration - 0.4 && lastSw.startTime > start) {
-          end = parseFloat(lastSw.startTime.toFixed(3));
-        }
-      }
-      return { clipIndex: c.index, trimStart: start, trimEnd: end, note: "trimmed" };
-    }),
-    transitions: clips.slice(0, -1).map(c => ({ afterClipIndex: c.index, type: "zoom-in", duration: 0.5 })),
-    globalColorAdjustments: { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, highlights: 0, shadows: 0 },
-    captions: [],
-    targetDuration: null,
-    muteSourceAudio: false,
-  };
 }
 
 export async function POST(req: NextRequest) {
@@ -467,24 +412,14 @@ Return ONLY a JSON object:
 
     // Fallback if all attempts failed completely
     if (!plan) {
-      console.warn("[edit-footage] All attempts failed, using default plan.");
-      plan = defaultPlan(clips);
-      if (requestedTransition) {
-        plan.transitions = plan.sceneOrder.slice(0, -1).map(afterClipIndex => ({
-          afterClipIndex,
-          type: requestedTransition,
-          duration: 0.8,
-        }));
-      }
-      if (requestedColor) {
-        plan.globalColorAdjustments = normalizeColorAdjustments({ ...plan.globalColorAdjustments, ...requestedColor });
-      }
+      console.warn("[edit-footage] All attempts failed. Throwing explicit pipeline error.");
+      throw new Error("Failed to generate a valid edit plan after all attempts. The AI model may be unavailable or returned unrecoverable data.");
     }
 
     const finalFeedbackStr = finalPlan ? finalFeedback : bestFeedback;
     return NextResponse.json({ success: true, plan, score: highestScore, feedback: finalFeedbackStr });
-  } catch (err) {
+  } catch (err: any) {
     console.error("[edit-footage] route error:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
   }
 }

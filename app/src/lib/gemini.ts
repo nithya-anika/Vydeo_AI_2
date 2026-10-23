@@ -245,7 +245,7 @@ Generate a complete timeline JSON object following this structure:
   ],
   "globalColorGrade": "${brand.colorGrade.name}",
   "meta": {
-    "generatedBy": "gemini-2.5-flash",
+    "generatedBy": "ai-pipeline",
     "promptUsed": "${userPrompt.replace(/"/g, "'")}",
     "brandWorkspaceId": "${brand.id}",
     "version": 1
@@ -435,7 +435,7 @@ Carefully watch each video clip. Then generate a complete edit plan:
     ],
     "audioLayers": [{ "id": "<uuid>", "type": "bgm", "startTime": 0, "endTime": <totalDuration>, "volume": 0.6, "fadeIn": 1.0, "fadeOut": 2.0 }],
     "globalColorGrade": "${brand.colorGrade.name}",
-    "meta": { "generatedBy": "gemini-2.5-pro", "promptUsed": "${userPrompt.replace(/"/g, "'")}", "brandWorkspaceId": "${brand.id}", "version": 1 },
+    "meta": { "generatedBy": "ai-pipeline", "promptUsed": "${userPrompt.replace(/"/g, "'")}", "brandWorkspaceId": "${brand.id}", "version": 1 },
     "isLocked": false
   },
   "clipAssignments": [
