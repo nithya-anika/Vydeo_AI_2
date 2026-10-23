@@ -12,6 +12,7 @@ import type { TransitionType } from '@/store/editorStore'
 import { MediaPanel } from './MediaPanel'
 import { MusicPanel } from './MusicPanel'
 import { ColorPanel } from './ColorPanel'
+import BrandTab from './BrandTab'
 
 /* ── Text / Captions ───────────────────────────────────────────────────────*/
 function TextPanel() {
@@ -137,43 +138,9 @@ function AIToolsPanel() {
 
 /* ── Brand Kit ─────────────────────────────────────────────────────────────*/
 function BrandPanel() {
-  const { brandKit, updateBrandKit } = useEditorStore()
-  const logoRef = useRef<HTMLInputElement>(null)
-  function applyColor(c: string) {
-    const store = useEditorStore.getState()
-    store.scenes.forEach((s) => s.captions.forEach((cap) => store.updateCaption(s.id, cap.id, { color: c })))
-  }
-  function applyFont(font: string) {
-    const store = useEditorStore.getState()
-    store.scenes.forEach((s) => s.captions.forEach((cap) => store.updateCaption(s.id, cap.id, { fontFamily: font })))
-  }
   return (
     <div className="tool-panel">
-      <div className="tool-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div>
-          <div className="tool-label">Logo</div>
-          <input ref={logoRef} type="file" accept="image/*" hidden onChange={(e) => {
-            const f = e.target.files?.[0]; if (f) updateBrandKit({ logo: URL.createObjectURL(f) }); e.target.value = ''
-          }} />
-          <div className="brand-logo-drop" onClick={() => logoRef.current?.click()}>
-            {brandKit?.logo ? <img src={brandKit.logo} alt="Brand logo" /> : <><Upload size={13} /> <span className="tool-note">Upload logo</span></>}
-          </div>
-        </div>
-        <div>
-          <div className="tool-label">Brand colors</div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {BRAND_SWATCHES.map((c) => (
-              <button key={c} type="button" className="brand-swatch" style={{ background: c }} title={`Apply ${c} to captions`} aria-label={`Apply ${c} to captions`} onClick={() => applyColor(c)} />
-            ))}
-          </div>
-          <div className="tool-note" style={{ marginTop: 4 }}>Click a color to apply to all captions.</div>
-        </div>
-        <div>
-          <div className="tool-label">Font</div>
-          <Select options={BRAND_FONTS.map((f) => ({ label: f, value: f }))} placeholder="Choose a font" onChange={applyFont} aria-label="Brand font" />
-          <div className="tool-note" style={{ marginTop: 4 }}>Applies to all captions.</div>
-        </div>
-      </div>
+      <BrandTab />
     </div>
   )
 }
