@@ -25,7 +25,7 @@ describe("Production Model Migration, Fallback Safety & Smoke Verification", () 
     expect(AI_MODELS.evaluate).toBe("gemini-4-argon");
 
     // Default fallback path must use verified Gemini 3.5 Flash, not retired 2.5 models!
-    expect(FALLBACK_MODELS.primary).toBe("gemini-3.5-flash");
+    expect(FALLBACK_MODELS.primary).toBe("gemini-3.6-flash");
     expect(FALLBACK_MODELS.reviewer).toBe("gemini-3.8-flash");
   });
 
@@ -35,11 +35,11 @@ describe("Production Model Migration, Fallback Safety & Smoke Verification", () 
     engageVerifiedSafetyFallback();
     expect(isFallbackActive()).toBe(true);
 
-    // All primary generation switches to verified gemini-3.5-flash
-    expect(getModel("planning")).toBe("gemini-3.5-flash");
-    expect(getModel("chat")).toBe("gemini-3.5-flash");
-    expect(getModel("storyboard")).toBe("gemini-3.5-flash");
-    expect(getModel("vision")).toBe("gemini-3.5-flash");
+    // All primary generation switches to verified gemini-3.6-flash
+    expect(getModel("planning")).toBe("gemini-3.6-flash");
+    expect(getModel("chat")).toBe("gemini-3.6-flash");
+    expect(getModel("storyboard")).toBe("gemini-3.6-flash");
+    expect(getModel("vision")).toBe("gemini-3.6-flash");
     expect(getModel("evaluate")).toBe("gemini-3.8-flash");
 
     restoreProductionDefaults();

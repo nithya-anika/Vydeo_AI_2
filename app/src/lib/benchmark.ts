@@ -61,7 +61,7 @@ const TOKEN_PRICING: Record<string, { prompt: number; candidate: number }> = {
   "gemini-2.5-pro": { prompt: 1.25, candidate: 5.00 },
   "gemini-2.5-flash": { prompt: 0.075, candidate: 0.30 },
   "gemini-3.8-flash": { prompt: 0.75, candidate: 3.75 },
-  "gemini-3.5-flash": { prompt: 0.50, candidate: 2.50 },
+  "gemini-3.6-flash": { prompt: 0.50, candidate: 2.50 },
   "gemini-4-argon": { prompt: 2.50, candidate: 10.00 },
 };
 

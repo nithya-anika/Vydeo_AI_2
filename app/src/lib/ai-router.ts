@@ -7,7 +7,7 @@
  * - Storyboard & Candidate Selection: gemini-3.1-pro-preview (Global Vertex AI endpoint)
  * - Fast Conversational Turns & Subtitles: gemini-3.8-flash (Global Vertex AI endpoint)
  * - Quality & Evaluator Reviewer: gemini-4-argon (Global Vertex AI endpoint)
- * - Verified Production Fallback: gemini-3.5-flash (Global Vertex AI endpoint)
+ * - Verified Production Fallback: gemini-3.6-flash (Global Vertex AI endpoint)
  * - Reviewer Fallback: gemini-3.8-flash (Global Vertex AI endpoint)
  */
 
@@ -35,7 +35,7 @@ export const AI_MODELS = {
 } as const
 
 export const FALLBACK_MODELS = {
-  primary: 'gemini-3.5-flash',
+  primary: 'gemini-3.6-flash',
   reviewer: 'gemini-3.8-flash',
 } as const
 
