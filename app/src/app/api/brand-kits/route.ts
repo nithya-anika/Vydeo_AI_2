@@ -33,12 +33,13 @@ export async function POST(req: NextRequest) {
           user_id: session.userId,
           name: k.name || "Unnamed Kit",
           logo: k.logo || null,
-          primary_color: k.primary || "#FFFFFF",
-          secondary_color: k.secondary || "#000000",
-          accent_color: k.accent || "#0066FF",
+          primary_color: k.primary || k.primaryColor || "#FFFFFF",
+          secondary_color: k.secondary || k.secondaryColor || "#000000",
+          accent_color: k.accent || k.accentColor || "#0066FF",
           font_heading: k.fontHeading || "Inter",
           font_body: k.fontBody || "Inter",
-          caption_preset: k.captionPreset || "minimal"
+          caption_preset: k.captionPreset || "minimal",
+          logo_overlay: k.logoOverlay ? JSON.stringify(k.logoOverlay) : null,
         });
       }
       return NextResponse.json({ success: true });

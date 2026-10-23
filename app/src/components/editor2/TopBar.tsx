@@ -345,15 +345,43 @@ export default function TopBar({ projectId }: { projectId?: string }) {
       setExportStatusText("Submitting render job...");
       setExportProgress(0);
 
+      const overlay = brandKit?.logoOverlay;
+      // If overlay is enabled or if logo exists and overlay is not explicitly disabled
+      const isOverlayActive = overlay ? overlay.enabled : Boolean(brandKit?.logo);
+
+      let exportedLogoData = (overlay?.type !== "text" && brandKit?.logo && isOverlayActive) ? brandKit.logo : undefined;
+      if (exportedLogoData && exportedLogoData.startsWith("blob:")) {
+        try {
+          const res = await fetch(exportedLogoData);
+          if (res.ok) {
+            const blob = await res.blob();
+            exportedLogoData = await blobToDataUrl(blob);
+          }
+        } catch (err) {
+          console.warn("[Export] Could not convert blob logo to data URL:", err);
+        }
+      }
+
+      const brandPayload = brandKit ? {
+        logoData: exportedLogoData,
+        logoText: (overlay?.type === "text" && isOverlayActive) ? (overlay.text || brandKit.name) : undefined,
+        logoType: overlay?.type ?? "image",
+        logoOpacity: isOverlayActive ? (overlay?.opacity ?? 0.85) : 0,
+        logoX: overlay?.x ?? 80,
+        logoY: overlay?.y ?? 80,
+        logoWidth: overlay?.width ?? 20,
+        logoTintColor: overlay?.tintColor || undefined,
+        primaryColor: brandKit.primaryColor,
+        secondaryColor: brandKit.secondaryColor,
+        accentColor: brandKit.accentColor,
+        fontFamily: brandKit.fontHeading,
+        fontBody: brandKit.fontBody,
+      } : undefined;
+
       const payload = {
         scenes: payloadScenes,
         audio: audioPayload,
-        brand: brandKit ? {
-          logoData: brandKit.logo || undefined,
-          logoOpacity: 0.85, // Default professional opacity
-          primaryColor: brandKit.primaryColor,
-          fontFamily: brandKit.fontHeading,
-        } : undefined,
+        brand: brandPayload,
         aspectRatio,
         totalDuration: scenes.reduce((s, sc) => s + sc.duration, 0),
         outputFilename: `${projectName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,

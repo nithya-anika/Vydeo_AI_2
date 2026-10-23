@@ -97,6 +97,17 @@ export interface Scene {
   muted?: boolean;
 }
 
+export interface BrandLogoOverlay {
+  enabled: boolean;
+  type: "image" | "text";
+  text?: string;
+  x: number; // 0 to 100 percentage from left
+  y: number; // 0 to 100 percentage from top
+  width: number; // 5 to 100 percentage of canvas width
+  opacity: number; // 0 to 1
+  tintColor?: string | null;
+}
+
 export interface BrandKit {
   id: string;
   name: string;
@@ -110,10 +121,16 @@ export interface BrandKit {
   watermark: string | null;
   intro: string | null;
   outro: string | null;
+  logoOverlay?: BrandLogoOverlay;
 }
 
 export type LeftTab = "media" | "text" | "music" | "transitions" | "brand" | "ai" | "effects";
-export type InspectorTarget = { type: "scene"; id: string } | { type: "caption"; sceneId: string; captionId: string } | { type: "audio"; id: string } | null;
+export type InspectorTarget =
+  | { type: "scene"; id: string }
+  | { type: "caption"; sceneId: string; captionId: string }
+  | { type: "audio"; id: string }
+  | { type: "logo" }
+  | null;
 
 /** Snapshot of the undoable timeline state. */
 export interface TimelineSnapshot {
@@ -249,6 +266,15 @@ const DEFAULT_BRAND_KIT: BrandKit = {
   watermark: null,
   intro: null,
   outro: null,
+  logoOverlay: {
+    enabled: false,
+    type: "image",
+    x: 80,
+    y: 80,
+    width: 18,
+    opacity: 0.85,
+    tintColor: null,
+  },
 };
 
 function makeDemoScene(order: number): Scene {

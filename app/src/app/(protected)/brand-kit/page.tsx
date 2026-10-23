@@ -179,6 +179,15 @@ export default function BrandKitPage() {
       primaryColor: kit.primary, secondaryColor: kit.secondary, accentColor: kit.accent,
       fontHeading: kit.fontHeading, fontBody: kit.fontBody,
       captionStyle: captionStyleForPreset(kit.captionPreset), watermark: null, intro: null, outro: null,
+      logoOverlay: {
+        enabled: Boolean(kit.logo),
+        type: "image",
+        x: 80,
+        y: 80,
+        width: 18,
+        opacity: 0.85,
+        tintColor: null,
+      },
     });
 
     setSaved(true);

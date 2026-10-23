@@ -51,6 +51,8 @@ function CanvasPreview({ containerWidth, containerHeight, showGrid, showSafe }: 
   const scenes = useEditorStore((s) => s.scenes)
   const activeSceneId = useEditorStore((s) => s.activeSceneId)
   const aspectRatio = useEditorStore((s) => s.aspectRatio)
+  const brandKit = useEditorStore((s) => s.brandKit)
+  const inspectorTarget = useEditorStore((s) => s.inspectorTarget)
   const activeScene = scenes.find((s) => s.id === activeSceneId)
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -213,6 +215,72 @@ function CanvasPreview({ containerWidth, containerHeight, showGrid, showSafe }: 
             {cap.text}
           </div>
         ))}
+
+        {/* Interactive Brand Logo / Watermark Overlay */}
+        {(() => {
+          const overlay = brandKit?.logoOverlay;
+          const isVisible = overlay ? overlay.enabled : Boolean(brandKit?.logo);
+          if (!isVisible) return null;
+
+          const isSelected = inspectorTarget?.type === "logo";
+          const type = overlay?.type ?? "image";
+          const x = overlay?.x ?? 80;
+          const y = overlay?.y ?? 80;
+          const widthPct = overlay?.width ?? 18;
+          const opacity = overlay?.opacity ?? 0.85;
+
+          return (
+            <div
+              data-testid="interactive-brand-logo-stage"
+              onClick={(e) => {
+                e.stopPropagation();
+                useEditorStore.getState().setInspectorTarget({ type: "logo" });
+              }}
+              style={{
+                position: "absolute",
+                left: `${x}%`,
+                top: `${y}%`,
+                width: `${widthPct}%`,
+                opacity: opacity,
+                cursor: "pointer",
+                zIndex: 14,
+                outline: isSelected ? "2px solid var(--accent, #6366F1)" : "1px dashed transparent",
+                borderRadius: 4,
+                padding: 2,
+                userSelect: "none",
+              }}
+            >
+              {type === "image" && brandKit?.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={brandKit.logo}
+                  alt="Brand logo"
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    display: "block",
+                    objectFit: "contain",
+                    pointerEvents: "none",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    fontFamily: brandKit?.fontHeading ?? "Inter",
+                    fontWeight: 800,
+                    color: brandKit?.primaryColor ?? "#FFFFFF",
+                    fontSize: Math.max(12, Math.round((previewW * widthPct) / 350)),
+                    textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                    textAlign: "center",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {overlay?.text || brandKit?.name || "BRAND"}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <div className="canvas-badge">{aspectRatio}</div>
         <CanvasTimecode />

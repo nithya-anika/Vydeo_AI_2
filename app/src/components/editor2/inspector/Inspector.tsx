@@ -76,6 +76,132 @@ export function Inspector() {
     )
   }
 
+  /* ── Logo Overlay ─────────────────────────────────────────────────────*/
+  if (inspectorTarget?.type === 'logo') {
+    const { brandKit, updateBrandKit, setInspectorTarget } = useEditorStore.getState()
+    const overlay = brandKit?.logoOverlay ?? {
+      enabled: true,
+      type: "image",
+      x: 80,
+      y: 80,
+      width: 18,
+      opacity: 0.85,
+    }
+    const upd = (patch: Partial<typeof overlay>) => {
+      updateBrandKit({
+        logoOverlay: { ...overlay, ...patch },
+      })
+    }
+
+    return (
+      <div className="insp">
+        <div className="insp-title">Brand Logo Overlay</div>
+        <Field label="Logo Mode">
+          <div style={{ display: "flex", gap: 6 }}>
+            <Button
+              variant={overlay.type === "image" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => upd({ type: "image", enabled: true })}
+            >
+              Image
+            </Button>
+            <Button
+              variant={overlay.type === "text" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => upd({ type: "text", enabled: true })}
+            >
+              Text
+            </Button>
+          </div>
+        </Field>
+
+        {overlay.type === "text" && (
+          <Field label="Text Copy">
+            <Input
+              value={overlay.text ?? brandKit?.name ?? "BRAND"}
+              onChange={(e) => upd({ text: e.target.value })}
+            />
+          </Field>
+        )}
+
+        <Field label={`Size — ${overlay.width}% width`}>
+          <Slider
+            min={6}
+            max={50}
+            step={1}
+            value={overlay.width}
+            onChange={(e) => upd({ width: Number(e.target.value) })}
+            aria-label="Logo size"
+          />
+        </Field>
+
+        <Field label={`Opacity — ${Math.round(overlay.opacity * 100)}%`}>
+          <Slider
+            min={0.1}
+            max={1}
+            step={0.05}
+            value={overlay.opacity}
+            onChange={(e) => upd({ opacity: Number(e.target.value) })}
+            aria-label="Logo opacity"
+          />
+        </Field>
+
+        {overlay.type === "image" && (
+          <Field label="Monochrome Tint">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Button
+                variant={overlay.tintColor ? "primary" : "secondary"}
+                size="sm"
+                onClick={() => upd({ tintColor: overlay.tintColor ? null : brandKit?.primaryColor ?? "#FFFFFF" })}
+              >
+                {overlay.tintColor ? "Enabled" : "Disabled"}
+              </Button>
+              {overlay.tintColor && (
+                <input
+                  type="color"
+                  value={overlay.tintColor}
+                  onChange={(e) => upd({ tintColor: e.target.value })}
+                  style={{ width: 24, height: 24, padding: 0, border: "none", cursor: "pointer", borderRadius: 4 }}
+                />
+              )}
+            </div>
+          </Field>
+        )}
+
+        <Field label="Quick Position">
+          <div className="pos-grid">
+            {[
+              ['TL', 6, 6], ['TR', 76, 6],
+              ['MC', 40, 45],
+              ['BL', 6, 84], ['BR', 76, 84],
+            ].map(([label, x, y]) => (
+              <button
+                key={label as string}
+                type="button"
+                className="pos-btn"
+                onClick={() => upd({ x: Number(x), y: Number(y) })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Button
+          variant="danger"
+          size="sm"
+          fullWidth
+          onClick={() => {
+            upd({ enabled: false })
+            setInspectorTarget(null)
+          }}
+        >
+          Remove Logo from Canvas
+        </Button>
+      </div>
+    )
+  }
+
   /* ── Audio (music) ────────────────────────────────────────────────────*/
   if (inspectorTarget?.type === 'audio') {
     const track = audioTracks.find((t) => t.id === inspectorTarget.id)

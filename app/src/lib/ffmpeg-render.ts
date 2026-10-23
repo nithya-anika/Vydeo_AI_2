@@ -1563,24 +1563,67 @@ export async function renderWithFfmpeg(
     }
     
     // Apply Brand Logo Watermark if present
-    if (logoFile) {
+    const hasImageLogo = Boolean(logoFile);
+    const hasTextLogo = brand?.logoType === "text" && Boolean(brand?.logoText);
+
+    if (hasImageLogo || hasTextLogo) {
       console.log(`[FFmpeg] Applying brand logo watermark...`);
-      // Scale logo to 20% of main video width, maintaining aspect ratio. 
-      // Place in bottom right with 30px padding, apply opacity.
-      // We use scale2ref to read the main video's width.
-      const opacity = brand?.logoOpacity ?? 0.85;
-      const overlayFilter = `[1:v][0:v]scale2ref=w=main_w*0.20:h=ow/mdar[logo][main];[logo]format=rgba,colorchannelmixer=aa=${opacity}[logo_transparent];[main][logo_transparent]overlay=W-w-30:H-h-30`;
-      
-      await runFfmpeg([
-        "-i", preFinal,
-        "-i", logoFile,
-        "-filter_complex", overlayFilter,
-        "-c:a", "copy",
-        "-c:v", "libx264",
-        "-preset", "ultrafast", // Use fast preset for the overlay pass
-        "-y",
-        outPath,
-      ]);
+      const opacity = Math.max(0.05, Math.min(1, brand?.logoOpacity ?? 0.85));
+      const logoX = brand?.logoX ?? 80;
+      const logoY = brand?.logoY ?? 80;
+      const logoWidth = brand?.logoWidth ?? 20;
+
+      // Calculate pixel coordinates relative to output video resolution [W, H]
+      const wPx = Math.max(20, Math.round((logoWidth / 100) * W));
+      const xPx = Math.max(0, Math.min(W - wPx, Math.round((logoX / 100) * W)));
+      const yPx = Math.max(0, Math.min(H - 20, Math.round((logoY / 100) * H)));
+
+      if (hasImageLogo) {
+        let logoFilter = `[1:v]scale=${wPx}:-2,format=rgba`;
+
+        // Apply monochrome tint via clean colorchannelmixer
+        if (brand?.logoTintColor) {
+          const hex = brand.logoTintColor.replace("#", "");
+          const r = (parseInt(hex.substring(0, 2), 16) / 255).toFixed(3);
+          const g = (parseInt(hex.substring(2, 4), 16) / 255).toFixed(3);
+          const b = (parseInt(hex.substring(4, 6), 16) / 255).toFixed(3);
+          logoFilter += `,colorchannelmixer=rr=${r}:rg=0:rb=0:gr=0:gg=${g}:gb=0:br=0:bg=0:bb=${b}:aa=${opacity}`;
+        } else {
+          logoFilter += `,colorchannelmixer=aa=${opacity}`;
+        }
+        logoFilter += `[logo]`;
+
+        const overlayFilter = `${logoFilter};[0:v][logo]overlay=${xPx}:${yPx}:shortest=1`;
+
+        await runFfmpeg([
+          "-i", preFinal,
+          "-framerate", "30",
+          "-loop", "1",
+          "-i", logoFile,
+          "-filter_complex", overlayFilter,
+          "-c:a", "copy",
+          "-c:v", "libx264",
+          "-preset", "ultrafast",
+          "-y",
+          outPath,
+        ]);
+      } else if (hasTextLogo) {
+        const fontPath = findSystemFont(brand?.fontFamily);
+        const fontArg = fontPath ? `:fontfile='${escapeFontPathForFfmpeg(fontPath)}'` : "";
+        const color = normalizeHexColor(brand?.primaryColor, "FFFFFF");
+        const fontSize = Math.max(16, Math.min(120, Math.round(wPx / 4)));
+        const drawFilter = `drawtext=text='${escapeDrawtext(brand?.logoText || "")}'${fontArg}:x=${xPx}:y=${yPx}:fontsize=${fontSize}:fontcolor=${color}@${opacity}:box=1:boxcolor=000000@0.3:boxborderw=8`;
+
+        await runFfmpeg([
+          "-i", preFinal,
+          "-vf", drawFilter,
+          "-c:a", "copy",
+          "-c:v", "libx264",
+          "-preset", "ultrafast",
+          "-y",
+          outPath,
+        ]);
+      }
     }
 
     /* ---------------------------------------------------------------------- */

@@ -57,11 +57,20 @@ export interface RenderCaption {
 
 export interface BrandRenderInput {
   logoData?: string;
+  logoText?: string;
+  logoType?: "image" | "text";
   logoOpacity?: number;
+  logoX?: number; // 0-100 percentage from left
+  logoY?: number; // 0-100 percentage from top
+  logoWidth?: number; // 5-100 percentage of width
+  logoTintColor?: string;
   logoStart?: number;
   logoEnd?: number;
   primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
   fontFamily?: string;
+  fontBody?: string;
 }
 
 export interface RenderParams {

@@ -59,6 +59,7 @@ export interface DbBrandKit {
   font_heading: string;
   font_body: string;
   caption_preset: string;
+  logo_overlay?: string | null;
   created_at: string;
   updated_at: string;
 }

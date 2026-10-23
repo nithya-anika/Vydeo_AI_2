@@ -1557,6 +1557,176 @@ function InspectorContent() {
 
   const activeScene = scenes.find((s) => s.id === activeSceneId);
 
+  // Logo overlay inspector
+  if (inspectorTarget?.type === "logo") {
+    const { brandKit, updateBrandKit } = useEditorStore.getState();
+    const overlay = brandKit?.logoOverlay ?? {
+      enabled: true,
+      type: "image",
+      x: 80,
+      y: 80,
+      width: 18,
+      opacity: 0.85,
+    };
+    const updOverlay = (patch: Partial<typeof overlay>) => {
+      updateBrandKit({
+        logoOverlay: { ...overlay, ...patch },
+      });
+    };
+
+    return (
+      <div
+        style={{
+          padding: "12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: "var(--text-primary)",
+            marginBottom: -4,
+          }}
+        >
+          Brand Logo Overlay
+        </div>
+
+        <IField label="Logo Mode">
+          <div style={{ display: "flex", background: "var(--bg-inset)", borderRadius: 4, padding: 2, border: "1px solid var(--border)" }}>
+            <button
+              onClick={() => updOverlay({ type: "image", enabled: true })}
+              style={{
+                flex: 1, fontSize: 11, padding: "4px 8px", border: "none", borderRadius: 3, cursor: "pointer",
+                background: overlay.type === "image" ? "var(--accent)" : "transparent",
+                color: overlay.type === "image" ? "#fff" : "var(--text-muted)", fontWeight: 600,
+              }}
+            >
+              Image
+            </button>
+            <button
+              onClick={() => updOverlay({ type: "text", enabled: true })}
+              style={{
+                flex: 1, fontSize: 11, padding: "4px 8px", border: "none", borderRadius: 3, cursor: "pointer",
+                background: overlay.type === "text" ? "var(--accent)" : "transparent",
+                color: overlay.type === "text" ? "#fff" : "var(--text-muted)", fontWeight: 600,
+              }}
+            >
+              Text
+            </button>
+          </div>
+        </IField>
+
+        {overlay.type === "text" && (
+          <IField label="Text Copy">
+            <input
+              type="text"
+              value={overlay.text ?? brandKit?.name ?? "BRAND"}
+              onChange={(e) => updOverlay({ text: e.target.value })}
+              style={inputStyle}
+            />
+          </IField>
+        )}
+
+        <IField label={`Width — ${overlay.width}%`}>
+          <input
+            type="range"
+            min={6}
+            max={50}
+            value={overlay.width}
+            onChange={(e) => updOverlay({ width: Number(e.target.value) })}
+            style={{ width: "100%", accentColor: "var(--accent)" }}
+          />
+        </IField>
+
+        <IField label={`Opacity — ${Math.round(overlay.opacity * 100)}%`}>
+          <input
+            type="range"
+            min={10}
+            max={100}
+            value={Math.round(overlay.opacity * 100)}
+            onChange={(e) => updOverlay({ opacity: Number(e.target.value) / 100 })}
+            style={{ width: "100%", accentColor: "var(--accent)" }}
+          />
+        </IField>
+
+        <IField label="Quick Position">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+            {[
+              { label: "TL", x: 6, y: 6 },
+              { label: "TR", x: 76, y: 6 },
+              { label: "Center", x: 40, y: 45 },
+              { label: "BL", x: 6, y: 84 },
+              { label: "BR", x: 76, y: 84 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                onClick={() => updOverlay({ x: p.x, y: p.y })}
+                style={{
+                  padding: "5px 2px",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  background: "var(--bg-inset)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 3,
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </IField>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <IField label="X Position (%)">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={Math.round(overlay.x)}
+              onChange={(e) => updOverlay({ x: Number(e.target.value) })}
+              style={{ ...inputStyle, textAlign: "right" }}
+            />
+          </IField>
+          <IField label="Y Position (%)">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={Math.round(overlay.y)}
+              onChange={(e) => updOverlay({ y: Number(e.target.value) })}
+              style={{ ...inputStyle, textAlign: "right" }}
+            />
+          </IField>
+        </div>
+
+        <button
+          onClick={() => {
+            updOverlay({ enabled: false });
+            useEditorStore.getState().setInspectorTarget(null);
+          }}
+          style={{
+            marginTop: 8,
+            padding: "8px 0",
+            background: "rgba(239, 68, 68, 0.1)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            borderRadius: "var(--r-md)",
+            color: "var(--danger, #ef4444)",
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Remove Logo from Canvas
+        </button>
+      </div>
+    );
+  }
+
   // Caption inspector
   if (inspectorTarget?.type === "caption") {
     const scene = scenes.find((s) => s.id === inspectorTarget.sceneId);
@@ -2771,7 +2941,7 @@ function CanvasPreview({
   onCaptionClick?: (sceneId: string, captionId: string) => void;
   transportVideoRef?: { current: HTMLVideoElement | null };
 }) {
-  const { scenes, activeSceneId, aspectRatio, brandKit } = useEditorStore();
+  const { scenes, activeSceneId, aspectRatio, brandKit, inspectorTarget } = useEditorStore();
   const activeScene = scenes.find((s) => s.id === activeSceneId) ?? scenes[0];
   const resolvedActiveSceneId = activeScene?.id ?? null;
 
@@ -2794,6 +2964,16 @@ function CanvasPreview({
 
   // Caption drag state
   const dragCaptionRef = useRef<{ captionId: string; sceneId: string; startX: number; startY: number; startCX: number; startCY: number } | null>(null);
+
+  // Logo overlay drag & resize state
+  const dragLogoRef = useRef<{
+    mode: "move" | "resize";
+    startX: number;
+    startY: number;
+    startLX: number;
+    startLY: number;
+    startWidth: number;
+  } | null>(null);
 
   // Offset of the active scene within the full timeline
   const sceneStartTime = useMemo(() => {
@@ -2910,31 +3090,113 @@ function CanvasPreview({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedActiveSceneId]);
 
-  // Caption drag — global mouse handlers
+  // Caption & Logo drag — global mouse handlers
   useEffect(() => {
     function onMove(e: MouseEvent) {
-      const drag = dragCaptionRef.current;
-      if (!drag) return;
       const container = canvasContainerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const dx = ((e.clientX - drag.startX) / rect.width) * 100;
-      const dy = ((e.clientY - drag.startY) / rect.height) * 100;
-      const newX = Math.max(5, Math.min(95, drag.startCX + dx));
-      const newY = Math.max(5, Math.min(95, drag.startCY + dy));
-      useEditorStore.getState().updateCaption(drag.sceneId, drag.captionId, { x: newX, y: newY });
+
+      // Caption Drag
+      const dragCap = dragCaptionRef.current;
+      if (dragCap) {
+        const dx = ((e.clientX - dragCap.startX) / rect.width) * 100;
+        const dy = ((e.clientY - dragCap.startY) / rect.height) * 100;
+        const newX = Math.max(5, Math.min(95, dragCap.startCX + dx));
+        const newY = Math.max(5, Math.min(95, dragCap.startCY + dy));
+        useEditorStore.getState().updateCaption(dragCap.sceneId, dragCap.captionId, { x: newX, y: newY });
+        return;
+      }
+
+      // Logo Drag / Resize
+      const dragLogo = dragLogoRef.current;
+      if (dragLogo) {
+        const bk = useEditorStore.getState().brandKit;
+        const ov = bk?.logoOverlay ?? { enabled: true, type: "image", x: 80, y: 80, width: 18, opacity: 0.85 };
+
+        if (dragLogo.mode === "move") {
+          const dx = ((e.clientX - dragLogo.startX) / rect.width) * 100;
+          const dy = ((e.clientY - dragLogo.startY) / rect.height) * 100;
+          let newX = Math.max(0, Math.min(100 - dragLogo.startWidth, dragLogo.startLX + dx));
+          let newY = Math.max(0, Math.min(92, dragLogo.startLY + dy));
+
+          // Smart edge snapping
+          if (newX < 6) newX = 5;
+          if (newX + dragLogo.startWidth > 94) newX = 95 - dragLogo.startWidth;
+          if (Math.abs(newX + dragLogo.startWidth / 2 - 50) < 2.5) newX = 50 - dragLogo.startWidth / 2;
+          if (newY < 6) newY = 5;
+          if (newY > 84) newY = 85;
+          if (Math.abs(newY - 50) < 2.5) newY = 50;
+
+          useEditorStore.getState().updateBrandKit({
+            logoOverlay: {
+              ...ov,
+              x: Math.round(newX * 10) / 10,
+              y: Math.round(newY * 10) / 10,
+            },
+          });
+        } else if (dragLogo.mode === "resize") {
+          const dw = ((e.clientX - dragLogo.startX) / rect.width) * 100;
+          const newW = Math.max(6, Math.min(50, dragLogo.startWidth + dw));
+          useEditorStore.getState().updateBrandKit({
+            logoOverlay: {
+              ...ov,
+              width: Math.round(newW * 10) / 10,
+            },
+          });
+        }
+      }
     }
+
     function onUp() {
       dragCaptionRef.current = null;
+      dragLogoRef.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     }
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
+  }, []);
+
+  // Keyboard controls for selected logo overlay
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = useEditorStore.getState().inspectorTarget;
+      if (target?.type !== "logo") return;
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
+
+      const bk = useEditorStore.getState().brandKit;
+      const ov = bk?.logoOverlay ?? { enabled: true, type: "image", x: 80, y: 80, width: 18, opacity: 0.85 };
+      const step = e.shiftKey ? 5 : 1;
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        useEditorStore.getState().updateBrandKit({ logoOverlay: { ...ov, x: Math.max(0, ov.x - step) } });
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        useEditorStore.getState().updateBrandKit({ logoOverlay: { ...ov, x: Math.min(100 - ov.width, ov.x + step) } });
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        useEditorStore.getState().updateBrandKit({ logoOverlay: { ...ov, y: Math.max(0, ov.y - step) } });
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        useEditorStore.getState().updateBrandKit({ logoOverlay: { ...ov, y: Math.min(95, ov.y + step) } });
+      } else if (e.key === "Backspace" || e.key === "Delete") {
+        e.preventDefault();
+        useEditorStore.getState().updateBrandKit({ logoOverlay: { ...ov, enabled: false } });
+        useEditorStore.getState().setInspectorTarget(null);
+      } else if (e.key === "Escape") {
+        useEditorStore.getState().setInspectorTarget(null);
+      }
+    }
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const [arW, arH] = aspectRatio.split(":").map(Number);
@@ -3020,6 +3282,42 @@ function CanvasPreview({
       )}
       <div
         ref={canvasContainerRef}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("application/x-brand-logo")) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDrop={(e) => {
+          if (e.dataTransfer.getData("application/x-brand-logo")) {
+            e.preventDefault();
+            const container = canvasContainerRef.current;
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const dropX = ((e.clientX - rect.left) / rect.width) * 100;
+            const dropY = ((e.clientY - rect.top) / rect.height) * 100;
+            const bk = useEditorStore.getState().brandKit;
+            const curW = bk?.logoOverlay?.width ?? 18;
+            const finalX = Math.max(2, Math.min(100 - curW, dropX - curW / 2));
+            const finalY = Math.max(2, Math.min(88, dropY - 5));
+
+            useEditorStore.getState().updateBrandKit({
+              logoOverlay: {
+                ...(bk?.logoOverlay ?? { enabled: true, type: "image", opacity: 0.85 }),
+                enabled: true,
+                x: Math.round(finalX),
+                y: Math.round(finalY),
+                width: curW,
+              },
+            });
+            useEditorStore.getState().setInspectorTarget({ type: "logo" });
+          }
+        }}
+        onClick={(e) => {
+          if (e.target === canvasContainerRef.current || (e.target as HTMLElement).tagName === "VIDEO") {
+            useEditorStore.getState().setInspectorTarget(null);
+          }
+        }}
         style={{
           width: previewW,
           height: previewH,
@@ -3116,7 +3414,8 @@ function CanvasPreview({
               fontSize: cap.fontSize * (previewW / 1080),
               fontWeight: cap.bold ? "bold" : "normal",
               fontStyle: cap.italic ? "italic" : "normal",
-              color: cap.color,
+              color: cap.color || brandKit?.primaryColor || "#FFFFFF",
+              fontFamily: cap.fontFamily || brandKit?.fontBody || "Inter",
               textAlign: cap.align,
               textShadow: cap.shadow ? "0 2px 8px rgba(0,0,0,0.8)" : "none",
               pointerEvents: "auto",
@@ -3153,24 +3452,181 @@ function CanvasPreview({
           {aspectRatio}
         </div>
 
-        {/* Brand logo watermark */}
-        {brandKit?.logo && (
-          <img
-            src={brandKit.logo}
-            alt="Brand logo"
-            style={{
-              position: "absolute",
-              left: 12,
-              top: 12,
-              maxWidth: Math.max(42, previewW * 0.18),
-              maxHeight: Math.max(28, previewH * 0.1),
-              objectFit: activeScene?.clipFit ?? "contain",
-              filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.65))",
-              pointerEvents: "none",
-              zIndex: 8,
-            }}
-          />
-        )}
+        {/* Interactive Brand Logo / Watermark Overlay */}
+        {(() => {
+          const overlay = brandKit?.logoOverlay;
+          const isVisible = overlay ? overlay.enabled : Boolean(brandKit?.logo);
+          if (!isVisible) return null;
+
+          const isSelected = inspectorTarget?.type === "logo";
+          const type = overlay?.type ?? "image";
+          const x = overlay?.x ?? 80;
+          const y = overlay?.y ?? 80;
+          const widthPct = overlay?.width ?? 18;
+          const opacity = overlay?.opacity ?? 0.85;
+
+          return (
+            <div
+              data-testid="interactive-brand-logo"
+              onClick={(e) => {
+                e.stopPropagation();
+                useEditorStore.getState().setInspectorTarget({ type: "logo" });
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                useEditorStore.getState().setInspectorTarget({ type: "logo" });
+                dragLogoRef.current = {
+                  mode: "move",
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  startLX: x,
+                  startLY: y,
+                  startWidth: widthPct,
+                };
+                document.body.style.cursor = "move";
+                document.body.style.userSelect = "none";
+              }}
+              style={{
+                position: "absolute",
+                left: `${x}%`,
+                top: `${y}%`,
+                width: `${widthPct}%`,
+                opacity: opacity,
+                cursor: "move",
+                zIndex: 14,
+                outline: isSelected ? "2px solid var(--accent, #6366F1)" : "1px dashed transparent",
+                boxShadow: isSelected ? "0 0 0 2px rgba(99,102,241,0.3), 0 4px 16px rgba(0,0,0,0.5)" : "none",
+                borderRadius: 4,
+                padding: 2,
+                transition: "outline 0.12s, box-shadow 0.12s",
+                userSelect: "none",
+              }}
+              onMouseEnter={(e) => {
+                if (!isSelected) {
+                  (e.currentTarget as HTMLElement).style.outline = "1px dashed rgba(255,255,255,0.6)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isSelected) {
+                  (e.currentTarget as HTMLElement).style.outline = "1px dashed transparent";
+                }
+              }}
+            >
+              {type === "image" && brandKit?.logo ? (
+                overlay?.tintColor ? (
+                  <div
+                    style={{
+                      width: "100%",
+                      paddingBottom: "100%", // Maintain square container to avoid collapse, or rely on image aspect
+                      WebkitMaskImage: `url(${brandKit.logo})`,
+                      WebkitMaskSize: "contain",
+                      WebkitMaskRepeat: "no-repeat",
+                      WebkitMaskPosition: "center",
+                      maskImage: `url(${brandKit.logo})`,
+                      maskSize: "contain",
+                      maskRepeat: "no-repeat",
+                      maskPosition: "center",
+                      backgroundColor: overlay.tintColor,
+                      filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.5))",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {/* Invisible image to force correct height for the mask container */}
+                    <img src={brandKit.logo} alt="" style={{ width: "100%", height: "auto", opacity: 0 }} />
+                  </div>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={brandKit.logo}
+                    alt="Brand logo"
+                    draggable={false}
+                    style={{
+                      width: "100%",
+                      height: "auto",
+                      display: "block",
+                      objectFit: "contain",
+                      filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.65))",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )
+              ) : (
+                <div
+                  style={{
+                    fontFamily: brandKit?.fontHeading ?? "Inter",
+                    fontWeight: 800,
+                    color: brandKit?.primaryColor ?? "#FFFFFF",
+                    fontSize: Math.max(12, Math.round((previewW * widthPct) / 350)),
+                    textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                    whiteSpace: "nowrap",
+                    textAlign: "center",
+                    pointerEvents: "none",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {overlay?.text || brandKit?.name || "BRAND"}
+                </div>
+              )}
+
+              {/* Selection Pill & Resize Handle */}
+              {isSelected && (
+                <>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: -18,
+                      left: 0,
+                      background: "var(--accent, #6366F1)",
+                      color: "#fff",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      padding: "1px 4px",
+                      borderRadius: 3,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    Brand Logo
+                  </div>
+
+                  {/* Corner Resize Handle */}
+                  <div
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      dragLogoRef.current = {
+                        mode: "resize",
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        startLX: x,
+                        startLY: y,
+                        startWidth: widthPct,
+                      };
+                      document.body.style.cursor = "nwse-resize";
+                      document.body.style.userSelect = "none";
+                    }}
+                    style={{
+                      position: "absolute",
+                      right: -4,
+                      bottom: -4,
+                      width: 9,
+                      height: 9,
+                      background: "#fff",
+                      border: "2px solid var(--accent, #6366F1)",
+                      borderRadius: "50%",
+                      cursor: "nwse-resize",
+                      zIndex: 16,
+                    }}
+                    title="Drag to resize logo"
+                  />
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Timecode pill — isolated component so it re-renders each frame without pulling CanvasPreview along */}
         <TimecodePill />
@@ -3404,12 +3860,44 @@ export default function EditorShell({
         /* ignore invalid json */
       }
     }
-
-    // We do NOT need to parse any payload or inject any clips here.
-    // The Zustand global store (useEditorStore) is persistent across page navigations in Next.js SPA routing!
     // The FootagePage already populated the store perfectly.
-    
     console.log("[EditorShell] Acknowledged handoff from Footage page.");
+  }, []);
+
+  // Hydrate user active Brand Kit on editor mount if not already loaded
+  useEffect(() => {
+    if (useEditorStore.getState().brandKit?.logo) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/brand-kits");
+        if (res.ok) {
+          const { kits } = await res.json();
+          if (Array.isArray(kits) && kits.length > 0) {
+            const activeId = typeof window !== "undefined" ? localStorage.getItem("vydeoai_brand_active_v1") : null;
+            const target = kits.find((k: any) => k.id === activeId) || kits[0];
+            let overlay = { enabled: true, type: "image" as const, x: 75, y: 80, width: 20, opacity: 0.85, tintColor: null };
+            if (target.logo_overlay) {
+              try { overlay = typeof target.logo_overlay === "string" ? JSON.parse(target.logo_overlay) : target.logo_overlay; } catch {}
+            }
+            useEditorStore.getState().setBrandKit({
+              id: target.id,
+              name: target.name || "Brand Kit",
+              logo: target.logo || null,
+              primaryColor: target.primary_color || "#C9A96E",
+              secondaryColor: target.secondary_color || "#1A1A22",
+              accentColor: target.accent_color || "#A78BFA",
+              fontHeading: target.font_heading || "Playfair Display",
+              fontBody: target.font_body || "Inter",
+              captionStyle: {},
+              watermark: null,
+              intro: null,
+              outro: null,
+              logoOverlay: overlay,
+            });
+          }
+        }
+      } catch {}
+    })();
   }, []);
 
   // ── Persistence: autosave + load via the drafts API ───────────────────────────
