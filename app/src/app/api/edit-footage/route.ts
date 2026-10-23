@@ -248,6 +248,19 @@ Below are sample frames from each clip so you can identify who is in them and wh
         // Parse response safely
         plan = safeParseJson<EditPlan>(raw);
 
+        // Strict completeness validation: do not silently accept incomplete timelines
+        if (!plan || !Array.isArray(plan.sceneOrder) || !Array.isArray(plan.trimInstructions)) {
+          throw new Error("Invalid or incomplete edit plan structure");
+        }
+        
+        // Ensure every requested scene has a corresponding trim instruction with valid boundaries
+        for (const clipIdx of plan.sceneOrder) {
+          const trim = plan.trimInstructions.find(t => t.clipIndex === clipIdx);
+          if (!trim || typeof trim.trimStart !== "number" || isNaN(trim.trimStart)) {
+             throw new Error(`Missing trimStart boundary for clip ${clipIdx}. Incomplete edit plan.`);
+          }
+        }
+
         // Ensure optional fields always exist before validating the AI response.
         if (plan.muteSourceAudio === undefined) {
           plan.muteSourceAudio = false;
