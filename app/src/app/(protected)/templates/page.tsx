@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -565,9 +565,32 @@ function TemplateCard({ template, onUse, onPreview, compact = false }: {
   compact?: boolean
 }) {
   const [hovered, setHovered] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isVisible, setIsVisible] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting)
+        if (videoRef.current) {
+          if (entry.isIntersecting) {
+            videoRef.current.play().catch(() => {})
+          } else {
+            videoRef.current.pause()
+          }
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
 
   return (
     <motion.div
+      ref={containerRef}
       onHoverStart={() => setHovered(true)}
       onHoverEnd={() => setHovered(false)}
       whileHover={{ scale: 1.015, y: -2 }}
@@ -594,24 +617,25 @@ function TemplateCard({ template, onUse, onPreview, compact = false }: {
           overflow: 'hidden',
         }}
       >
-        {/* SVG Thumbnail – shown while loading or when not hovered */}
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-          <TemplateThumbnail template={template} />
-        </div>
+        {/* SVG Thumbnail – shown ONLY if no video exists */}
+        {!template.previewVideoUrl && (
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+            <TemplateThumbnail template={template} />
+          </div>
+        )}
 
-        {/* Live Video Preview - plays inline on hover */}
+        {/* Live Video Preview - plays inline always when visible */}
         {template.previewVideoUrl && (
-          <div style={{ position: 'absolute', inset: 0, opacity: hovered ? 1 : 0, transition: 'opacity 0.3s ease' }}>
-            {hovered && (
-              <video
-                src={template.previewVideoUrl}
-                autoPlay
-                muted
-                loop
-                playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            )}
+          <div style={{ position: 'absolute', inset: 0, opacity: 1, pointerEvents: 'none' }}>
+            <video
+              ref={videoRef}
+              src={template.previewVideoUrl}
+              poster={template.posterUrl}
+              muted
+              loop
+              playsInline
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
           </div>
         )}
 
@@ -975,14 +999,15 @@ function FeaturedCard({ template, onUse, onPreview }: { template: Template; onUs
 
       {/* Video Background (if available) */}
       {template.previewVideoUrl && (
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.4, mixBlendMode: 'overlay', pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           <video
             src={template.previewVideoUrl}
+            poster={template.posterUrl}
             autoPlay
             muted
             loop
             playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.5, mixBlendMode: 'overlay' }}
           />
         </div>
       )}
