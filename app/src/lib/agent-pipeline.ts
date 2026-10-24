@@ -431,52 +431,54 @@ Music Style: ${template.musicStyle} (${template.musicEnergy} energy)
         });
       } else if (toolName === "music-selector") {
         const data = result.data as Awaited<ReturnType<typeof musicSelectorTool.execute>>["data"];
-        if (result.success && data) {
-          musicSpec = { genre: data.primary.genre, searchKeywords: data.primary.searchKeywords, editorialNote: data.primary.editorialNote };
+        if (result.success && data && data.primary) {
+          musicSpec = { genre: data.primary.genre, searchKeywords: data.primary.searchKeywords || [], editorialNote: data.primary.editorialNote };
 
           // Automatically select best track from library based on genre/keywords/tempo
-          if (timeline && timeline.audioLayers && timeline.audioLayers.length === 0) {
-            let bestTrack = MUSIC_LIBRARY[0];
-            let bestScore = -1;
-            const targetGenre = data.primary.genre.toLowerCase();
-            const targetTempo = data.primary.tempo;
-            const targetEnergy = data.primary.energy;
-            
-            for (const track of MUSIC_LIBRARY) {
-              let score = 0;
-              const cat = track.category.toLowerCase();
-              if (targetGenre.includes(cat) || cat.includes(targetGenre)) score += 5;
-              if (track.mood.toLowerCase() === data.primary.mood.toLowerCase()) score += 3;
-              if (data.primary.searchKeywords.some(kw => track.tags.includes(kw.toLowerCase()))) score += 2;
+          if (timeline) {
+            if (!timeline.audioLayers) timeline.audioLayers = [];
+            if (timeline.audioLayers.length === 0) {
+              let bestTrack = MUSIC_LIBRARY[0];
+              let bestScore = -1;
+              const targetGenre = (data.primary.genre || "").toLowerCase();
+              const targetTempo = data.primary.tempo || "medium";
               
-              if (targetTempo === "fast" && track.bpm > 120) score += 2;
-              if (targetTempo === "slow" && track.bpm < 80) score += 2;
-              if (targetTempo === "medium" && track.bpm >= 80 && track.bpm <= 120) score += 2;
+              for (const track of MUSIC_LIBRARY) {
+                let score = 0;
+                const cat = track.category.toLowerCase();
+                if (targetGenre && (targetGenre.includes(cat) || cat.includes(targetGenre))) score += 5;
+                if (data.primary.mood && track.mood.toLowerCase() === data.primary.mood.toLowerCase()) score += 3;
+                if (Array.isArray(data.primary.searchKeywords) && data.primary.searchKeywords.some(kw => track.tags.includes(kw.toLowerCase()))) score += 2;
+                
+                if (targetTempo.includes("fast") && track.bpm > 120) score += 2;
+                if (targetTempo.includes("slow") && track.bpm < 80) score += 2;
+                if (targetTempo.includes("medium") && track.bpm >= 80 && track.bpm <= 120) score += 2;
 
-              if (score > bestScore) {
-                bestScore = score;
-                bestTrack = track;
+                if (score > bestScore) {
+                  bestScore = score;
+                  bestTrack = track;
+                }
               }
-            }
 
-            if (bestTrack) {
-              timeline.audioLayers = [{
-                id: `audio-${bestTrack.id}`,
-                type: "bgm",
-                src: bestTrack.previewUrl,
-                startTime: 0,
-                endTime: timeline.totalDuration ?? 30,
-                volume: data.audioLayers?.volume ?? (template?.musicVolume ?? 0.7),
-                fadeIn: data.audioLayers?.fadeIn ?? 1.0,
-                fadeOut: data.audioLayers?.fadeOut ?? 2.0,
-              }];
-              console.log(`[pipeline] Auto-selected music: ${bestTrack.title} (Score: ${bestScore})`);
+              if (bestTrack) {
+                timeline.audioLayers = [{
+                  id: `audio-${bestTrack.id}`,
+                  type: "bgm",
+                  src: bestTrack.previewUrl,
+                  startTime: 0,
+                  endTime: timeline.totalDuration ?? 30,
+                  volume: template?.musicVolume ?? 0.7,
+                  fadeIn: template ? 1.0 : 0.5,
+                  fadeOut: template ? 2.0 : 1.0,
+                }];
+                console.log(`[pipeline] Auto-selected music: ${bestTrack.title} (Score: ${bestScore})`);
+              }
             }
           }
         }
         trace.push({
           stage: "Music Selector", model: result.modelUsed ?? MODELS.MUSIC_SELECTOR, durationMs,
-          decision: data ? `${data.primary.genre} | ${data.primary.tempo} | ${data.primary.searchKeywords[0]}` : "no spec",
+          decision: data?.primary ? `${data.primary.genre} | ${data.primary.tempo} | ${data.primary.searchKeywords?.[0] ?? ""}` : "no spec",
         });
       }
     }

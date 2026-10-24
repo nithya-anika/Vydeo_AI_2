@@ -127,6 +127,10 @@ tools[].toolName must be valid tool names from the registry above.`;
     if (!parsed.tools.find(t => t.toolName === "timeline-generator")) {
       parsed.tools.push({ toolName: "timeline-generator" as ToolName, reason: "Core generation step" });
     }
+    // Ensure music-selector is always present
+    if (!parsed.tools.find(t => t.toolName === "music-selector")) {
+      parsed.tools.push({ toolName: "music-selector" as ToolName, reason: "Background music selection" });
+    }
 
     console.log(`[planner] ${parsed.cluster}/${parsed.mode} → ${parsed.workflowId} | tools: [${parsed.tools.map(t => t.toolName).join(", ")}] | ${Date.now() - start}ms`);
 
@@ -144,6 +148,7 @@ tools[].toolName must be valid tool names from the registry above.`;
     tools.push({ toolName: "hook-detection", reason: "Find best hook" });
     tools.push({ toolName: "timeline-generator", reason: "Generate edit plan" });
     tools.push({ toolName: "caption-generator", reason: "Polish captions" });
+    tools.push({ toolName: "music-selector", reason: "Select background music" });
 
     return {
       cluster,
@@ -169,5 +174,6 @@ function buildDefaultTools(hasClips: boolean, cluster: string): Array<{ toolName
   tools.push({ toolName: "timeline-generator", reason: "Generate edit plan" });
   tools.push({ toolName: "transition-planner", reason: "Refine transitions" });
   tools.push({ toolName: "caption-generator", reason: "Polish captions" });
+  tools.push({ toolName: "music-selector", reason: "Select background music" });
   return tools;
 }
