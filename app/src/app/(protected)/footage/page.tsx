@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { TEMPLATES as TEMPLATE_REGISTRY } from "@/lib/templates/registry";
 import {
   Upload, Film, X, Play, Sparkles, ArrowRight,
   Scissors, Shuffle, Zap, Music, Clock, LayoutGrid,
@@ -213,6 +214,9 @@ function ClipCard({ clip, onRemove, index }: { clip: UploadedClip; onRemove: () 
 
 export default function FootagePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTemplateId = searchParams.get("templateId");
+  const activeTemplate = urlTemplateId ? (TEMPLATE_REGISTRY[Number(urlTemplateId)] || Object.values(TEMPLATE_REGISTRY).find(t => t.id === urlTemplateId)) : null;
   const { loadTimeline } = useEditorStore();
 
   const [clips, setClips] = useState<UploadedClip[]>([]);
@@ -220,6 +224,16 @@ export default function FootagePage() {
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [aspectRatio, setAspectRatioLocal] = useState<AspectRatio>("9:16");
+
+  // Sync template presets into prompt and aspect ratio on mount
+  useEffect(() => {
+    if (activeTemplate) {
+      setPrompt(activeTemplate.editorialPrompt);
+      if (activeTemplate.aspectRatio) {
+        setAspectRatioLocal(activeTemplate.aspectRatio as AspectRatio);
+      }
+    }
+  }, [activeTemplate]);
   const [processing, setProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -555,16 +569,18 @@ export default function FootagePage() {
       let score: number | null = null;
       let feedback: string | null = null;
 
-      if (prompt.trim()) {
+      const effectivePrompt = prompt.trim() || activeTemplate?.editorialPrompt || "";
+      if (effectivePrompt) {
         setProcessingStep("AI is analyzing dialogues, cuts & narrative flow...");
         try {
           const res = await fetch("/api/lineup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              prompt: prompt.trim(),
+              prompt: effectivePrompt,
               workspaceSlug: "asaya",
               aspectRatio: aspectRatio,
+              templateId: urlTemplateId || activeTemplate?.id,
               geminiClips: clipInfosWithDialogue.map((c) => ({
                 id: clips[c.index].id,
                 mimeType: "video/mp4",
@@ -694,6 +710,52 @@ export default function FootagePage() {
             </div>
           </div>
         </motion.div>
+
+        {/* Active Template Banner */}
+        {activeTemplate && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              background: "linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(168,85,247,0.12) 100%)",
+              border: "1px solid rgba(99,102,241,0.35)",
+              borderRadius: "var(--r-xl)",
+              padding: "14px 18px",
+              marginBottom: 24,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              boxShadow: "0 8px 24px rgba(99,102,241,0.15)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: "var(--r-md)",
+                background: "var(--accent)", color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+                  Applied Template: {activeTemplate.name}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                  Editorial brief, {activeTemplate.pacing} pacing, and {activeTemplate.musicStyle} music are pre-configured. Just add clips and click Generate!
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <span style={{ fontSize: 10, padding: "4px 9px", borderRadius: "var(--r-full)", background: "rgba(255,255,255,0.08)", color: "var(--text-primary)", fontWeight: 600 }}>
+                {activeTemplate.platform}
+              </span>
+              <span style={{ fontSize: 10, padding: "4px 9px", borderRadius: "var(--r-full)", background: "rgba(255,255,255,0.08)", color: "var(--text-primary)", fontWeight: 600 }}>
+                {activeTemplate.targetDurationMin}-{activeTemplate.targetDurationMax}s
+              </span>
+            </div>
+          </motion.div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 24, alignItems: "start" }}>
           {/* Left column */}

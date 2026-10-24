@@ -554,9 +554,10 @@ function StarRating({ rating }: { rating: number }) {
   )
 }
 
-function TemplateCard({ template, onUse, compact = false }: {
+function TemplateCard({ template, onUse, onPreview, compact = false }: {
   template: Template
   onUse: (t: Template) => void
+  onPreview?: (t: Template) => void
   compact?: boolean
 }) {
   const [hovered, setHovered] = useState(false)
@@ -658,7 +659,7 @@ function TemplateCard({ template, onUse, compact = false }: {
             >
               <motion.button
                 whileTap={{ scale: 0.97 }}
-                onClick={e => { e.stopPropagation(); onUse(template) }}
+                onClick={e => { e.stopPropagation(); onPreview?.(template) }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -911,7 +912,7 @@ function TemplateCard({ template, onUse, compact = false }: {
 
 // ─── Featured Hero Card ───────────────────────────────────────────────────────
 
-function FeaturedCard({ template, onUse }: { template: Template; onUse: (t: Template) => void }) {
+function FeaturedCard({ template, onUse, onPreview }: { template: Template; onUse: (t: Template) => void; onPreview?: (t: Template) => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -1116,7 +1117,7 @@ function FeaturedCard({ template, onUse }: { template: Template; onUse: (t: Temp
           <motion.button
             whileTap={{ scale: 0.97 }}
             transition={{ duration: 0.1 }}
-            onClick={() => onUse(template)}
+            onClick={() => onPreview?.(template)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1332,9 +1333,11 @@ function BeforeAfterCard({
 function CategoryRow({
   templates,
   onUse,
+  onPreview,
 }: {
   templates: Template[]
   onUse: (t: Template) => void
+  onPreview?: (t: Template) => void
 }) {
   return (
     <div
@@ -1353,7 +1356,7 @@ function CategoryRow({
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: i * 0.05, duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
         >
-          <TemplateCard template={template} onUse={onUse} compact />
+          <TemplateCard template={template} onUse={onUse} onPreview={onPreview} compact />
         </motion.div>
       ))}
     </div>
@@ -1369,9 +1372,14 @@ export default function TemplatesPage() {
   const [activePlatform, setActivePlatform] = useState<string | null>(null)
   const [activeSectionTab, setActiveSectionTab] = useState('most-used')
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
+  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
 
   const handleUse = (template: Template) => {
     setSelectedTemplate(template)
+  }
+
+  const handlePreview = (template: Template) => {
+    setPreviewTemplate(template)
   }
 
   // Map a template's target platform to an aspect ratio AIWorkspace accepts.
@@ -1571,6 +1579,164 @@ export default function TemplatesPage() {
             </motion.div>
           </motion.div>
         )}
+
+        {/* ── Template Preview Modal ── */}
+        {previewTemplate && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 20,
+            }}
+            onClick={() => setPreviewTemplate(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 8 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--bg-panel)', border: '1px solid var(--border)',
+                borderRadius: 'var(--r-2xl)', width: '100%', maxWidth: 760,
+                maxHeight: '90vh', overflowY: 'auto',
+                boxShadow: '0 32px 80px rgba(0,0,0,0.85)',
+                display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) 1.25fr',
+                gap: 24, padding: 24,
+              }}
+            >
+              {/* Left: Video / visual preview */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{
+                  width: '100%', aspectRatio: previewTemplate.platform === 'YouTube' ? '16/9' : '9/16',
+                  maxHeight: 400, borderRadius: 'var(--r-xl)', overflow: 'hidden',
+                  background: '#0a0a0f', border: '1px solid var(--border)',
+                  position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <video
+                    src="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_1MB.mp4"
+                    controls
+                    autoPlay
+                    loop
+                    playsInline
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                  Live template preview generated with VydeoAI rendering engine
+                </div>
+              </div>
+
+              {/* Right: Recipe & Details */}
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--r-full)', background: 'var(--accent-subtle)', color: 'var(--accent-light)', border: '1px solid var(--accent-border)' }}>
+                          {previewTemplate.category.toUpperCase()}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                          {previewTemplate.platform} · {previewTemplate.duration}
+                        </span>
+                      </div>
+                      <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
+                        {previewTemplate.name}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => setPreviewTemplate(null)}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 4 }}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Creative Specification Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
+                    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Pacing Profile
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                        {TEMPLATE_REGISTRY[previewTemplate.id]?.pacing || "Balanced Cuts"}
+                      </div>
+                    </div>
+                    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Music Style
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                        {previewTemplate.musicStyle}
+                      </div>
+                    </div>
+                    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Caption Style
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                        {previewTemplate.captionStyle} Subtitles
+                      </div>
+                    </div>
+                    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Color Treatment
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                        {TEMPLATE_REGISTRY[previewTemplate.id]?.defaultColorGrade || "Natural"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Editorial Brief Preview */}
+                  <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 'var(--r-lg)', padding: '12px 14px', marginTop: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-light)', marginBottom: 4 }}>
+                      AI Editorial Recipe
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {TEMPLATE_REGISTRY[previewTemplate.id]?.editorialPrompt || `Optimized for ${previewTemplate.platform} with ${previewTemplate.captionStyle} text overlays.`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Actions */}
+                <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                  <button
+                    onClick={() => {
+                      const t = previewTemplate;
+                      setPreviewTemplate(null);
+                      setSelectedTemplate(t);
+                    }}
+                    style={{
+                      flex: 1, padding: '12px 18px', borderRadius: 'var(--r-lg)',
+                      background: 'var(--accent)', border: 'none', color: '#fff',
+                      fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
+                    }}
+                  >
+                    Use This Template
+                    <ArrowRight size={14} />
+                  </button>
+                  <button
+                    onClick={() => setPreviewTemplate(null)}
+                    style={{
+                      padding: '12px 16px', borderRadius: 'var(--r-lg)',
+                      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                      color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* ── Header ── */}
@@ -1741,7 +1907,7 @@ export default function TemplatesPage() {
         {/* Featured hero (only when no filters active) */}
         {activeCategory === 'all' && !search && !activePlatform && (
           <div style={{ marginBottom: 32 }}>
-            <FeaturedCard template={featuredTemplate} onUse={handleUse} />
+            <FeaturedCard template={featuredTemplate} onUse={handleUse} onPreview={handlePreview} />
           </div>
         )}
 
@@ -1789,7 +1955,7 @@ export default function TemplatesPage() {
             >
               {filtered.map(template => (
                 <motion.div key={template.id} variants={itemVariants}>
-                  <TemplateCard template={template} onUse={handleUse} />
+                  <TemplateCard template={template} onUse={handleUse} onPreview={handlePreview} />
                 </motion.div>
               ))}
             </motion.div>
@@ -1919,7 +2085,7 @@ export default function TemplatesPage() {
               exit={{ opacity: 0, x: -8 }}
               transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
             >
-              <CategoryRow templates={sectionTemplates} onUse={handleUse} />
+              <CategoryRow templates={sectionTemplates} onUse={handleUse} onPreview={handlePreview} />
             </motion.div>
           </AnimatePresence>
         </motion.div>

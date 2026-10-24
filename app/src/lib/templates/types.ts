@@ -36,4 +36,8 @@ export interface TemplateConfig {
   
   // Platform export defaults
   aspectRatio: "9:16" | "16:9" | "1:1" | "4:5";
+
+  // Assets
+  previewVideoUrl?: string;
+  posterUrl?: string;
 }
