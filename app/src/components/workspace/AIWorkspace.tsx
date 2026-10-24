@@ -748,6 +748,19 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
       cancelControllerRef.current = controller;
       const timeout = setTimeout(() => controller.abort(), 300_000);
 
+      let templateReferences = undefined;
+      let templateRefProfile = undefined;
+      try {
+        const rawCustom = sessionStorage.getItem("vydeoai_template_customization");
+        if (rawCustom) {
+          const parsed = JSON.parse(rawCustom);
+          if (Array.isArray(parsed.references) && parsed.references.length > 0) {
+            templateReferences = parsed.references;
+            templateRefProfile = parsed.referenceProfile;
+          }
+        }
+      } catch {}
+
       const res = await fetch("/api/lineup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -761,6 +774,8 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
           platform,
           stylePreset,
           templateId,
+          references: templateReferences,
+          referenceProfile: templateRefProfile,
         }),
         signal: controller.signal,
       });

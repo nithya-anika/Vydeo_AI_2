@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { TEMPLATES as TEMPLATE_REGISTRY } from "@/lib/templates/registry";
+import type { ReferenceMedia, ReferenceStyleProfile } from "@/types/references";
 import {
   Upload, Film, X, Play, Sparkles, ArrowRight,
   Scissors, Shuffle, Zap, Music, Clock, LayoutGrid,
@@ -224,16 +225,31 @@ export default function FootagePage() {
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [aspectRatio, setAspectRatioLocal] = useState<AspectRatio>("9:16");
+  const [references, setReferences] = useState<ReferenceMedia[]>([]);
+  const [referenceProfile, setReferenceProfile] = useState<ReferenceStyleProfile | null>(null);
 
-  // Sync template presets into prompt and aspect ratio on mount
+  // Sync template presets and references on mount
   useEffect(() => {
     if (activeTemplate) {
-      setPrompt(activeTemplate.editorialPrompt);
+      let initialPrompt = activeTemplate.editorialPrompt;
+      try {
+        const rawCustom = sessionStorage.getItem("vydeoai_template_customization");
+        if (rawCustom) {
+          const parsed = JSON.parse(rawCustom);
+          if (String(parsed.templateId) === String(activeTemplate.id) || Number(parsed.templateId) === Number(urlTemplateId)) {
+            if (parsed.customPrompt) initialPrompt = parsed.customPrompt;
+            if (Array.isArray(parsed.references)) setReferences(parsed.references);
+            if (parsed.referenceProfile) setReferenceProfile(parsed.referenceProfile);
+          }
+        }
+      } catch {}
+
+      setPrompt(initialPrompt);
       if (activeTemplate.aspectRatio) {
         setAspectRatioLocal(activeTemplate.aspectRatio as AspectRatio);
       }
     }
-  }, [activeTemplate]);
+  }, [activeTemplate, urlTemplateId]);
   const [processing, setProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -581,6 +597,8 @@ export default function FootagePage() {
               workspaceSlug: "asaya",
               aspectRatio: aspectRatio,
               templateId: urlTemplateId || activeTemplate?.id,
+              references: references.length > 0 ? references : undefined,
+              referenceProfile: referenceProfile || undefined,
               geminiClips: clipInfosWithDialogue.map((c) => ({
                 id: clips[c.index].id,
                 mimeType: "video/mp4",
@@ -744,6 +762,22 @@ export default function FootagePage() {
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
                   Editorial brief, {activeTemplate.pacing} pacing, and {activeTemplate.musicStyle} music are pre-configured. Just add clips and click Generate!
                 </div>
+                {references.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 8 }}>
+                    <span style={{ fontSize: 11, color: "var(--accent-light)", fontWeight: 700 }}>
+                      📎 {references.length} Style Reference(s):
+                    </span>
+                    {references.map((r) => (
+                      <span key={r.id} style={{
+                        fontSize: 10, padding: "2px 8px", borderRadius: "var(--r-sm)",
+                        background: "rgba(255,255,255,0.1)", color: "var(--text-primary)",
+                        display: "inline-flex", alignItems: "center", gap: 4, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                      }}>
+                        {r.type === "video" ? "🎬 " : "🖼️ "}{r.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>

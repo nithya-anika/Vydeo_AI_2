@@ -33,6 +33,8 @@ import type { ToolContext } from "./tools/types";
 import { validateAndRepairTimeline } from "./pipeline-guards";
 import { transcribeClipWithGemini } from "./transcription";
 import { MUSIC_LIBRARY } from "@/types/music";
+import type { ReferenceMedia, ReferenceStyleProfile } from "@/types/references";
+import { analyzeReferences } from "./reference-analysis";
 import {
   saveGeneration, saveWorkflowRun, saveToolExecution, saveEvaluationResult,
   getSimilarGenerations,
@@ -68,6 +70,7 @@ export interface PipelineResult {
     platformScores: Array<{ platform: string; score: number; rating: string; insight: string }>;
   };
   musicSpec?: { genre: string; searchKeywords: string[]; editorialNote: string };
+  referenceProfile?: ReferenceStyleProfile;
   dbSaved: boolean;
 }
 
@@ -95,8 +98,10 @@ export async function runAgentPipeline(params: {
   workspaceSlug: string;
   runQA?: boolean;
   templateId?: string | number;
+  references?: ReferenceMedia[];
+  referenceProfile?: ReferenceStyleProfile;
 }): Promise<PipelineResult> {
-  const { prompt, brand, clips = [], aspectRatio, overrides, workspaceSlug, templateId } = params;
+  const { prompt, brand, clips = [], aspectRatio, overrides, workspaceSlug, templateId, references, referenceProfile } = params;
   const runId = uuidv4();
   const hasClips = clips.length > 0;
   const pipelineStart = Date.now();
@@ -109,6 +114,19 @@ export async function runAgentPipeline(params: {
   const effectivePrompt = template 
     ? `TEMPLATE INSTRUCTION: ${template.editorialPrompt}\n\nUSER PROMPT: ${prompt}`
     : prompt;
+
+  // ── Step 0: Analyze reference media if provided ─────────────────────────────
+  let activeRefProfile = referenceProfile;
+  if (!activeRefProfile && references && references.length > 0) {
+    const refStart = Date.now();
+    activeRefProfile = (await analyzeReferences(references, template?.name, prompt)) ?? undefined;
+    trace.push({
+      stage: "Reference Media Analyzer",
+      model: getModel("vision"),
+      durationMs: Date.now() - refStart,
+      decision: `${references.length} reference file(s) analyzed → ${activeRefProfile?.visualMood ?? "Stylistic profile ready"}`,
+    });
+  }
 
   // ── Step 1: Planner + Brief Interpreter in parallel ─────────────────────────
   // These two are independent — brief interpreter only reads the prompt text,
@@ -166,9 +184,28 @@ Music Style: ${template.musicStyle} (${template.musicEnergy} energy)
     `.trim() + "\n\n";
   }
 
+  // Inject reference directives if reference media was analyzed
+  let referenceDirectives = "";
+  if (activeRefProfile) {
+    referenceDirectives = `
+━━━ CREATIVE REFERENCE STYLE GUIDELINES ━━━
+Visual Mood: ${activeRefProfile.visualMood}
+Lighting: ${activeRefProfile.lightingStyle}
+Color Palette: ${activeRefProfile.colorPalette?.join(", ") || "Derived from references"}
+Pacing Preference: ${activeRefProfile.pacingPreference}
+Transition Pattern: ${activeRefProfile.transitionStyle}
+Caption Placement: ${activeRefProfile.captionPlacement || "Lower third"} (${activeRefProfile.captionTypography || "Clean"})
+Music Energy: ${activeRefProfile.musicEnergy || "medium"}
+Directives:
+${(activeRefProfile.creativeDirectives || []).map(d => `- ${d}`).join("\n")}
+Reference Summary: ${activeRefProfile.summary}
+CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do NOT invent clips or copy scenes from the references. Edit ONLY the user's provided clips.
+    `.trim() + "\n\n";
+  }
+
   const enrichedPrompt = structuredBrief
-    ? `${templateDirectives}${effectivePrompt}\n\n━━━ STRUCTURED INTERPRETATION ━━━\n${formatBriefForPrompt(structuredBrief)}`
-    : `${templateDirectives}${effectivePrompt}`;
+    ? `${templateDirectives}${referenceDirectives}${effectivePrompt}\n\n━━━ STRUCTURED INTERPRETATION ━━━\n${formatBriefForPrompt(structuredBrief)}`
+    : `${templateDirectives}${referenceDirectives}${effectivePrompt}`;
 
   // ── Retrieve past examples from memory ─────────────────────────────────────
   const pastGens = await getSimilarGenerations({ workspaceSlug, cluster: plan.cluster, workflowId: workflow.id, limit: 2 });
@@ -570,6 +607,7 @@ Music Style: ${template.musicStyle} (${template.musicEnergy} energy)
       })),
     },
     musicSpec,
+    referenceProfile: activeRefProfile,
     dbSaved,
   };
 }

@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, Star, Zap, Clock, Film, Users, ArrowRight,
-  Sparkles, Flame, ChevronRight, Play,
+  Sparkles, Flame, ChevronRight, ChevronLeft, Play,
   Music2, Tag, LayoutGrid, Tv2, Smartphone, Briefcase, AtSign,
-  Upload, Scissors, X,
+  Upload, Scissors, X, Trash2, RotateCcw, Image as ImageIcon, Video as VideoIcon,
+  CheckCircle2, AlertCircle, Loader2,
 } from 'lucide-react'
+import { v4 as uuidv4 } from 'uuid'
 import type { Variants } from 'framer-motion'
 import { TEMPLATES as TEMPLATE_REGISTRY } from '@/lib/templates/registry'
+import type { ReferenceMedia, ReferenceStyleProfile, TemplateCustomizationPayload } from '@/types/references'
 
 // ─── Template Data ────────────────────────────────────────────────────────────
 
@@ -1374,16 +1377,138 @@ export default function TemplatesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
 
+  // Customization & Reference state
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [references, setReferences] = useState<ReferenceMedia[]>([])
+  const [uploadingRef, setUploadingRef] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [analyzingStyle, setAnalyzingStyle] = useState(false)
+  const [referenceProfile, setReferenceProfile] = useState<ReferenceStyleProfile | null>(null)
+  const refFileInputRef = useRef<HTMLInputElement>(null)
+
   const handleUse = (template: Template) => {
     setSelectedTemplate(template)
+    const reg = TEMPLATE_REGISTRY[template.id]
+    const initialPrompt = reg?.editorialPrompt || promptForTemplate(template)
+    setCustomPrompt(initialPrompt)
+    setReferences([])
+    setReferenceProfile(null)
+    setUploadError(null)
   }
 
   const handlePreview = (template: Template) => {
     setPreviewTemplate(template)
   }
 
+  const handleRestorePrompt = () => {
+    if (!selectedTemplate) return
+    const reg = TEMPLATE_REGISTRY[selectedTemplate.id]
+    setCustomPrompt(reg?.editorialPrompt || promptForTemplate(selectedTemplate))
+  }
+
+  const handleReferenceFiles = async (files: FileList | File[]) => {
+    const list = Array.from(files)
+    if (!list.length) return
+    if (references.length + list.length > 6) {
+      setUploadError("Maximum 6 reference files allowed.")
+      return
+    }
+    setUploadError(null)
+    setUploadingRef(true)
+
+    try {
+      const added: ReferenceMedia[] = []
+      for (const file of list) {
+        if (file.size > 50 * 1024 * 1024) {
+          throw new Error(`"${file.name}" exceeds 50MB limit.`)
+        }
+        const isVideo = file.type.startsWith("video/") || file.name.endsWith(".mp4") || file.name.endsWith(".mov")
+        const isImage = file.type.startsWith("image/")
+        if (!isVideo && !isImage) {
+          throw new Error(`"${file.name}" is not a supported image or video format.`)
+        }
+
+        const ext = file.name.split('.').pop() || (isVideo ? 'mp4' : 'png')
+        const initRes = await fetch("/api/upload-media", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: `ref_${Date.now()}_${file.name}`, contentType: file.type || (isVideo ? "video/mp4" : "image/png") }),
+        })
+
+        let finalUrl = ""
+        if (initRes.ok) {
+          const { url, publicUrl } = await initRes.json()
+          await fetch(url, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || (isVideo ? "video/mp4" : "image/png") },
+            body: file,
+          })
+          finalUrl = publicUrl || url.split("?")[0]
+        } else {
+          finalUrl = URL.createObjectURL(file)
+        }
+
+        added.push({
+          id: uuidv4(),
+          name: file.name,
+          type: isVideo ? "video" : "image",
+          url: finalUrl,
+          mimeType: file.type || (isVideo ? "video/mp4" : "image/png"),
+          size: file.size,
+          thumbnailUrl: isImage ? URL.createObjectURL(file) : undefined,
+        })
+      }
+
+      setReferences(prev => [...prev, ...added])
+    } catch (err: any) {
+      setUploadError(err.message || "Failed to upload reference media")
+    } finally {
+      setUploadingRef(false)
+    }
+  }
+
+  const handleRemoveReference = (id: string) => {
+    setReferences(prev => prev.filter(r => r.id !== id))
+  }
+
+  const handleReorderReference = (index: number, direction: "left" | "right") => {
+    setReferences(prev => {
+      const copy = [...prev]
+      const target = direction === "left" ? index - 1 : index + 1
+      if (target < 0 || target >= copy.length) return prev
+      const temp = copy[index]
+      copy[index] = copy[target]
+      copy[target] = temp
+      return copy
+    })
+  }
+
+  const handleAnalyzeReferences = async () => {
+    if (!references.length || analyzingStyle) return
+    setAnalyzingStyle(true)
+    setUploadError(null)
+    try {
+      const res = await fetch("/api/analyze-references", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          references,
+          templateName: selectedTemplate?.name,
+          customPrompt,
+        }),
+      })
+      const data = await res.json()
+      if (data.profile) {
+        setReferenceProfile(data.profile)
+      }
+    } catch (err: any) {
+      console.warn("Style analysis error:", err)
+    } finally {
+      setAnalyzingStyle(false)
+    }
+  }
+
   // Map a template's target platform to an aspect ratio AIWorkspace accepts.
-  // Accepted values (AIWorkspace.tsx): "9:16" | "16:9" | "1:1" | "4:5" | "3:4".
   const aspectRatioForPlatform = (platform: string): string => {
     switch (platform) {
       case 'Instagram':
@@ -1398,30 +1523,47 @@ export default function TemplatesPage() {
     }
   }
 
-  // Compose a generation prompt from the template's fields (no dedicated
-  // `prompt` field exists on TEMPLATES, so build one from name + audience + style).
   const promptForTemplate = (t: Template): string =>
     `Create a ${t.duration} ${t.platform} video in the style of "${t.name}". ` +
     `Target audience: ${t.targetAudience}. ` +
     `${t.scenes} scenes, ${t.captionStyle} captions, ${t.musicStyle} music. ` +
     `Polished, ${t.difficulty.toLowerCase()}-friendly, ready to publish.`
 
-  // Primary action: actually seed a generation in the AI workspace using the
-  // params it already understands (prompt + aspectRatio + autoGenerate + templateId).
+  // Primary action: seed generation in AI workspace carrying prompt and references
   const handleUseWithAI = () => {
     if (!selectedTemplate) return
-    const prompt = promptForTemplate(selectedTemplate)
+    const payload: TemplateCustomizationPayload = {
+      templateId: selectedTemplate.id,
+      templateName: selectedTemplate.name,
+      customPrompt,
+      references,
+      referenceProfile: referenceProfile || undefined,
+      updatedAt: Date.now(),
+    }
+    sessionStorage.setItem("vydeoai_template_customization", JSON.stringify(payload))
+
+    const promptToSend = customPrompt.trim() || promptForTemplate(selectedTemplate)
     const ar = aspectRatioForPlatform(selectedTemplate.platform)
     const tid = selectedTemplate.id
     setSelectedTemplate(null)
     router.push(
-      `/workspace/new?prompt=${encodeURIComponent(prompt)}&aspectRatio=${ar}&autoGenerate=1&templateId=${tid}`
+      `/workspace/new?prompt=${encodeURIComponent(promptToSend)}&aspectRatio=${ar}&autoGenerate=1&templateId=${tid}`
     )
   }
 
-  // Route to footage page with templateId param
+  // Route to footage page carrying prompt and references
   const handleUseWithFootage = () => {
     if (!selectedTemplate) return
+    const payload: TemplateCustomizationPayload = {
+      templateId: selectedTemplate.id,
+      templateName: selectedTemplate.name,
+      customPrompt,
+      references,
+      referenceProfile: referenceProfile || undefined,
+      updatedAt: Date.now(),
+    }
+    sessionStorage.setItem("vydeoai_template_customization", JSON.stringify(payload))
+
     const tid = selectedTemplate.id
     setSelectedTemplate(null)
     router.push(`/footage?templateId=${tid}`)
@@ -1473,7 +1615,7 @@ export default function TemplatesPage() {
         background: 'var(--bg-base)',
       }}
     >
-      {/* ── Footage choice modal ── */}
+      {/* ── Reference-Guided Template Customization Modal ── */}
       <AnimatePresence>
         {selectedTemplate && (
           <motion.div
@@ -1482,99 +1624,330 @@ export default function TemplatesPage() {
             exit={{ opacity: 0 }}
             style={{
               position: 'fixed', inset: 0, zIndex: 9999,
-              background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)',
+              background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 20,
             }}
             onClick={() => setSelectedTemplate(null)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 16 }}
+              initial={{ opacity: 0, scale: 0.93, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 8 }}
               transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
               onClick={e => e.stopPropagation()}
               style={{
                 background: 'var(--bg-panel)', border: '1px solid var(--border)',
-                borderRadius: 'var(--r-2xl)', padding: '28px 28px 24px', width: 420,
-                boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+                borderRadius: 'var(--r-2xl)', padding: '24px 28px', width: '100%', maxWidth: 660,
+                maxHeight: '90vh', overflowY: 'auto',
+                boxShadow: '0 32px 80px rgba(0,0,0,0.85)',
+                display: 'flex', flexDirection: 'column', gap: 18,
               }}
             >
               {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                    How would you like to use this?
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--r-full)', background: 'var(--accent-subtle)', color: 'var(--accent-light)', border: '1px solid var(--accent-border)' }}>
+                      TEMPLATE
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                      {selectedTemplate.platform} · {selectedTemplate.duration}
+                    </span>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                    {selectedTemplate.name}
+                  <h2 style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em', margin: 0 }}>
+                    Customize: {selectedTemplate.name}
+                  </h2>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>
+                    Fine-tune editorial instructions and optionally attach visual style references.
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedTemplate(null)}
                   style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 4 }}
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
 
-              <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* Option 1: AI-generated visuals */}
-                <button
-                  onClick={handleUseWithAI}
+              {/* Editorial Prompt Customizer */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Editorial Brief & Prompt
+                  </label>
+                  {customPrompt !== (TEMPLATE_REGISTRY[selectedTemplate.id]?.editorialPrompt || promptForTemplate(selectedTemplate)) && (
+                    <button
+                      onClick={handleRestorePrompt}
+                      style={{
+                        background: 'transparent', border: 'none', color: 'var(--accent-light)',
+                        fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                      }}
+                    >
+                      <RotateCcw size={11} />
+                      Restore Default Prompt
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={customPrompt}
+                  onChange={e => setCustomPrompt(e.target.value)}
+                  rows={3}
                   style={{
-                    padding: '16px 18px', borderRadius: 'var(--r-xl)',
-                    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                    cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 14,
-                    transition: 'border-color 0.15s, background 0.15s',
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--r-md)',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-primary)',
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    resize: 'vertical',
                     fontFamily: 'var(--font-sans)',
+                    outline: 'none',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-border)'; (e.currentTarget as HTMLElement).style.background = 'var(--accent-subtle)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'; }}
-                >
-                  <div style={{ width: 40, height: 40, borderRadius: 'var(--r-md)', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Sparkles size={18} color='var(--accent-light)' />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                      Use AI-generated visuals
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      AI creates all the scenes, clips and music for you based on this template style.
-                    </div>
-                  </div>
-                </button>
-
-                {/* Option 2: Upload own footage */}
-                <button
-                  onClick={handleUseWithFootage}
-                  style={{
-                    padding: '16px 18px', borderRadius: 'var(--r-xl)',
-                    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                    cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 14,
-                    transition: 'border-color 0.15s, background 0.15s',
-                    fontFamily: 'var(--font-sans)',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(139,92,246,0.5)'; (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.07)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'; }}
-                >
-                  <div style={{ width: 40, height: 40, borderRadius: 'var(--r-md)', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Scissors size={18} color='#A78BFA' />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                      Upload my own footage
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      Upload your video clips — AI edits them following this template&apos;s structure and style.
-                    </div>
-                  </div>
-                </button>
+                  placeholder="Describe your editing vision or instructions for this template..."
+                />
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                  VydeoAI will use this customized brief to direct shot choices, pacing, transitions, and story structure.
+                </div>
               </div>
 
-              <div style={{ marginTop: 16, fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center' }}>
-                You can always switch approaches after opening the editor
+              {/* Reference Media Upload Section */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      Creative Style References <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(Optional)</span>
+                    </label>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      Upload images or videos whose aesthetic, color harmony, or pacing you want VydeoAI to emulate.
+                    </div>
+                  </div>
+                  {references.length > 0 && (
+                    <button
+                      onClick={handleAnalyzeReferences}
+                      disabled={analyzingStyle}
+                      style={{
+                        background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)',
+                        color: 'var(--accent-light)', padding: '4px 10px', borderRadius: 'var(--r-md)',
+                        fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                      }}
+                    >
+                      {analyzingStyle ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      {referenceProfile ? 'Re-Analyze Style' : 'Analyze Style Profile'}
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  ref={refFileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    if (e.target.files) handleReferenceFiles(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
+
+                {/* Upload Drop Zone */}
+                <div
+                  onClick={() => refFileInputRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => {
+                    e.preventDefault()
+                    if (e.dataTransfer.files) handleReferenceFiles(e.dataTransfer.files)
+                  }}
+                  style={{
+                    border: '1.5px dashed var(--border-strong)',
+                    borderRadius: 'var(--r-lg)',
+                    padding: '16px 20px',
+                    textAlign: 'center',
+                    background: 'var(--bg-hover)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    transition: 'border-color 0.15s',
+                  }}
+                >
+                  {uploadingRef ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-light)', fontSize: 12 }}>
+                      <Loader2 size={16} className="animate-spin" />
+                      Uploading reference media...
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600 }}>
+                        <Upload size={14} />
+                        Drop reference images or video clips here, or click to browse
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                        Supports JPEG, PNG, WebP, MP4, MOV (Max 6 files, 50MB each)
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {uploadError && (
+                  <div style={{ fontSize: 11, color: '#EF4444', display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(239,68,68,0.1)', padding: '6px 10px', borderRadius: 'var(--r-sm)' }}>
+                    <AlertCircle size={13} />
+                    {uploadError}
+                  </div>
+                )}
+
+                {/* Reference List Preview */}
+                {references.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 10, marginTop: 4 }}>
+                    {references.map((ref, idx) => (
+                      <div
+                        key={ref.id}
+                        style={{
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--r-md)',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          position: 'relative',
+                        }}
+                      >
+                        <div style={{ height: 72, background: '#0a0a10', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
+                          {ref.type === 'image' && ref.thumbnailUrl ? (
+                            <img src={ref.thumbnailUrl} alt={ref.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'var(--text-secondary)' }}>
+                              <VideoIcon size={20} />
+                              <span style={{ fontSize: 9 }}>VIDEO</span>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => handleRemoveReference(ref.id)}
+                            style={{
+                              position: 'absolute', top: 4, right: 4,
+                              background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: '50%',
+                              width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: '#fff', cursor: 'pointer',
+                            }}
+                            title="Remove reference"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                        <div style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                          <span style={{ fontSize: 10, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ref.name}>
+                            {ref.name}
+                          </span>
+                          <div style={{ display: 'flex', gap: 2 }}>
+                            {idx > 0 && (
+                              <button
+                                onClick={() => handleReorderReference(idx, 'left')}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 1 }}
+                                title="Move left"
+                              >
+                                <ChevronLeft size={12} />
+                              </button>
+                            )}
+                            {idx < references.length - 1 && (
+                              <button
+                                onClick={() => handleReorderReference(idx, 'right')}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 1 }}
+                                title="Move right"
+                              >
+                                <ChevronRight size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Reference Style Profile Display */}
+                {referenceProfile && (
+                  <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 'var(--r-lg)', padding: '12px 14px', marginTop: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <CheckCircle2 size={14} color="var(--accent-light)" />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Extracted Style: {referenceProfile.visualMood}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {referenceProfile.summary}
+                    </div>
+                    {referenceProfile.colorPalette && referenceProfile.colorPalette.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Palette:</span>
+                        {referenceProfile.colorPalette.map(c => (
+                          <div key={c} style={{ width: 14, height: 14, borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.2)' }} title={c} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ height: 1, background: 'var(--border)' }} />
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Choose Creation Flow
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <button
+                    onClick={handleProceedWithFootage}
+                    style={{
+                      padding: '14px 16px', borderRadius: 'var(--r-xl)',
+                      background: 'var(--accent)', border: 'none',
+                      cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 12,
+                      color: '#fff', boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
+                      fontFamily: 'var(--font-sans)',
+                    }}
+                  >
+                    <div style={{ width: 34, height: 34, borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Scissors size={16} color="#fff" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>
+                        Cut with My Footage
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 2, lineHeight: 1.4 }}>
+                        Upload your video clips — AI edits them with these reference guidelines.
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={handleUseWithAI}
+                    style={{
+                      padding: '14px 16px', borderRadius: 'var(--r-xl)',
+                      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                      cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 12,
+                      transition: 'border-color 0.15s, background 0.15s',
+                      fontFamily: 'var(--font-sans)',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-border)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
+                  >
+                    <div style={{ width: 34, height: 34, borderRadius: 'var(--r-md)', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Sparkles size={16} color="var(--accent-light)" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Generate AI Visuals
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>
+                        AI generates the visuals and music based on this template brief.
+                      </div>
+                    </div>
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

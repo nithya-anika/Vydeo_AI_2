@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
       platform,
       stylePreset,
       templateId,
+      references,
+      referenceProfile,
     } = body;
 
     const isRefinement = Boolean(existingTimeline);
@@ -160,6 +162,8 @@ ${prompt.trim()}
       workspaceSlug,
       runQA,
       templateId,
+      references: Array.isArray(references) ? references : undefined,
+      referenceProfile: referenceProfile && typeof referenceProfile === "object" ? referenceProfile : undefined,
     });
 
     console.timeEnd("[pipeline]");
@@ -203,6 +207,7 @@ ${prompt.trim()}
       trace: result.trace,
       evaluation: result.evaluation,
       musicSpec: result.musicSpec,
+      referenceProfile: result.referenceProfile,
       workspace: {
         id: workspace.id,
         name: workspace.name,
