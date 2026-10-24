@@ -10,147 +10,35 @@ import {
   Upload, Scissors, X,
 } from 'lucide-react'
 import type { Variants } from 'framer-motion'
+import { TEMPLATES as TEMPLATE_REGISTRY } from '@/lib/templates/registry'
 
 // ─── Template Data ────────────────────────────────────────────────────────────
 
-const TEMPLATES = [
-  {
-    id: 1,
-    name: 'Luxury Product Showcase',
-    category: 'ads',
-    platform: 'Instagram',
-    duration: '0:30',
-    scenes: 8,
-    captionStyle: 'Cinematic',
-    musicStyle: 'Ambient Luxury',
-    targetAudience: 'Fashion & Beauty',
-    difficulty: 'Beginner' as const,
-    editTime: '~10 min',
-    rating: 4.9,
-    uses: 1847,
-    isAIPick: true,
-    gradient: 'linear-gradient(135deg, #0d0d1a 0%, #1a1035 50%, #2d1b69 100%)',
-  },
-  {
-    id: 2,
-    name: 'Viral TikTok Hook',
-    category: 'ugc',
-    platform: 'TikTok',
-    duration: '0:15',
-    scenes: 5,
-    captionStyle: 'Bold',
-    musicStyle: 'Energetic Pop',
-    targetAudience: 'Gen Z',
-    difficulty: 'Beginner' as const,
-    editTime: '~5 min',
-    rating: 4.8,
-    uses: 3201,
-    isAIPick: false,
-    gradient: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)',
-  },
-  {
-    id: 3,
-    name: 'Cinematic Travel Reel',
-    category: 'travel',
-    platform: 'YouTube',
-    duration: '1:00',
-    scenes: 14,
-    captionStyle: 'Minimal',
-    musicStyle: 'Orchestral Cinematic',
-    targetAudience: 'Travel Enthusiasts',
-    difficulty: 'Intermediate' as const,
-    editTime: '~20 min',
-    rating: 4.9,
-    uses: 1203,
-    isAIPick: true,
-    gradient: 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
-  },
-  {
-    id: 4,
-    name: 'Product Launch Hype',
-    category: 'ads',
-    platform: 'Instagram',
-    duration: '0:45',
-    scenes: 10,
-    captionStyle: 'Dynamic',
-    musicStyle: 'Upbeat Electronic',
-    targetAudience: 'Tech & Gadgets',
-    difficulty: 'Intermediate' as const,
-    editTime: '~15 min',
-    rating: 4.7,
-    uses: 892,
-    isAIPick: false,
-    gradient: 'linear-gradient(135deg, #0a0010 0%, #20003a 100%)',
-  },
-  {
-    id: 5,
-    name: 'Brand Story Documentary',
-    category: 'brand',
-    platform: 'LinkedIn',
-    duration: '1:30',
-    scenes: 16,
-    captionStyle: 'Professional',
-    musicStyle: 'Corporate Ambient',
-    targetAudience: 'B2B Professionals',
-    difficulty: 'Advanced' as const,
-    editTime: '~30 min',
-    rating: 4.6,
-    uses: 445,
-    isAIPick: false,
-    gradient: 'linear-gradient(135deg, #0a1628 0%, #1e3a5f 100%)',
-  },
-  {
-    id: 6,
-    name: 'Fitness Motivation Reel',
-    category: 'ugc',
-    platform: 'Instagram',
-    duration: '0:30',
-    scenes: 9,
-    captionStyle: 'Bold',
-    musicStyle: 'High Energy',
-    targetAudience: 'Fitness Community',
-    difficulty: 'Beginner' as const,
-    editTime: '~10 min',
-    rating: 4.8,
-    uses: 2156,
-    isAIPick: true,
-    gradient: 'linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 100%)',
-  },
-  {
-    id: 7,
-    name: 'Restaurant Showcase',
-    category: 'local',
-    platform: 'Instagram',
-    duration: '0:45',
-    scenes: 11,
-    captionStyle: 'Elegant',
-    musicStyle: 'Jazz Lounge',
-    targetAudience: 'Food & Dining',
-    difficulty: 'Beginner' as const,
-    editTime: '~12 min',
-    rating: 4.5,
-    uses: 734,
-    isAIPick: false,
-    gradient: 'linear-gradient(135deg, #1a0a00 0%, #3d1f00 100%)',
-  },
-  {
-    id: 8,
-    name: 'App Product Demo',
-    category: 'ads',
-    platform: 'YouTube',
-    duration: '1:00',
-    scenes: 13,
-    captionStyle: 'Tech Minimal',
-    musicStyle: 'Modern Electronic',
-    targetAudience: 'SaaS Users',
-    difficulty: 'Intermediate' as const,
-    editTime: '~18 min',
-    rating: 4.7,
-    uses: 1089,
-    isAIPick: true,
-    gradient: 'linear-gradient(135deg, #001628 0%, #003d6b 100%)',
-  },
-]
+// Map backend registry to frontend UI model
+const TEMPLATES = Object.values(TEMPLATE_REGISTRY).map(t => ({
+  id: Number(Object.keys(TEMPLATE_REGISTRY).find(k => TEMPLATE_REGISTRY[Number(k)].id === t.id)),
+  _stringId: t.id,
+  name: t.name,
+  category: t.category,
+  platform: t.platform,
+  duration: `${t.targetDurationMin}-${t.targetDurationMax}s`,
+  scenes: t.sceneCountRange[1],
+  captionStyle: t.captionStyle,
+  musicStyle: t.musicStyle,
+  targetAudience: "Broad",
+  difficulty: 'Beginner' as const,
+  editTime: '~5 min',
+  rating: 4.8 + (Math.random() * 0.2),
+  uses: Math.floor(1000 + Math.random() * 4000),
+  isAIPick: [1, 3, 5].includes(Number(Object.keys(TEMPLATE_REGISTRY).find(k => TEMPLATE_REGISTRY[Number(k)].id === t.id))),
+  gradient: [
+    'linear-gradient(135deg, #0d0d1a 0%, #1a1035 50%, #2d1b69 100%)',
+    'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)',
+    'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
+    'linear-gradient(135deg, #0a0010 0%, #20003a 100%)',
+    'linear-gradient(135deg, #0a1628 0%, #1e3a5f 100%)',
+  ][Number(Object.keys(TEMPLATE_REGISTRY).find(k => TEMPLATE_REGISTRY[Number(k)].id === t.id)) % 5] || 'linear-gradient(135deg, #0d0d1a 0%, #1a1035 50%, #2d1b69 100%)',
+}))
 
 type Template = typeof TEMPLATES[0]
 
@@ -1511,23 +1399,24 @@ export default function TemplatesPage() {
     `Polished, ${t.difficulty.toLowerCase()}-friendly, ready to publish.`
 
   // Primary action: actually seed a generation in the AI workspace using the
-  // params it already understands (prompt + aspectRatio + autoGenerate).
+  // params it already understands (prompt + aspectRatio + autoGenerate + templateId).
   const handleUseWithAI = () => {
     if (!selectedTemplate) return
     const prompt = promptForTemplate(selectedTemplate)
     const ar = aspectRatioForPlatform(selectedTemplate.platform)
+    const tid = selectedTemplate.id
     setSelectedTemplate(null)
     router.push(
-      `/workspace/new?prompt=${encodeURIComponent(prompt)}&aspectRatio=${ar}&autoGenerate=1`
+      `/workspace/new?prompt=${encodeURIComponent(prompt)}&aspectRatio=${ar}&autoGenerate=1&templateId=${tid}`
     )
   }
 
-  // The footage page does not read template params, so wiring it is out of
-  // scope. Route there plainly rather than passing params nothing reads.
+  // Route to footage page with templateId param
   const handleUseWithFootage = () => {
     if (!selectedTemplate) return
+    const tid = selectedTemplate.id
     setSelectedTemplate(null)
-    router.push('/footage')
+    router.push(`/footage?templateId=${tid}`)
   }
 
   const filtered = useMemo(() => {

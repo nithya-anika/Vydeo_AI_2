@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       workflow,
       platform,
       stylePreset,
+      templateId,
     } = body;
 
     const isRefinement = Boolean(existingTimeline);
@@ -158,6 +159,7 @@ ${prompt.trim()}
       overrides: brandOverrides as BrandOverrides | undefined,
       workspaceSlug,
       runQA,
+      templateId,
     });
 
     console.timeEnd("[pipeline]");

@@ -498,6 +498,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
   const urlPrompt = searchParams.get("prompt") ?? "";
   const urlAutoGenerate = searchParams.get("autoGenerate") === "1";
   const urlAspectRatio = (searchParams.get("aspectRatio") ?? "") as AspectRatio | "";
+  const urlTemplateId = searchParams.get("templateId");
   const { loadTimeline, setAspectRatio: storeSetAR, setProjectName } = useEditorStore();
 
   // Prompt & settings
@@ -505,6 +506,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
   const [workflow, setWorkflow] = useState("ugc-ads");
   const [duration, setDuration] = useState(30);
+  const [templateId, setTemplateId] = useState<string | null>(urlTemplateId);
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -754,11 +756,11 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
           workspaceSlug: "asaya",
           aspectRatio,
           runQA: false,
-          // C1 — previously-dead user controls; now forwarded so they reach the model.
           duration,
           workflow,
           platform,
           stylePreset,
+          templateId,
         }),
         signal: controller.signal,
       });

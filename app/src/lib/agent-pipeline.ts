@@ -24,6 +24,7 @@ import { runEvaluator } from "./agents/evaluator";
 import { interpretBrief, formatBriefForPrompt } from "./agents/brief-interpreter";
 import type { StructuredBrief } from "./agents/brief-interpreter";
 import { getDefaultWorkflow, getWorkflow } from "./workflows/registry";
+import { TEMPLATES } from "./templates/registry";
 import {
   videoAnalysisTool, hookDetectionTool, timelineGeneratorTool,
   transitionPlannerTool, captionGeneratorTool, musicSelectorTool,
@@ -31,6 +32,7 @@ import {
 import type { ToolContext } from "./tools/types";
 import { validateAndRepairTimeline } from "./pipeline-guards";
 import { transcribeClipWithGemini } from "./transcription";
+import { MUSIC_LIBRARY } from "@/types/music";
 import {
   saveGeneration, saveWorkflowRun, saveToolExecution, saveEvaluationResult,
   getSimilarGenerations,
@@ -92,13 +94,21 @@ export async function runAgentPipeline(params: {
   overrides?: BrandOverrides;
   workspaceSlug: string;
   runQA?: boolean;
+  templateId?: string | number;
 }): Promise<PipelineResult> {
-  const { prompt, brand, clips = [], aspectRatio, overrides, workspaceSlug } = params;
+  const { prompt, brand, clips = [], aspectRatio, overrides, workspaceSlug, templateId } = params;
   const runId = uuidv4();
   const hasClips = clips.length > 0;
   const pipelineStart = Date.now();
   const trace: AgentStep[] = [];
   const toolsExecuted: string[] = [];
+
+  const template = templateId ? TEMPLATES[Number(templateId)] : undefined;
+  
+  // Combine user prompt with template editorial instructions if applicable
+  const effectivePrompt = template 
+    ? `TEMPLATE INSTRUCTION: ${template.editorialPrompt}\n\nUSER PROMPT: ${prompt}`
+    : prompt;
 
   // ── Step 1: Planner + Brief Interpreter in parallel ─────────────────────────
   // These two are independent — brief interpreter only reads the prompt text,
@@ -106,14 +116,14 @@ export async function runAgentPipeline(params: {
   const phase1Start = Date.now();
   const [plan, briefResult] = await Promise.all([
     runPlanner({
-      prompt,
+      prompt: effectivePrompt,
       hasClips,
       clipCount: clips.length,
       workspaceSlug,
       brandName: brand.name,
       brandKeywords: brand.styleKeywords,
     }),
-    interpretBrief(prompt).catch(() => null as StructuredBrief | null),
+    interpretBrief(effectivePrompt).catch(() => null as StructuredBrief | null),
   ]);
   const phase1Ms = Date.now() - phase1Start;
 
@@ -139,9 +149,26 @@ export async function runAgentPipeline(params: {
 
   const workflow = getWorkflow(plan.workflowId) ?? getDefaultWorkflow(plan.cluster);
   const ctx: ToolContext = { runId, workspaceSlug, cluster: plan.cluster, mode: plan.mode };
+  
+  // Inject hard template constraints directly into the prompt so the timeline generator is forced to obey
+  let templateDirectives = "";
+  if (template) {
+    templateDirectives = `
+━━━ TEMPLATE CONSTRAINTS ━━━
+Pacing: ${template.pacing}
+Hook Strategy: ${template.hookStrategy}
+Ending Strategy: ${template.endingStrategy}
+Target Duration: ${template.targetDurationMin}s to ${template.targetDurationMax}s
+Allowed Transitions: ${template.supportedTransitions.join(", ")}
+Color Grade: ${template.defaultColorGrade || "None"}
+Caption Style: ${template.captionStyle} (Align: ${template.captionAlign}, Anim: ${template.captionAnimation})
+Music Style: ${template.musicStyle} (${template.musicEnergy} energy)
+    `.trim() + "\n\n";
+  }
+
   const enrichedPrompt = structuredBrief
-    ? `${prompt}\n\n━━━ STRUCTURED INTERPRETATION ━━━\n${formatBriefForPrompt(structuredBrief)}`
-    : prompt;
+    ? `${templateDirectives}${effectivePrompt}\n\n━━━ STRUCTURED INTERPRETATION ━━━\n${formatBriefForPrompt(structuredBrief)}`
+    : `${templateDirectives}${effectivePrompt}`;
 
   // ── Retrieve past examples from memory ─────────────────────────────────────
   const pastGens = await getSimilarGenerations({ workspaceSlug, cluster: plan.cluster, workflowId: workflow.id, limit: 2 });
@@ -406,6 +433,46 @@ export async function runAgentPipeline(params: {
         const data = result.data as Awaited<ReturnType<typeof musicSelectorTool.execute>>["data"];
         if (result.success && data) {
           musicSpec = { genre: data.primary.genre, searchKeywords: data.primary.searchKeywords, editorialNote: data.primary.editorialNote };
+
+          // Automatically select best track from library based on genre/keywords/tempo
+          if (timeline && timeline.audioLayers && timeline.audioLayers.length === 0) {
+            let bestTrack = MUSIC_LIBRARY[0];
+            let bestScore = -1;
+            const targetGenre = data.primary.genre.toLowerCase();
+            const targetTempo = data.primary.tempo;
+            const targetEnergy = data.primary.energy;
+            
+            for (const track of MUSIC_LIBRARY) {
+              let score = 0;
+              const cat = track.category.toLowerCase();
+              if (targetGenre.includes(cat) || cat.includes(targetGenre)) score += 5;
+              if (track.mood.toLowerCase() === data.primary.mood.toLowerCase()) score += 3;
+              if (data.primary.searchKeywords.some(kw => track.tags.includes(kw.toLowerCase()))) score += 2;
+              
+              if (targetTempo === "fast" && track.bpm > 120) score += 2;
+              if (targetTempo === "slow" && track.bpm < 80) score += 2;
+              if (targetTempo === "medium" && track.bpm >= 80 && track.bpm <= 120) score += 2;
+
+              if (score > bestScore) {
+                bestScore = score;
+                bestTrack = track;
+              }
+            }
+
+            if (bestTrack) {
+              timeline.audioLayers = [{
+                id: `audio-${bestTrack.id}`,
+                type: "bgm",
+                src: bestTrack.previewUrl,
+                startTime: 0,
+                endTime: timeline.totalDuration ?? 30,
+                volume: data.audioLayers?.volume ?? (template?.musicVolume ?? 0.7),
+                fadeIn: data.audioLayers?.fadeIn ?? 1.0,
+                fadeOut: data.audioLayers?.fadeOut ?? 2.0,
+              }];
+              console.log(`[pipeline] Auto-selected music: ${bestTrack.title} (Score: ${bestScore})`);
+            }
+          }
         }
         trace.push({
           stage: "Music Selector", model: result.modelUsed ?? MODELS.MUSIC_SELECTOR, durationMs,
