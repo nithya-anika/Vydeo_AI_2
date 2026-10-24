@@ -7,10 +7,10 @@ const AUTH_ONLY_PATHS = ["/login", "/signup", "/forgot-password"];
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Skip static assets and API routes (except auth)
+  // Skip static assets, media files, and API routes (except auth)
   if (
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
+    pathname.match(/\.(ico|png|jpg|jpeg|svg|mp4|webm|mp3)$/) ||
     (pathname.startsWith("/api") && !pathname.startsWith("/api/auth"))
   ) {
     return NextResponse.next();
@@ -32,5 +32,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mp3)$).*)"],
 };
