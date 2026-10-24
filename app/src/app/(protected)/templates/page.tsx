@@ -1675,6 +1675,7 @@ export default function TemplatesPage() {
       <AnimatePresence>
         {selectedTemplate && (
           <motion.div
+            key="modal-selected"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2012,6 +2013,7 @@ export default function TemplatesPage() {
         {/* ── Template Preview Modal ── */}
         {previewTemplate && (
           <motion.div
+            key="modal-preview"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2138,7 +2140,7 @@ export default function TemplatesPage() {
                     onClick={() => {
                       const t = previewTemplate;
                       setPreviewTemplate(null);
-                      setSelectedTemplate(t);
+                      handleUse(t);
                     }}
                     style={{
                       flex: 1, padding: '12px 18px', borderRadius: 'var(--r-lg)',
