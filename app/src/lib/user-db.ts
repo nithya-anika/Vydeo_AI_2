@@ -16,6 +16,8 @@ export interface DbUser {
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
+  assistant_name?: string | null;
+  assistant_name_customized?: boolean;
 }
 
 export interface DbProject {
@@ -138,6 +140,14 @@ export const userQueries = {
     await db.collection("users").updateOne(
       { id },
       { $set: { last_login_at: new Date().toISOString() } },
+    );
+  },
+
+  updateAssistantPreferences: async (id: string, name: string, customized: boolean): Promise<void> => {
+    const db = await getDb();
+    await db.collection("users").updateOne(
+      { id },
+      { $set: { assistant_name: name, assistant_name_customized: customized, updated_at: new Date().toISOString() } },
     );
   },
 };

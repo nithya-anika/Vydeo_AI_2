@@ -11,6 +11,8 @@ export async function GET() {
     user: {
       id: user.id, firstName: user.first_name, lastName: user.last_name,
       email: user.email, plan: user.plan, createdAt: user.created_at,
+      assistantName: user.assistant_name || "Rumi",
+      assistantNameCustomized: user.assistant_name_customized ?? false
     }
   });
 }

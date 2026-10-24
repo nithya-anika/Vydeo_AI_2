@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAssistantStore } from "@/store/assistantStore";
 import { motion, AnimatePresence } from "framer-motion";
 import { TEMPLATES as TEMPLATE_REGISTRY } from "@/lib/templates/registry";
 import type { ReferenceMedia, ReferenceStyleProfile } from "@/types/references";
@@ -213,9 +214,10 @@ function ClipCard({ clip, onRemove, index }: { clip: UploadedClip; onRemove: () 
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function FootagePage() {
+export default function FootageEditorSetup() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const assistantName = useAssistantStore(s => s.name);
   const urlTemplateId = searchParams.get("templateId");
   const activeTemplate = urlTemplateId ? (TEMPLATE_REGISTRY[Number(urlTemplateId)] || Object.values(TEMPLATE_REGISTRY).find(t => t.id === urlTemplateId)) : null;
   const { loadTimeline } = useEditorStore();
@@ -587,7 +589,7 @@ export default function FootagePage() {
 
       const effectivePrompt = prompt.trim() || activeTemplate?.editorialPrompt || "";
       if (effectivePrompt) {
-        setProcessingStep("AI is analyzing dialogues, cuts & narrative flow...");
+        setProcessingStep(`${assistantName} is analyzing dialogues, cuts & narrative flow...`);
         try {
           const res = await fetch("/api/lineup", {
             method: "POST",
@@ -719,13 +721,9 @@ export default function FootagePage() {
               <Scissors size={18} color="#fff" />
             </div>
             <div>
-              <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-                Footage Editor
-              </h1>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                Upload your clips, describe your vision — AI does the edit
-              </p>
-            </div>
+              <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Footage Editor</h1>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Upload your clips, describe your vision — {assistantName} does the edit</p>
+              </div>
           </div>
         </motion.div>
 
@@ -1141,7 +1139,7 @@ export default function FootagePage() {
               ) : (
                 <>
                   <Scissors size={18} />
-                  {prompt.trim() ? "Edit with AI" : "Auto-Edit Footage"}
+                  {prompt.trim() ? `Edit with ${assistantName}` : "Auto-Edit Footage"}
                   <ArrowRight size={16} />
                 </>
               )}
@@ -1218,7 +1216,7 @@ export default function FootagePage() {
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Sparkles size={16} color="var(--accent)" />
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>AI Prompt Helper</span>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>{assistantName} (Prompt Helper)</span>
                 </div>
                 <button onClick={() => setShowSuggestor(false)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
                   <X size={16}/>
@@ -1229,7 +1227,7 @@ export default function FootagePage() {
               <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {suggestorMessages.length === 0 && (
                   <div style={{ alignSelf: 'flex-start', background: 'var(--bg-elevated)', padding: '12px 16px', borderRadius: '12px 12px 12px 2px', fontSize: 13, color: 'var(--text-secondary)', maxWidth: '85%', lineHeight: 1.5 }}>
-                    Hi there! I am analyzing your {clips.length} uploaded clips...
+                    Hi there! I'm {assistantName}. I am analyzing your {clips.length} uploaded clips...
                   </div>
                 )}
                 

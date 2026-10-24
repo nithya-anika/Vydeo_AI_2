@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, Palette, Download, Keyboard, LogOut } from 'lucide-react'
 import { PageContainer, PageHeader } from '@/components/layout/Page'
+import { CompanionSettings } from '@/components/settings/CompanionSettings'
 import {
   Card,
   CardHeader,
@@ -207,6 +208,7 @@ export default function SettingsPage() {
       <PageHeader title="Settings" subtitle="Manage your account, defaults, and editor preferences." />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 720 }}>
+        <CompanionSettings />
         {/* ── Profile ──────────────────────────────────────────────────────── */}
         <SectionCard
           icon={<User size={18} strokeWidth={1.8} />}

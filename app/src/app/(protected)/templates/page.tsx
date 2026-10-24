@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useAssistantStore } from '@/store/assistantStore'
+import { motion, AnimatePresence, Variants } from 'framer-motion'
 import {
   Search, Star, Zap, Clock, Film, Users, ArrowRight,
   Sparkles, Flame, ChevronRight, ChevronLeft, Play,
@@ -1426,6 +1427,7 @@ function CategoryRow({
 
 export default function TemplatesPage() {
   const router = useRouter()
+  const assistantName = useAssistantStore(s => s.name)
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activePlatform, setActivePlatform] = useState<string | null>(null)
@@ -1787,7 +1789,7 @@ export default function TemplatesPage() {
                   placeholder="Describe your editing vision or instructions for this template..."
                 />
                 <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-                  VydeoAI will use this customized brief to direct shot choices, pacing, transitions, and story structure.
+                  {assistantName} will use this customized brief to direct shot choices, pacing, transitions, and story structure.
                 </div>
               </div>
 
@@ -1799,7 +1801,7 @@ export default function TemplatesPage() {
                       Creative Style References <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(Optional)</span>
                     </label>
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                      Upload images or videos whose aesthetic, color harmony, or pacing you want VydeoAI to emulate.
+                      Upload images or videos whose aesthetic, color harmony, or pacing you want {assistantName} to emulate.
                     </div>
                   </div>
                   {references.length > 0 && (

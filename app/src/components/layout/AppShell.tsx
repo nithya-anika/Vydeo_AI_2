@@ -8,6 +8,7 @@ import {
   Settings, ChevronLeft, ChevronRight, Search, Zap, LogOut, User, CreditCard, Scissors, Menu,
 } from 'lucide-react'
 import IconButton from '@/components/ui/IconButton'
+import { useAssistantStore } from '@/store/assistantStore'
 
 interface NavItemDef {
   href: string
@@ -15,11 +16,12 @@ interface NavItemDef {
   icon: React.ReactNode
   badge?: string
   exact?: boolean
+  dot?: boolean
 }
 
 interface AppShellProps {
   children: React.ReactNode
-  user?: { firstName: string; email: string; plan: string } | null
+  user?: { firstName: string; email: string; plan: string; assistantNameCustomized?: boolean } | null
 }
 
 function getInitials(name: string) {
@@ -51,7 +53,7 @@ function UserAvatar({ name, size = 28 }: { name: string; size?: number }) {
   )
 }
 
-function NavItem({ href, label, icon, badge, exact = false, rail }: NavItemDef & { rail: boolean }) {
+function NavItem({ href, label, icon, badge, exact = false, dot = false, rail }: NavItemDef & { rail: boolean }) {
   const pathname = usePathname()
   const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
   return (
@@ -64,6 +66,7 @@ function NavItem({ href, label, icon, badge, exact = false, rail }: NavItemDef &
       <span className="nav-item-icon">{icon}</span>
       {!rail && <span className="nav-item-label">{label}</span>}
       {!rail && badge && <span className="nav-badge">{badge}</span>}
+      {!rail && dot && <div style={{width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', marginLeft: 'auto'}} title="Action needed"></div>}
     </Link>
   )
 }
@@ -113,6 +116,7 @@ export default function AppShell({ children, user }: AppShellProps) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const isCompact = useMediaQuery('(max-width: 1024px)')
   const menuRef = useRef<HTMLDivElement>(null)
+  const assistantCustomized = useAssistantStore(s => s.customized)
 
   // Auto-collapse to an icon rail on laptop/tablet widths.
   useEffect(() => {
@@ -205,7 +209,7 @@ export default function AppShell({ children, user }: AppShellProps) {
               Upgrade to Pro
             </button>
           )}
-          <NavItem href="/settings" label="Settings" icon={<Settings size={18} strokeWidth={1.5} />} rail={rail} />
+          <NavItem href="/settings" label="Settings" icon={<Settings size={18} strokeWidth={1.5} />} rail={rail} dot={!assistantCustomized} />
           <div className={`app-user-row${rail ? ' is-rail' : ''}`}>
             <UserAvatar name={displayName} size={28} />
             {!rail && (

@@ -4,10 +4,12 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sparkles, Upload } from 'lucide-react'
 import { Button, Segmented, PromptInput, UploadCard } from '@/components/ui'
+import { useAssistantStore } from '@/store/assistantStore'
 import { AI_AUTO_PROMPTS, QUICK_PROMPTS, PLATFORMS, ASPECT_RATIOS, getGreeting } from './data'
 
 export function CreateHero({ promptRef }: { promptRef?: React.RefObject<HTMLTextAreaElement | null> }) {
   const router = useRouter()
+  const assistantName = useAssistantStore(s => s.name)
   const [mode, setMode] = useState<'ai' | 'custom'>('custom')
   const [prompt, setPrompt] = useState('')
   const [platform, setPlatform] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export function CreateHero({ promptRef }: { promptRef?: React.RefObject<HTMLText
               aria-label="Video prompt"
               placeholder={
                 mode === 'ai'
-                  ? "Optional: add a theme (e.g. 'luxury skincare brand') — or leave blank to let AI decide"
+                  ? `Optional: add a theme (e.g. 'luxury skincare brand') — or leave blank to let ${assistantName} decide`
                   : "Describe your video… (e.g. '30-second Instagram ad for a luxury skincare brand')"
               }
             />
@@ -80,10 +82,10 @@ export function CreateHero({ promptRef }: { promptRef?: React.RefObject<HTMLText
                 leftIcon={<Sparkles size={18} />}
                 onClick={() => (prompt.trim() ? generate() : autoGenerate())}
               >
-                {prompt.trim() ? 'Generate with your prompt' : 'Generate — AI picks everything'}
+                {prompt.trim() ? 'Generate with your prompt' : `Generate — ${assistantName} picks everything`}
               </Button>
               <p className="text-small" style={{ color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 10 }}>
-                AI creates topic, style, scenes &amp; music — or uses your prompt as direction
+                {assistantName} creates topic, style, scenes &amp; music — or uses your prompt as direction
               </p>
             </>
           ) : (

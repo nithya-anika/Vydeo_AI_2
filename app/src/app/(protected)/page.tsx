@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { PageContainer } from '@/components/layout/Page'
+import { AssistantReminder } from '@/components/dashboard/AssistantReminder'
 import { WelcomeBanner } from '@/components/dashboard/WelcomeBanner'
 import { CreateHero } from '@/components/dashboard/CreateHero'
 import { ContinueEditing } from '@/components/dashboard/ContinueEditing'
@@ -41,6 +42,7 @@ export default function HomePage() {
 
   return (
     <PageContainer>
+      <AssistantReminder />
       {showWelcome && <WelcomeBanner onDismiss={dismissWelcome} onStart={startNow} />}
       <CreateHero promptRef={promptRef} />
       <ContinueEditing />

@@ -500,6 +500,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
   const urlAspectRatio = (searchParams.get("aspectRatio") ?? "") as AspectRatio | "";
   const urlTemplateId = searchParams.get("templateId");
   const { loadTimeline, setAspectRatio: storeSetAR, setProjectName } = useEditorStore();
+  const assistantName = useAssistantStore(s => s.name);
 
   // Prompt & settings
   const [prompt, setPrompt] = useState("");
@@ -2039,7 +2040,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
                   fontSize: 13, color: "var(--text-tertiary)", maxWidth: 380,
                   lineHeight: 1.7, textAlign: "center", marginBottom: 28,
                 }}>
-                  VydeoAI will analyze your brief, plan every scene, select music, and build a complete video structure — ready to edit.
+                  {assistantName} will analyze your brief, plan every scene, select music, and build a complete video structure — ready to edit.
                 </p>
                 {/* Example prompts */}
                 <motion.div

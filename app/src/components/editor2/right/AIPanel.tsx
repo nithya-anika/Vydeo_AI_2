@@ -6,12 +6,14 @@ import { Sparkles, ArrowUp } from 'lucide-react'
 import { useEditorStore } from '@/store/editorStore'
 import { IconButton } from '@/components/ui'
 import { processAICommand, QUICK_CHIPS } from '../lib/aiCommands'
+import { useAssistantStore } from '@/store/assistantStore'
 
 interface ChatMessage { id: string; role: 'user' | 'assistant' | 'system'; text: string; isError?: boolean }
 
 export function AIPanel() {
+  const assistantName = useAssistantStore(s => s.name)
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '0', role: 'system', text: "Hi — I'm your AI creative director. Ask me to refine pacing, add captions, change the look, or anything else." },
+    { id: '0', role: 'system', text: `Hi — I'm ${assistantName}, your AI creative director. Ask me to refine pacing, add captions, change the look, or anything else.` },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -70,7 +72,7 @@ export function AIPanel() {
           className="textarea-base"
           rows={1}
           value={input}
-          placeholder="Ask your AI director…"
+          placeholder={`Ask ${assistantName}…`}
           disabled={loading}
           aria-label="Message the AI creative director"
           style={{ minHeight: 38 }}
