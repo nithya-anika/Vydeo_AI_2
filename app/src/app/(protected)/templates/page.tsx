@@ -1439,6 +1439,7 @@ export default function TemplatesPage() {
   const [uploadingRef, setUploadingRef] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [analyzingStyle, setAnalyzingStyle] = useState(false)
+  const [isSuggestingPrompt, setIsSuggestingPrompt] = useState(false)
   const [referenceProfile, setReferenceProfile] = useState<ReferenceStyleProfile | null>(null)
   const refFileInputRef = useRef<HTMLInputElement>(null)
 
@@ -1450,6 +1451,31 @@ export default function TemplatesPage() {
     setReferences([])
     setReferenceProfile(null)
     setUploadError(null)
+  }
+
+  const handleSuggestPrompt = async () => {
+    if (!selectedTemplate || isSuggestingPrompt) return
+    setIsSuggestingPrompt(true)
+    try {
+      const res = await fetch("/api/suggest-template-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateName: selectedTemplate.name,
+          platform: selectedTemplate.platform,
+          duration: selectedTemplate.duration,
+          references,
+        }),
+      })
+      const data = await res.json()
+      if (data.success && data.text) {
+        setCustomPrompt(data.text)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsSuggestingPrompt(false)
+    }
   }
 
   const handlePreview = (template: Template) => {
@@ -1607,24 +1633,6 @@ export default function TemplatesPage() {
     )
   }
 
-  // Route to footage page carrying prompt and references
-  const handleUseWithFootage = () => {
-    if (!selectedTemplate) return
-    const payload: TemplateCustomizationPayload = {
-      templateId: selectedTemplate.id,
-      templateName: selectedTemplate.name,
-      customPrompt,
-      references,
-      referenceProfile: referenceProfile || undefined,
-      updatedAt: Date.now(),
-    }
-    sessionStorage.setItem("vydeoai_template_customization", JSON.stringify(payload))
-
-    const tid = selectedTemplate.id
-    setSelectedTemplate(null)
-    router.push(`/footage?templateId=${tid}`)
-  }
-
   const filtered = useMemo(() => {
     return TEMPLATES.filter(t => {
       const q = search.toLowerCase()
@@ -1733,18 +1741,31 @@ export default function TemplatesPage() {
                   <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
                     Editorial Brief & Prompt
                   </label>
-                  {customPrompt !== (TEMPLATE_REGISTRY[selectedTemplate.id]?.editorialPrompt || promptForTemplate(selectedTemplate)) && (
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     <button
-                      onClick={handleRestorePrompt}
+                      onClick={handleSuggestPrompt}
+                      disabled={isSuggestingPrompt}
                       style={{
                         background: 'transparent', border: 'none', color: 'var(--accent-light)',
                         fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                       }}
                     >
-                      <RotateCcw size={11} />
-                      Restore Default Prompt
+                      {isSuggestingPrompt ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                      Auto-Write Prompt
                     </button>
-                  )}
+                    {customPrompt !== (TEMPLATE_REGISTRY[selectedTemplate.id]?.editorialPrompt || promptForTemplate(selectedTemplate)) && (
+                      <button
+                        onClick={handleRestorePrompt}
+                        style={{
+                          background: 'transparent', border: 'none', color: 'var(--text-tertiary)',
+                          fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                        }}
+                      >
+                        <RotateCcw size={11} />
+                        Restore Default
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <textarea
                   value={customPrompt}
@@ -1953,58 +1974,21 @@ export default function TemplatesPage() {
               <div style={{ height: 1, background: 'var(--border)' }} />
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Choose Creation Flow
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <button
-                    onClick={handleProceedWithFootage}
-                    style={{
-                      padding: '14px 16px', borderRadius: 'var(--r-xl)',
-                      background: 'var(--accent)', border: 'none',
-                      cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 12,
-                      color: '#fff', boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
-                      fontFamily: 'var(--font-sans)',
-                    }}
-                  >
-                    <div style={{ width: 34, height: 34, borderRadius: 'var(--r-md)', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Scissors size={16} color="#fff" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>
-                        Cut with My Footage
-                      </div>
-                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 2, lineHeight: 1.4 }}>
-                        Upload your video clips — AI edits them with these reference guidelines.
-                      </div>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={handleUseWithAI}
-                    style={{
-                      padding: '14px 16px', borderRadius: 'var(--r-xl)',
-                      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                      cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 12,
-                      transition: 'border-color 0.15s, background 0.15s',
-                      fontFamily: 'var(--font-sans)',
-                    }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-border)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
-                  >
-                    <div style={{ width: 34, height: 34, borderRadius: 'var(--r-md)', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Sparkles size={16} color="var(--accent-light)" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        Generate AI Visuals
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>
-                        AI generates the visuals and music based on this template brief.
-                      </div>
-                    </div>
-                  </button>
-                </div>
+                <button
+                  onClick={handleUseWithAI}
+                  style={{
+                    padding: '14px 16px', borderRadius: 'var(--r-xl)',
+                    background: 'var(--accent)', border: 'none',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                    color: '#fff', boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
+                    fontFamily: 'var(--font-sans)', width: '100%',
+                  }}
+                >
+                  <Sparkles size={16} color="#fff" />
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>
+                    Generate Video
+                  </span>
+                </button>
               </div>
             </motion.div>
           </motion.div>
