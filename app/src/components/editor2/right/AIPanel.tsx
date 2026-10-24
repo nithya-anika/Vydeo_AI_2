@@ -20,6 +20,16 @@ export function AIPanel() {
   const endRef = useRef<HTMLDivElement>(null)
   const setIsGenerating = useEditorStore((s) => s.setIsGenerating)
 
+  useEffect(() => {
+    setMessages(prev => {
+      const copy = [...prev];
+      if (copy[0]?.role === 'system') {
+        copy[0] = { ...copy[0], text: `Hi — I'm ${assistantName}, your AI creative director. Ask me to refine pacing, add captions, change the look, or anything else.` };
+      }
+      return copy;
+    });
+  }, [assistantName])
+
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const send = useCallback(async (text: string) => {
