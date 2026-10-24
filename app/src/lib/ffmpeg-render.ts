@@ -1502,9 +1502,10 @@ export async function renderWithFfmpeg(
 
     const hasOriginalAudio = params.scenes.some((s) => s.clipType === "video");
     
-    // We will render to a pre-final file if a logo needs to be overlaid
-    const preFinal = logoFile ? path.join(tmpDir, `prefinal-${uuidv4()}.mp4`) : outPath;
-    if (logoFile) tempFiles.push(preFinal);
+    // We will render to a pre-final file if an image or text logo needs to be overlaid
+    const needsLogoOverlay = Boolean(logoFile) || (brand?.logoType === "text" && Boolean(brand?.logoText));
+    const preFinal = needsLogoOverlay ? path.join(tmpDir, `prefinal-${uuidv4()}.mp4`) : outPath;
+    if (needsLogoOverlay) tempFiles.push(preFinal);
 
     if (audio?.src) {
       console.log(
@@ -1512,18 +1513,35 @@ export async function renderWithFfmpeg(
         audio.src.slice(0, 100)
       );
 
+      let resolvedAudioSrc = audio.src;
+      if (resolvedAudioSrc.startsWith("/api/audio-proxy?url=")) {
+        const rawUrl = resolvedAudioSrc.replace("/api/audio-proxy?url=", "");
+        resolvedAudioSrc = decodeURIComponent(rawUrl);
+      }
+
       let audioFile = "";
-      if (audio.src.startsWith("local://")) {
-        audioFile = audio.src.replace("local://", "");
+      if (resolvedAudioSrc.startsWith("local://")) {
+        audioFile = resolvedAudioSrc.replace("local://", "");
         console.log(`[FFmpeg Audio] Using local EC2 audio: ${audioFile}`);
-      } else if (audio.src.startsWith("http://") || audio.src.startsWith("https://")) {
-        const ext = audio.src.includes(".wav") ? "wav" : audio.src.includes(".ogg") ? "ogg" : "mp3";
+      } else if (resolvedAudioSrc.startsWith("http://") || resolvedAudioSrc.startsWith("https://")) {
+        const ext = resolvedAudioSrc.includes(".wav") ? "wav" : resolvedAudioSrc.includes(".ogg") ? "ogg" : "mp3";
         audioFile = path.join(tmpDir, `bgm-${uuidv4()}.${ext}`);
-        console.log(`[FFmpeg Audio] Downloading remote audio: ${audio.src}`);
-        await downloadFile(audio.src, audioFile);
+        console.log(`[FFmpeg Audio] Downloading remote audio: ${resolvedAudioSrc}`);
+        await downloadFile(resolvedAudioSrc, audioFile);
         tempFiles.push(audioFile);
+      } else if (resolvedAudioSrc.startsWith("/")) {
+        const localPublic = path.join(process.cwd(), "public", resolvedAudioSrc);
+        if (fs.existsSync(localPublic)) {
+          audioFile = localPublic;
+          console.log(`[FFmpeg Audio] Using local public audio: ${audioFile}`);
+        } else {
+          audioFile = path.join(tmpDir, `bgm-${uuidv4()}.mp3`);
+          console.log(`[FFmpeg Audio] Downloading local endpoint audio: ${resolvedAudioSrc}`);
+          await downloadFile(`http://localhost:3000${resolvedAudioSrc}`, audioFile);
+          tempFiles.push(audioFile);
+        }
       } else {
-        audioFile = await saveBase64(audio.src, "m4a", tmpDir);
+        audioFile = await saveBase64(resolvedAudioSrc, "m4a", tmpDir);
         tempFiles.push(audioFile);
       }
 

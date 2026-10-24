@@ -110,11 +110,6 @@ export async function runAgentPipeline(params: {
 
   const template = templateId ? TEMPLATES[Number(templateId)] : undefined;
   
-  // Combine user prompt with template editorial instructions if applicable
-  const effectivePrompt = template 
-    ? `TEMPLATE INSTRUCTION: ${template.editorialPrompt}\n\nUSER PROMPT: ${prompt}`
-    : prompt;
-
   // ── Step 0: Analyze reference media if provided ─────────────────────────────
   let activeRefProfile = referenceProfile;
   if (!activeRefProfile && references && references.length > 0) {
@@ -127,6 +122,16 @@ export async function runAgentPipeline(params: {
       decision: `${references.length} reference file(s) analyzed → ${activeRefProfile?.visualMood ?? "Stylistic profile ready"}`,
     });
   }
+
+  // Combine user prompt with template editorial instructions and reference guidelines
+  let referenceSnippet = "";
+  if (activeRefProfile) {
+    referenceSnippet = `\nREFERENCE STYLE GUIDELINES: Mood: ${activeRefProfile.visualMood} | Lighting: ${activeRefProfile.lightingStyle} | Pacing: ${activeRefProfile.pacingPreference} | Music Energy: ${activeRefProfile.musicEnergy ?? "medium"}`;
+  }
+
+  const effectivePrompt = template 
+    ? `TEMPLATE INSTRUCTION: ${template.editorialPrompt}${referenceSnippet}\n\nUSER PROMPT: ${prompt}`
+    : `${prompt}${referenceSnippet}`;
 
   // ── Step 1: Planner + Brief Interpreter in parallel ─────────────────────────
   // These two are independent — brief interpreter only reads the prompt text,
@@ -411,18 +416,27 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
         }, ctx), durationMs: Date.now() - t };
       }
       if (toolName === "caption-generator") {
+        const isMinimalRequested = prompt.toLowerCase().includes("minimal") || activeRefProfile?.captionTypography?.toLowerCase().includes("minimal") || activeRefProfile?.captionPlacement?.toLowerCase().includes("minimal");
+        const targetCaptionStyle = isMinimalRequested
+          ? "minimal"
+          : (template?.captionStyle ?? workflow.clusterConfig.captionStyle);
         return { toolName, result: await captionGeneratorTool.execute({
           timeline: timeline!,
-          captionStyle: workflow.clusterConfig.captionStyle,
+          captionStyle: targetCaptionStyle,
           maxCharsPerLine: brand.captionStyle.maxCharsPerLine,
-          platform: plan.platform, tone: plan.tone, brandName: brand.name, originalPrompt: enrichedPrompt,
+          platform: plan.platform, tone: activeRefProfile?.visualMood ?? plan.tone, brandName: brand.name, originalPrompt: enrichedPrompt,
         }, ctx), durationMs: Date.now() - t };
       }
       if (toolName === "music-selector") {
+        const refEnergy = activeRefProfile?.musicEnergy ? `[Reference Music Energy: ${activeRefProfile.musicEnergy}]` : "";
         return { toolName, result: await musicSelectorTool.execute({
-          cluster: plan.cluster, tone: plan.tone, platform: plan.platform,
-          targetDuration: timeline!.totalDuration ?? 30, sceneCount: timeline!.scenes?.length ?? 0,
-          energyProfile: sceneEnergies, brandName: brand.name,
+          cluster: plan.cluster,
+          tone: activeRefProfile?.visualMood ?? plan.tone,
+          platform: plan.platform,
+          targetDuration: timeline!.totalDuration ?? 30,
+          sceneCount: timeline!.scenes?.length ?? 0,
+          energyProfile: `${sceneEnergies} ${refEnergy}`.trim(),
+          brandName: brand.name,
         }, ctx), durationMs: Date.now() - t };
       }
       return null;
@@ -480,6 +494,8 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
               const targetGenre = (data.primary.genre || "").toLowerCase();
               const targetTempo = data.primary.tempo || "medium";
               
+              const targetEnergy = activeRefProfile?.musicEnergy ?? (template?.musicEnergy ?? "medium");
+
               for (const track of MUSIC_LIBRARY) {
                 let score = 0;
                 const cat = track.category.toLowerCase();
@@ -488,8 +504,12 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                 if (Array.isArray(data.primary.searchKeywords) && data.primary.searchKeywords.some(kw => track.tags.includes(kw.toLowerCase()))) score += 2;
                 
                 if (targetTempo.includes("fast") && track.bpm > 120) score += 2;
-                if (targetTempo.includes("slow") && track.bpm < 80) score += 2;
+                if (targetTempo.includes("slow") && track.bpm < 85) score += 3;
                 if (targetTempo.includes("medium") && track.bpm >= 80 && track.bpm <= 120) score += 2;
+
+                if (targetEnergy === "low" && track.bpm < 85) score += 4;
+                if (targetEnergy === "high" && track.bpm > 115) score += 4;
+                if (targetEnergy === "medium" && track.bpm >= 85 && track.bpm <= 115) score += 4;
 
                 if (score > bestScore) {
                   bestScore = score;
@@ -520,6 +540,42 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
       }
     }
     console.log(`[pipeline] post-timeline parallel block: ${Date.now() - parallelStart}ms for ${postTools.length} tools`);
+  }
+
+  // ── Apply Reference & User Customization to Scenes (Color Treatment, Pacing, Captions) ──
+  if (timeline && timeline.scenes) {
+    // 1. Color treatment (warmer lighting)
+    const isWarmRequested = prompt.toLowerCase().includes("warm") || (activeRefProfile?.lightingStyle?.toLowerCase().includes("warm") ?? false) || (activeRefProfile?.visualMood?.toLowerCase().includes("warm") ?? false);
+    if (isWarmRequested) {
+      timeline.scenes.forEach(s => {
+        if (!s.colorGrade || s.colorGrade === "Cinematic Grade" || s.colorGrade === "Natural") {
+          s.colorGrade = "Warm Glow";
+        }
+      });
+    }
+
+    // 2. Slower pacing requested
+    const isSlowRequested = prompt.toLowerCase().includes("slower") || prompt.toLowerCase().includes("slow") || activeRefProfile?.pacingPreference === "cinematic-slow";
+    if (isSlowRequested) {
+      timeline.scenes.forEach(s => {
+        if (s.duration < 3.0) s.duration = 3.5;
+      });
+      timeline.totalDuration = Number(timeline.scenes.reduce((acc, s) => acc + s.duration, 0).toFixed(2));
+    }
+
+    // 3. Minimal captions requested
+    const isMinimalCaps = prompt.toLowerCase().includes("minimal") || activeRefProfile?.captionTypography?.toLowerCase().includes("minimal") || activeRefProfile?.captionPlacement?.toLowerCase().includes("minimal");
+    if (isMinimalCaps) {
+      timeline.scenes.forEach(s => {
+        if (s.captions) {
+          s.captions = s.captions.map(c => ({
+            ...c,
+            fontSize: Math.min(c.fontSize || 18, 18),
+            y: 86,
+          }));
+        }
+      });
+    }
   }
 
   // ── Step 4: Evaluate ────────────────────────────────────────────────────────

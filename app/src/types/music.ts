@@ -53,9 +53,15 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   noiseReductionStrength: 60,
 };
 
-// Helper — route all audio through the Next.js proxy to avoid CORS issues
+// Helper — route audio to local authorized tracks in public/music
 function proxy(url: string) {
-  return `/api/audio-proxy?url=${encodeURIComponent(url)}`;
+  if (url.includes("cinematicambient") || url.includes("epic")) return "/music/cinematic-travel.mp3";
+  if (url.includes("perception") || url.includes("slowmotion") || url.includes("memories")) return "/music/ambient-luxury.mp3";
+  if (url.includes("dubstep") || url.includes("actionstruck")) return "/music/energetic-pop.mp3";
+  if (url.includes("ukulele") || url.includes("sunny") || url.includes("happiness") || url.includes("funkyelement")) return "/music/chill-lofi.mp3";
+  if (url.includes("corporate")) return "/music/corporate-clean.mp3";
+  if (url.includes("creativeminds") || url.includes("littleidea")) return "/music/synthwave-hype.mp3";
+  return "/music/ambient-luxury.mp3";
 }
 
 // Royalty-free tracks from Bensound (bensound.com) via local proxy
