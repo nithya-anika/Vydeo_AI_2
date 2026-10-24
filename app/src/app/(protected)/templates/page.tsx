@@ -28,10 +28,11 @@ const TEMPLATES = Object.values(TEMPLATE_REGISTRY).map(t => ({
   scenes: t.sceneCountRange[1],
   captionStyle: t.captionStyle,
   musicStyle: t.musicStyle,
+  previewVideoUrl: t.previewVideoUrl,
   targetAudience: "Broad",
   difficulty: 'Beginner' as const,
   editTime: '~5 min',
-  rating: 4.8 + (Math.random() * 0.2),
+  rating: Number((4.5 + (Math.random() * 0.4)).toFixed(1)),
   uses: Math.floor(1000 + Math.random() * 4000),
   isAIPick: [1, 3, 5].includes(Number(Object.keys(TEMPLATE_REGISTRY).find(k => TEMPLATE_REGISTRY[Number(k)].id === t.id))),
   gradient: [
@@ -584,7 +585,7 @@ function TemplateCard({ template, onUse, onPreview, compact = false }: {
         ...(compact ? { width: 200, flexShrink: 0 } : {}),
       }}
     >
-      {/* Thumbnail */}
+      {/* Thumbnail / Video Preview */}
       <div
         style={{
           position: 'relative',
@@ -593,14 +594,30 @@ function TemplateCard({ template, onUse, onPreview, compact = false }: {
           overflow: 'hidden',
         }}
       >
-        {/* SVG Thumbnail – fills the card thumbnail area */}
+        {/* SVG Thumbnail – shown while loading or when not hovered */}
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           <TemplateThumbnail template={template} />
         </div>
 
+        {/* Live Video Preview - plays inline on hover */}
+        {template.previewVideoUrl && (
+          <div style={{ position: 'absolute', inset: 0, opacity: hovered ? 1 : 0, transition: 'opacity 0.3s ease' }}>
+            {hovered && (
+              <video
+                src={template.previewVideoUrl}
+                autoPlay
+                muted
+                loop
+                playsInline
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            )}
+          </div>
+        )}
+
         {/* Shimmer on hover */}
         <AnimatePresence>
-          {hovered && (
+          {hovered && !template.previewVideoUrl && (
             <motion.div
               initial={{ opacity: 0, x: '-100%' }}
               animate={{ opacity: 1, x: '100%' }}
@@ -955,6 +972,20 @@ function FeaturedCard({ template, onUse, onPreview }: { template: Template; onUs
           pointerEvents: 'none',
         }}
       />
+
+      {/* Video Background (if available) */}
+      {template.previewVideoUrl && (
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.4, mixBlendMode: 'overlay', pointerEvents: 'none' }}>
+          <video
+            src={template.previewVideoUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </div>
+      )}
 
       {/* Content */}
       <div
