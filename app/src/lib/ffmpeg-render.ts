@@ -1593,12 +1593,10 @@ export async function renderWithFfmpeg(
         }
         logoFilter += `[logo]`;
 
-        const overlayFilter = `${logoFilter};[0:v][logo]overlay=${xPx}:${yPx}:shortest=1`;
+        const overlayFilter = `${logoFilter};[0:v][logo]overlay=${xPx}:${yPx}`;
 
         await runFfmpeg([
           "-i", preFinal,
-          "-framerate", "30",
-          "-loop", "1",
           "-i", logoFile,
           "-filter_complex", overlayFilter,
           "-c:a", "copy",
