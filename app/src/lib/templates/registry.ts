@@ -24,7 +24,8 @@ export const TEMPLATES: Record<number, TemplateConfig> = {
     captionStyle: "cinematic",
     captionAnimation: "fade",
     captionAlign: "center",
-    aspectRatio: "9:16"
+    aspectRatio: "9:16",
+    previewVideoUrl: "/templates/luxury-showcase-01.mp4"
   },
   2: {
     id: "tiktok-hook-01",
@@ -49,7 +50,8 @@ export const TEMPLATES: Record<number, TemplateConfig> = {
     captionStyle: "bold",
     captionAnimation: "scale",
     captionAlign: "center",
-    aspectRatio: "9:16"
+    aspectRatio: "9:16",
+    previewVideoUrl: "/templates/tiktok-hook-01.mp4"
   },
   3: {
     id: "cinematic-travel-01",
@@ -74,7 +76,8 @@ export const TEMPLATES: Record<number, TemplateConfig> = {
     captionStyle: "minimal",
     captionAnimation: "fade",
     captionAlign: "left",
-    aspectRatio: "9:16"
+    aspectRatio: "9:16",
+    previewVideoUrl: "/templates/cinematic-travel-01.mp4"
   },
   4: {
     id: "product-launch-01",
@@ -99,7 +102,8 @@ export const TEMPLATES: Record<number, TemplateConfig> = {
     captionStyle: "dynamic",
     captionAnimation: "typewriter",
     captionAlign: "center",
-    aspectRatio: "9:16"
+    aspectRatio: "9:16",
+    previewVideoUrl: "/templates/product-launch-01.mp4"
   },
   5: {
     id: "brand-story-01",
@@ -124,7 +128,8 @@ export const TEMPLATES: Record<number, TemplateConfig> = {
     captionStyle: "professional",
     captionAnimation: "none",
     captionAlign: "center",
-    aspectRatio: "4:5"
+    aspectRatio: "4:5",
+    previewVideoUrl: "/templates/brand-story-01.mp4"
   },
   6: {
     id: "fitness-reel-01",
@@ -149,7 +154,8 @@ export const TEMPLATES: Record<number, TemplateConfig> = {
     captionStyle: "bold",
     captionAnimation: "scale",
     captionAlign: "center",
-    aspectRatio: "9:16"
+    aspectRatio: "9:16",
+    previewVideoUrl: "/templates/fitness-reel-01.mp4"
   },
   7: {
     id: "restaurant-showcase-01",
@@ -174,7 +180,8 @@ export const TEMPLATES: Record<number, TemplateConfig> = {
     captionStyle: "minimal",
     captionAnimation: "fade",
     captionAlign: "center",
-    aspectRatio: "9:16"
+    aspectRatio: "9:16",
+    previewVideoUrl: "/templates/restaurant-showcase-01.mp4"
   },
   8: {
     id: "app-demo-01",
@@ -199,6 +206,7 @@ export const TEMPLATES: Record<number, TemplateConfig> = {
     captionStyle: "professional",
     captionAnimation: "none",
     captionAlign: "left",
-    aspectRatio: "16:9"
+    aspectRatio: "16:9",
+    previewVideoUrl: "/templates/app-demo-01.mp4"
   }
 };
