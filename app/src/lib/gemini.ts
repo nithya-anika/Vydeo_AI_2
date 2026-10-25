@@ -465,10 +465,10 @@ export async function generateLineupFromClips(
     parts.push({ text: `Clip ${clip.index}: "${clip.name}"${clip.duration ? ` (${clip.duration}s total)` : ""}` });
     if (clip.frames?.length) {
       for (const frame of clip.frames) {
-        parts.push({ inlineData: { mimeType: "image/jpeg", data: frame } });
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: frame.replace(/^data:image\/\w+;base64,/, "") } });
       }
     } else if (clip.data) {
-      parts.push({ inlineData: { mimeType: clip.mimeType, data: clip.data } });
+      parts.push({ inlineData: { mimeType: clip.mimeType, data: clip.data.replace(/^data:.*base64,/, "") } });
     }
   }
 

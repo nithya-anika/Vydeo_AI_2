@@ -115,10 +115,10 @@ export const videoAnalysisTool: Tool<VideoAnalysisInput, VideoAnalysisOutput> = 
               ? `Keyframe at ${ts.toFixed(2)}s${clip.duration ? ` / ${clip.duration.toFixed(2)}s` : ""}`
               : `Keyframe ${fi + 1} of ${clip.frames.length}`;
             parts.push({ text: label });
-            parts.push({ inlineData: { mimeType: "image/jpeg", data: clip.frames[fi] } });
+            parts.push({ inlineData: { mimeType: "image/jpeg", data: clip.frames[fi].replace(/^data:image\/\w+;base64,/, "") } });
           }
         } else if (clip.data) {
-          parts.push({ inlineData: { mimeType: clip.mimeType, data: clip.data } });
+          parts.push({ inlineData: { mimeType: clip.mimeType, data: clip.data.replace(/^data:.*base64,/, "") } });
         }
       }
       parts.push({ text: buildAnalysisPrompt(input.clips.length) });
