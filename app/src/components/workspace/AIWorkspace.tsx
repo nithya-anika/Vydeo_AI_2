@@ -26,6 +26,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { useEditorStore, type Scene, type AspectRatio, type Mood } from "@/store/editorStore";
+import { useAssistantStore } from "@/store/assistantStore";
 import { buildSceneVideoPrompt } from "@/lib/videoPrompt";
 import { v4 as uuidv4 } from "uuid";
 
