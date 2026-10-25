@@ -25,9 +25,9 @@ export const AI_MODELS = {
   // Image generation
   imageGen: 'imagen-4.0-generate-preview-05-20',
   // Video generation
-  videoGen: 'veo-3.0-generate-preview',
+  videoGen: 'veo-3.1-generate-001',
   // Video generation fallback
-  videoGenFallback: 'veo-2.0-generate-001',
+  videoGenFallback: 'veo-3.0-generate-001',
   // Embeddings / semantic search
   embeddings: 'text-embedding-005',
   // Vision / multimodal analysis

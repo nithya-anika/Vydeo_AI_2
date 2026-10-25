@@ -29,10 +29,15 @@ async function checkGemini(model: string): Promise<string> {
 
 async function checkVeo(token: string, model: string): Promise<string> {
   try {
-    const res = await fetch(`${BASE}/${model}:predictLongRunning`, {
+    const isGlobal = model.startsWith("veo-3");
+    const loc = isGlobal ? "global" : LOCATION;
+    const host = isGlobal ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
+    const url = `https://${host}/v1/projects/${PROJECT}/locations/${loc}/publishers/google/models/${model}:predictLongRunning`;
+    const freshToken = createVertexJWT(isGlobal);
+    const res = await fetch(url, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ instances: [{ prompt: "a red ball" }], parameters: { sampleCount: 1, durationSeconds: 6 } }),
+      headers: { Authorization: `Bearer ${freshToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ instances: [{ prompt: "a red ball" }], parameters: { sampleCount: 1, durationSeconds: 4 } }),
     });
     const j = await res.json() as { name?: string; error?: { message?: string; status?: string } };
     // If we get a long-running operation name back, it's available
@@ -60,7 +65,7 @@ export async function GET() {
     const [
       pro31, flash38, argon4, flash35,
       pro25, flash25,
-      veo2, veo3, veo3fast,
+      veo31, veo30,
       img3, img4, img4ultra,
     ] = await Promise.all([
       checkGemini("gemini-3.1-pro-preview"),
@@ -69,9 +74,8 @@ export async function GET() {
       checkGemini("gemini-3.5-flash"),
       checkGemini("gemini-2.5-pro"),
       checkGemini("gemini-2.5-flash"),
-      checkVeo(token, "veo-2.0-generate-001"),
+      checkVeo(token, "veo-3.1-generate-001"),
       checkVeo(token, "veo-3.0-generate-001"),
-      checkVeo(token, "veo-3.0-fast-generate-001"),
       checkImagen(token, "imagen-3.0-generate-001"),
       checkImagen(token, "imagen-4.0-generate-001"),
       checkImagen(token, "imagen-4.0-ultra-001"),
@@ -87,9 +91,8 @@ export async function GET() {
         "gemini-2.5-flash": flash25,
       },
       veo: {
-        "veo-2.0-generate-001": veo2,
-        "veo-3.0-generate-001": veo3,
-        "veo-3.0-fast-generate-001": veo3fast,
+        "veo-3.1-generate-001": veo31,
+        "veo-3.0-generate-001": veo30,
       },
       imagen: {
         "imagen-3.0-generate-001": img3,

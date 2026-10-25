@@ -24,17 +24,8 @@ type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: str
 
 const VEO_SUPPORTED_DURATION_SECONDS = [4, 6, 8] as const;
 const PROMPT_ENHANCER_MODEL = getModel("planning");
-const VEO_MODELS_WITH_AUDIO = [
-  "veo-3.1-generate-preview",
-  "veo-3.1-fast-generate-preview",
-  "veo-3.0-generate-001",
-  "veo-3.0-generate-preview",
-  "veo-3.0-fast-generate-001",
-];
-const VEO_MODELS_SILENT_OK = [
-  ...VEO_MODELS_WITH_AUDIO,
-  "veo-2.0-generate-001",
-];
+const PRIMARY_VEO_MODEL = "veo-3.1-generate-001";
+const FALLBACK_VEO_MODEL = "veo-3.0-generate-001";
 
 function normalizeVeoDurationSeconds(duration?: string) {
   const requested = Number.parseFloat(duration ?? "8");
@@ -228,120 +219,111 @@ export async function POST(req: NextRequest) {
 
     const baseParameters = { aspectRatio: ratio, durationSeconds: durationSecs };
 
-    // Prefer the best available Gemini/Veo video family first, then gracefully
-    // fall back for projects where newer preview model IDs are not enabled.
-    // Keep audio-generating requests on Veo 3+ because Veo 2 may return valid
-    // but silent video, which is confusing when the user asked for voice/sound.
-    const models = audio ? VEO_MODELS_WITH_AUDIO : VEO_MODELS_SILENT_OK;
+    // Enforce user policy: Use ONLY veo-3.1-generate-001; if it fails after 2 attempts, then only use veo-3.0-generate-001
+    const modelExecutionSteps = [
+      { model: PRIMARY_VEO_MODEL, maxAttempts: 2 },
+      { model: FALLBACK_VEO_MODEL, maxAttempts: 2 },
+    ];
+
     let operationName: string | null = null;
     let usedModel = "";
     let lastError = "";
     let audioMode: "explicit" | "native" | "off" | "silent-fallback" = audio ? "explicit" : "off";
+    let usedHost = "aiplatform.googleapis.com";
+    let usedLocation = "global";
+    let isUsedGlobal = true;
 
-    for (const model of models) {
-      const isVeo3 = model.startsWith("veo-3");
-      const modelLocation = isVeo3 ? "global" : location;
-      const host = isVeo3 ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
-      const url = `https://${host}/v1/projects/${project}/locations/${modelLocation}/publishers/google/models/${model}:predictLongRunning`;
-      
-      const attempts = audio
-        ? [
-            { mode: "explicit" as const, body: { instances: [instance], parameters: { ...baseParameters, generateAudio: true } } },
-            // Some Vertex/Veo deployments expose Veo 3 audio natively and reject
-            // an explicit generateAudio flag. Keep the audio-focused prompt and
-            // retry Veo 3 without that parameter before giving up.
-            { mode: "native" as const, body: { instances: [instance], parameters: baseParameters } },
-          ]
-        : [
-            { mode: "off" as const, body: { instances: [instance], parameters: { ...baseParameters, generateAudio: false } } },
-          ];
+    for (const step of modelExecutionSteps) {
+      const model = step.model;
+      let stepSuccess = false;
+
+      // Define attempt configurations for this model (up to step.maxAttempts)
+      // Attempt 1: Target global endpoint
+      // Attempt 2: Target regional endpoint (or retry with alternate parameters)
+      const attempts = [
+        {
+          attemptNum: 1,
+          isGlobal: true,
+          mode: audio ? ("explicit" as const) : ("off" as const),
+          parameters: audio ? { ...baseParameters, generateAudio: true } : { ...baseParameters, generateAudio: false },
+        },
+        {
+          attemptNum: 2,
+          isGlobal: false,
+          mode: audio ? ("native" as const) : ("off" as const),
+          parameters: baseParameters,
+        },
+      ].slice(0, step.maxAttempts);
 
       for (const attempt of attempts) {
-        const token = createVertexJWT(isVeo3);
+        const endpointLocation = attempt.isGlobal ? "global" : location;
+        const endpointHost = attempt.isGlobal ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+        const url = `https://${endpointHost}/v1/projects/${project}/locations/${endpointLocation}/publishers/google/models/${model}:predictLongRunning`;
+        const token = createVertexJWT(attempt.isGlobal);
 
-        const initRes = await fetch(url, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify(attempt.body),
-          cache: "no-store",
-        });
+        try {
+          const initRes = await fetch(url, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ instances: [instance], parameters: attempt.parameters }),
+            cache: "no-store",
+          });
 
-        const parsed = await safeJson(initRes);
-        if (!parsed.ok) {
-          lastError = `${model} returned non-JSON (status ${initRes.status}): ${parsed.text}`;
-          continue;
+          const parsed = await safeJson(initRes);
+          if (!parsed.ok) {
+            lastError = `${model} attempt ${attempt.attemptNum} (${endpointLocation}) returned non-JSON (${initRes.status}): ${parsed.text}`;
+            continue;
+          }
+
+          const body = parsed.data as { name?: string; error?: { message?: string; code?: number } };
+
+          if (body.error) {
+            const code = body.error.code ?? initRes.status;
+            lastError = `${model} attempt ${attempt.attemptNum} (${endpointLocation}): ${body.error.message ?? `Error ${code}`}`;
+            continue;
+          }
+
+          if (!initRes.ok) {
+            lastError = `${model} attempt ${attempt.attemptNum} (${endpointLocation}): HTTP ${initRes.status}`;
+            continue;
+          }
+
+          if (body.name) {
+            operationName = body.name;
+            usedModel = model;
+            audioMode = attempt.mode;
+            usedHost = endpointHost;
+            usedLocation = endpointLocation;
+            isUsedGlobal = attempt.isGlobal;
+            stepSuccess = true;
+            break;
+          }
+
+          lastError = `${model} attempt ${attempt.attemptNum}: no operation name in response`;
+        } catch (fetchErr: unknown) {
+          lastError = `${model} attempt ${attempt.attemptNum}: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`;
         }
-
-        const body = parsed.data as { name?: string; error?: { message?: string; code?: number } };
-
-        if (body.error) {
-          const code = body.error.code ?? initRes.status;
-          if (code === 404 || code === 400) { lastError = `${model}: ${body.error.message}`; continue; }
-          throw new Error(`${model}: ${body.error.message ?? `API error ${code}`}`);
-        }
-
-        if (!initRes.ok) {
-          lastError = `${model}: HTTP ${initRes.status}`;
-          if (initRes.status === 404 || initRes.status === 400) continue;
-          throw new Error(lastError);
-        }
-
-        if (body.name) {
-          operationName = body.name;
-          usedModel = model;
-          audioMode = attempt.mode;
-          break;
-        }
-        lastError = `${model}: no operation name in response`;
       }
 
-      if (operationName) break;
-    }
-
-    if (!operationName && audio && allowSilentFallback) {
-      const fallbackModel = "veo-2.0-generate-001";
-      const fallbackUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${fallbackModel}:predictLongRunning`;
-      const token = createVertexJWT();
-      const fallbackBody = {
-        instances: [instance],
-        parameters: { aspectRatio: ratio, durationSeconds: durationSecs },
-      };
-      const fallbackRes = await fetch(fallbackUrl, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(fallbackBody),
-        cache: "no-store",
-      });
-      const parsed = await safeJson(fallbackRes);
-      if (parsed.ok) {
-        const body = parsed.data as { name?: string; error?: { message?: string; code?: number } };
-        if (fallbackRes.ok && body.name) {
-          operationName = body.name;
-          usedModel = fallbackModel;
-          audioMode = "silent-fallback";
-        } else if (body.error?.message) {
-          lastError = `${fallbackModel}: ${body.error.message}`;
-        }
-      } else {
-        lastError = `${fallbackModel} returned non-JSON (status ${fallbackRes.status}): ${parsed.text}`;
+      if (stepSuccess) {
+        break;
       }
+
+      console.warn(`[generate-video] Model ${model} failed after ${step.maxAttempts} attempts: ${lastError}`);
     }
 
     if (!operationName) {
-      throw new Error(`No Veo model available. ${lastError}`);
+      throw new Error(`Video generation failed. Primary model ${PRIMARY_VEO_MODEL} failed after 2 attempts, and fallback ${FALLBACK_VEO_MODEL} failed: ${lastError}`);
     }
 
     // Veo on Vertex AI uses fetchPredictOperation — NOT the generic /operations/ endpoint
-    const isVeo3Used = usedModel.startsWith("veo-3");
-    const usedLocation = isVeo3Used ? "global" : location;
-    const usedHost = isVeo3Used ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
     const fetchOpUrl = `https://${usedHost}/v1/projects/${project}/locations/${usedLocation}/publishers/google/models/${usedModel}:fetchPredictOperation`;
     const deadline = Date.now() + 300_000;
     let videoUrl: string | null = null;
 
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 5000));
-      const freshToken = createVertexJWT(isVeo3Used);
+      const freshToken = createVertexJWT(isUsedGlobal);
       const pollRes = await fetch(fetchOpUrl, {
         method: "POST",
         headers: { "Authorization": `Bearer ${freshToken}`, "Content-Type": "application/json" },
