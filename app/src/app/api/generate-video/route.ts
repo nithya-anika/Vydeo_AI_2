@@ -239,7 +239,11 @@ export async function POST(req: NextRequest) {
     let audioMode: "explicit" | "native" | "off" | "silent-fallback" = audio ? "explicit" : "off";
 
     for (const model of models) {
-      const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
+      const isVeo3 = model.startsWith("veo-3");
+      const modelLocation = isVeo3 ? "global" : location;
+      const host = isVeo3 ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+      const url = `https://${host}/v1/projects/${project}/locations/${modelLocation}/publishers/google/models/${model}:predictLongRunning`;
+      
       const attempts = audio
         ? [
             { mode: "explicit" as const, body: { instances: [instance], parameters: { ...baseParameters, generateAudio: true } } },
@@ -253,7 +257,7 @@ export async function POST(req: NextRequest) {
           ];
 
       for (const attempt of attempts) {
-        const token = createVertexJWT();
+        const token = createVertexJWT(isVeo3);
 
         const initRes = await fetch(url, {
           method: "POST",
@@ -328,13 +332,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Veo on Vertex AI uses fetchPredictOperation — NOT the generic /operations/ endpoint
-    const fetchOpUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${usedModel}:fetchPredictOperation`;
+    const isVeo3Used = usedModel.startsWith("veo-3");
+    const usedLocation = isVeo3Used ? "global" : location;
+    const usedHost = isVeo3Used ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+    const fetchOpUrl = `https://${usedHost}/v1/projects/${project}/locations/${usedLocation}/publishers/google/models/${usedModel}:fetchPredictOperation`;
     const deadline = Date.now() + 300_000;
     let videoUrl: string | null = null;
 
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 5000));
-      const freshToken = createVertexJWT();
+      const freshToken = createVertexJWT(isVeo3Used);
       const pollRes = await fetch(fetchOpUrl, {
         method: "POST",
         headers: { "Authorization": `Bearer ${freshToken}`, "Content-Type": "application/json" },
