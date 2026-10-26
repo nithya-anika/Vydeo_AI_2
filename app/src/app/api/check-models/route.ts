@@ -2,17 +2,15 @@ import { NextResponse } from "next/server";
 import { createVertexJWT } from "@/lib/gemini";
 
 const PROJECT = process.env.GOOGLE_PROJECT_ID!;
-const LOCATION = process.env.GOOGLE_LOCATION ?? "us-central1";
-const BASE = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${LOCATION}/publishers/google/models`;
+const LOCATION = process.env.GOOGLE_LOCATION ?? "global";
+const BASE = `https://aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${LOCATION}/publishers/google/models`;
 
 async function checkGemini(model: string): Promise<string> {
   try {
-    const isGlobal = process.env.GOOGLE_VERTEX_LOCATION === "global" ||
-      model.startsWith("gemini-3") ||
-      model.startsWith("gemini-4");
+    const isGlobal = true;
     const token = createVertexJWT(isGlobal);
-    const host = isGlobal ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
-    const loc = isGlobal ? "global" : LOCATION;
+    const host = "aiplatform.googleapis.com";
+    const loc = "global";
     const url = `https://${host}/v1/projects/${PROJECT}/locations/${loc}/publishers/google/models/${model}:generateContent`;
 
     const res = await fetch(url, {
@@ -29,9 +27,9 @@ async function checkGemini(model: string): Promise<string> {
 
 async function checkVeo(token: string, model: string): Promise<string> {
   try {
-    const isGlobal = model.startsWith("veo-3");
-    const loc = isGlobal ? "global" : LOCATION;
-    const host = isGlobal ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
+    const isGlobal = true;
+    const loc = "global";
+    const host = "aiplatform.googleapis.com";
     const url = `https://${host}/v1/projects/${PROJECT}/locations/${loc}/publishers/google/models/${model}:predictLongRunning`;
     const freshToken = createVertexJWT(isGlobal);
     const res = await fetch(url, {
@@ -48,7 +46,11 @@ async function checkVeo(token: string, model: string): Promise<string> {
 
 async function checkImagen(token: string, model: string): Promise<string> {
   try {
-    const res = await fetch(`${BASE}/${model}:predict`, {
+    const isGlobal = true;
+    const loc = "global";
+    const host = "aiplatform.googleapis.com";
+    const url = `https://${host}/v1/projects/${PROJECT}/locations/${loc}/publishers/google/models/${model}:predict`;
+    const res = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ instances: [{ prompt: "a red circle" }], parameters: { sampleCount: 1 } }),

@@ -13,8 +13,8 @@ function vertexUrl(model: string) {
   const useGlobal = process.env.GOOGLE_VERTEX_LOCATION === "global" ||
     model.startsWith("gemini-3") ||
     model.startsWith("gemini-4");
-  const location = useGlobal ? "global" : (process.env.GOOGLE_LOCATION ?? "us-central1");
-  const host = useGlobal ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+  const location = useGlobal ? "global" : (process.env.GOOGLE_LOCATION ?? "global");
+  const host = "aiplatform.googleapis.com";
   return `https://${host}/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`;
 }
 
@@ -88,10 +88,8 @@ export function createStorageJWT(): string {
 export function createVertexJWT(forGlobal = false): string {
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL!;
   const privateKey = (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n");
-  const location = process.env.GOOGLE_LOCATION ?? "us-central1";
-  const audience = forGlobal || process.env.GOOGLE_VERTEX_LOCATION === "global"
-    ? "https://aiplatform.googleapis.com/"
-    : `https://${location}-aiplatform.googleapis.com/`;
+  const location = process.env.GOOGLE_LOCATION ?? "global";
+  const audience = "https://aiplatform.googleapis.com/";
 
   const now = Math.floor(Date.now() / 1000);
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");

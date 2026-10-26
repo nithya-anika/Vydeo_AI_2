@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     const project = process.env.GOOGLE_PROJECT_ID;
-    const location = process.env.GOOGLE_LOCATION ?? "us-central1";
+    const location = process.env.GOOGLE_LOCATION ?? "global";
     if (!project) {
       return NextResponse.json({ error: "GOOGLE_PROJECT_ID not configured" }, { status: 500 });
     }

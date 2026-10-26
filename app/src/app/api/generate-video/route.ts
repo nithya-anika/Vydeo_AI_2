@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
     }
 
     const project = process.env.GOOGLE_PROJECT_ID;
-    const location = process.env.GOOGLE_LOCATION ?? "us-central1";
+    const location = process.env.GOOGLE_LOCATION ?? "global";
     if (!project) {
       return NextResponse.json({ error: "GOOGLE_PROJECT_ID not configured" }, { status: 500 });
     }
@@ -256,8 +256,8 @@ export async function POST(req: NextRequest) {
       ].slice(0, step.maxAttempts);
 
       for (const attempt of attempts) {
-        const endpointLocation = attempt.isGlobal ? "global" : location;
-        const endpointHost = attempt.isGlobal ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+        const endpointLocation = "global";
+        const endpointHost = "aiplatform.googleapis.com";
         const url = `https://${endpointHost}/v1/projects/${project}/locations/${endpointLocation}/publishers/google/models/${model}:predictLongRunning`;
         const token = createVertexJWT(attempt.isGlobal);
 
