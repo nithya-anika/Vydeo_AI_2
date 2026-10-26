@@ -526,6 +526,8 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
   // Cancel controller for in-flight generation
   const cancelControllerRef = useRef<AbortController | null>(null);
 
+  const [processingStep, setProcessingStep] = useState("");
+
   // Selected scene in storyboard
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
 
@@ -554,6 +556,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
   const [platform, setPlatform] = useState("Instagram Reels");
   const [stylePreset, setStylePreset] = useState("Cinematic");
   const [uploadedRefs, setUploadedRefs] = useState<{ name: string; file: File; isVideo: boolean; src: string }[]>([]);
+  const [isSuggestingPrompt, setIsSuggestingPrompt] = useState(false);
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
 
   // Ref that always holds the latest uploadedRefs — avoids stale closures in useCallback
@@ -763,6 +766,44 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
         }
       } catch {}
 
+      // Handle raw local uploads that haven't been passed through template page yet
+      let localRefs: any[] | undefined = undefined;
+      if (uploadedRefsRef.current.length > 0 && !templateReferences) {
+        setProcessingStep(`Uploading ${uploadedRefsRef.current.length} reference(s)...`);
+        localRefs = [];
+        for (const ref of uploadedRefsRef.current) {
+          try {
+            const ext = ref.file.name.split('.').pop() || (ref.isVideo ? 'mp4' : 'png');
+            const initRes = await fetch("/api/upload-media", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ filename: `workspace_${Date.now()}_${ref.name}`, contentType: ref.file.type || (ref.isVideo ? "video/mp4" : "image/png") }),
+            });
+            const { url, publicUrl } = await initRes.json();
+            
+            await fetch(url, {
+              method: "PUT",
+              headers: { "Content-Type": ref.file.type || (ref.isVideo ? "video/mp4" : "image/png") },
+              body: ref.file,
+            });
+            
+            localRefs.push({
+              id: uuidv4(),
+              name: ref.file.name,
+              type: ref.isVideo ? "video" : "image",
+              url: publicUrl || url.split("?")[0],
+              mimeType: ref.file.type || (ref.isVideo ? "video/mp4" : "image/png"),
+              size: ref.file.size,
+            });
+          } catch (e) {
+            console.error("Failed to upload reference:", e);
+          }
+        }
+        setProcessingStep("Planning scenes & AI lineup...");
+      }
+
+      const mergedReferences = templateReferences || localRefs;
+
       const res = await fetch("/api/lineup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -776,7 +817,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
           platform,
           stylePreset,
           templateId,
-          references: templateReferences,
+          references: mergedReferences,
           referenceProfile: templateRefProfile,
         }),
         signal: controller.signal,
@@ -899,6 +940,47 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
     setGenStep(0);
     setCompletedSteps([]);
   }, []);
+
+  const handleSuggestPrompt = useCallback(async () => {
+    if (isSuggestingPrompt || uploadedRefsRef.current.length === 0) return;
+    setIsSuggestingPrompt(true);
+    try {
+      const b64Clips = await Promise.all(
+        uploadedRefsRef.current.map(async (r, i) => {
+          return new Promise<any>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const res = e.target?.result as string;
+              if (r.isVideo) {
+                // For videos, we only have the file in workspace, not extracted frames natively
+                // However, we just pass the file name for prompt suggestion context
+                resolve({ name: r.name, duration: 5, frames: [] });
+              } else {
+                resolve({ name: r.name, duration: 0, frames: [res] });
+              }
+            };
+            reader.readAsDataURL(r.file);
+          });
+        })
+      );
+      const res = await fetch("/api/suggest-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Analyze these uploaded references and write a single, detailed, cinematic editorial prompt for generating a video that incorporates their style, subjects, or concepts. Return only the prompt paragraph without extra conversational filler." }],
+          clips: b64Clips
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.text) {
+        setPrompt(data.text);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSuggestingPrompt(false);
+    }
+  }, [isSuggestingPrompt]);
 
   const handleUseFootage = useCallback(() => {
     const videoFiles = uploadedRefsRef.current.filter(r => r.isVideo).map(r => r.file);
@@ -1415,7 +1497,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
                     <Loader2 size={14} />
                   </motion.div>
-                  Generating...
+                  {processingStep || "Generating..."}
                 </>
               ) : (
                 <>
@@ -1425,28 +1507,23 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
               )}
             </motion.button>
 
-            {/* Refine with AI */}
+            {/* Auto-Write Prompt */}
             <motion.button
-              onClick={() => {
-                if (!prompt.trim()) return;
-                const refinement = " — make it more cinematic with dramatic transitions";
-                setPrompt(prev => prev + refinement);
-                promptRef.current?.focus();
-              }}
+              onClick={handleSuggestPrompt}
               whileTap={{ scale: 0.97 }}
-              disabled={!prompt.trim()}
+              disabled={isSuggestingPrompt || uploadedRefs.length === 0}
               style={{
                 height: 42, padding: "0 16px", borderRadius: "var(--r-lg)",
                 background: "transparent",
                 border: "1px solid var(--border)",
                 color: "var(--text-secondary)", fontSize: 12, fontWeight: 600,
-                cursor: !prompt.trim() ? "not-allowed" : "pointer",
+                cursor: (isSuggestingPrompt || uploadedRefs.length === 0) ? "not-allowed" : "pointer",
                 display: "flex", alignItems: "center", gap: 6,
                 transition: "all 0.12s ease", flexShrink: 0,
-                opacity: !prompt.trim() ? 0.4 : 1,
+                opacity: (isSuggestingPrompt || uploadedRefs.length === 0) ? 0.4 : 1,
               }}
               onMouseEnter={e => {
-                if (!prompt.trim()) return;
+                if (isSuggestingPrompt || uploadedRefs.length === 0) return;
                 (e.currentTarget as HTMLElement).style.borderColor = "var(--accent-border)";
                 (e.currentTarget as HTMLElement).style.color = "var(--accent-light)";
               }}
@@ -1455,8 +1532,8 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
                 (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
               }}
             >
-              <Wand2 size={13} />
-              Refine with AI
+              {isSuggestingPrompt ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+              Auto-Write Prompt
             </motion.button>
 
             {/* Upload clips — label triggers hidden input natively, no programmatic click needed */}
