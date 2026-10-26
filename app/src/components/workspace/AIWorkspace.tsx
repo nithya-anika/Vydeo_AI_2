@@ -507,7 +507,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
   const [prompt, setPrompt] = useState("");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
   const [workflow, setWorkflow] = useState("ugc-ads");
-  const [duration, setDuration] = useState(30);
+  const [duration, setDuration] = useState<number | "">("");
   const [templateId, setTemplateId] = useState<string | null>(urlTemplateId);
 
   // Generation state
@@ -812,7 +812,7 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
           workspaceSlug: "asaya",
           aspectRatio,
           runQA: false,
-          duration,
+          duration: duration === "" ? null : duration,
           workflow,
           platform,
           stylePreset,
@@ -1455,7 +1455,11 @@ export default function AIWorkspace({ projectId }: { projectId?: string }) {
                 min={1}
                 step={1}
                 value={duration}
-                onChange={(e) => setDuration(Math.max(1, Number(e.target.value) || 1))}
+                placeholder="Auto"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDuration(val === "" ? "" : Math.max(1, Number(val) || 1));
+                }}
                 style={{
                   width: 74,
                   padding: "4px 8px",
