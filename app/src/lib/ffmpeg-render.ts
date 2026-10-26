@@ -1206,8 +1206,8 @@ export async function renderWithFfmpeg(
 
       const isCover = (scene as any).clipFit === "cover";
       const scaleFilter = isCover
-        ? `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1`
-        : `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
+        ? `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,settb=1/90000,format=yuv420p`
+        : `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,settb=1/90000,format=yuv420p`;
 
       const fpsFilter = "fps=30";
 
