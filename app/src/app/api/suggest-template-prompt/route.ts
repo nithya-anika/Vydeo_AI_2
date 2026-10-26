@@ -18,13 +18,13 @@ Platform: ${platform}
 Duration: ${duration}
 User Uploaded File Names: ${refsStr}
 
-Write ONE cohesive, cinematic paragraph (no bullet points, no extra chat) that provides comprehensive editing instructions. You MUST include explicit directions on:
-1. Video Arrangement & Trimming (e.g., "trim dead space, cut directly to peak action, filter out outtakes").
-2. Audio Flow & Sound Design (e.g., "sync cuts to the beat, duck background audio during speech, layer cinematic sound effects").
-3. Aesthetic & Pacing (e.g., fast cuts vs slow cinematic, mood, lighting, transition styles like zoom-ins or crossfades).
-4. Visuals (what subjects or actions should be featured based on the reference names).
+Write ONE cohesive, cinematic paragraph (no bullet points, no extra chat) that provides comprehensive editing instructions. You MUST explicitly direct the AI to produce a clean, highly polished final clip by including:
+1. Video Arrangement & Trimming: "Trim all dead space, remove outtakes, and ensure every clip is cut cleanly to its best moment."
+2. Audio Flow & Clarity: "Ensure the audio is crystal clear, seamlessly duck background music during speech, and create a smooth, professional soundscape."
+3. Neat Transitions & Pacing: "Use neat, seamless transitions (like smooth dissolves or precise hard cuts) to maintain excellent flow and pacing."
+4. Visuals & Aesthetic: Integrate the uploaded reference subjects seamlessly into the template's mood.
 
-Make it incredibly descriptive and actionable so the AI editor builds the perfect video.`;
+Make it incredibly descriptive and actionable so the AI editor builds a perfectly neat, clear, and professional video.`;
 
     const contents = [{ role: "user", parts: [{ text: systemText }] }];
 
