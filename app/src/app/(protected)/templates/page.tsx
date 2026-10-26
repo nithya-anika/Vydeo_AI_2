@@ -1442,6 +1442,7 @@ export default function TemplatesPage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [analyzingStyle, setAnalyzingStyle] = useState(false)
   const [isSuggestingPrompt, setIsSuggestingPrompt] = useState(false)
+  const [promptSuggestions, setPromptSuggestions] = useState<string[]>([])
   const [referenceProfile, setReferenceProfile] = useState<ReferenceStyleProfile | null>(null)
   const refFileInputRef = useRef<HTMLInputElement>(null)
 
@@ -1453,6 +1454,7 @@ export default function TemplatesPage() {
     setReferences([])
     setReferenceProfile(null)
     setUploadError(null)
+    setPromptSuggestions([])
   }
 
   const handleSuggestPrompt = async () => {
@@ -1470,8 +1472,8 @@ export default function TemplatesPage() {
         }),
       })
       const data = await res.json()
-      if (data.success && data.text) {
-        setCustomPrompt(data.text)
+      if (data.success && Array.isArray(data.prompts)) {
+        setPromptSuggestions(data.prompts)
       }
     } catch (e) {
       console.error(e)
@@ -1488,6 +1490,7 @@ export default function TemplatesPage() {
     if (!selectedTemplate) return
     const reg = TEMPLATE_REGISTRY[selectedTemplate.id]
     setCustomPrompt(reg?.editorialPrompt || promptForTemplate(selectedTemplate))
+    setPromptSuggestions([])
   }
 
   const handleReferenceFiles = async (files: FileList | File[]) => {
@@ -1788,6 +1791,28 @@ export default function TemplatesPage() {
                   }}
                   placeholder="Describe your editing vision or instructions for this template..."
                 />
+                {promptSuggestions.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4, background: 'rgba(99,102,241,0.05)', padding: '10px', borderRadius: 'var(--r-md)', border: '1px solid rgba(99,102,241,0.1)' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-light)', textTransform: 'uppercase' }}>
+                      Suggested Angles
+                    </div>
+                    {promptSuggestions.map((sug, i) => (
+                      <div
+                        key={i}
+                        onClick={() => { setCustomPrompt(sug); setPromptSuggestions([]); }}
+                        style={{
+                          padding: '8px 10px', background: 'var(--bg-panel)', border: '1px solid var(--border)',
+                          borderRadius: 'var(--r-sm)', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer',
+                          lineHeight: 1.4, transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-border)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
+                      >
+                        {sug}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
                   {assistantName} will use this customized brief to direct shot choices, pacing, transitions, and story structure.
                 </div>
