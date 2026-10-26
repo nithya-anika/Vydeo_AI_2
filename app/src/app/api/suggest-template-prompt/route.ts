@@ -33,7 +33,18 @@ Do not use markdown blocks, just raw JSON array.`;
 
     const response = await geminiRequest(getModel("chat"), {
       contents,
-      generationConfig: { temperature: 0.7, maxOutputTokens: 2000, responseMimeType: "application/json" },
+      generationConfig: { 
+        temperature: 0.7, 
+        maxOutputTokens: 2000, 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "ARRAY",
+          description: "An array of exactly 3 highly detailed editorial prompt strings. Do not include conversational text.",
+          items: {
+            type: "STRING"
+          }
+        }
+      },
     });
 
     const text = (response as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
@@ -42,9 +53,12 @@ Do not use markdown blocks, just raw JSON array.`;
       prompts = JSON.parse(text);
       if (!Array.isArray(prompts)) prompts = [text];
     } catch {
-      prompts = [text.replace(/[\[\]"]/g, '')];
+      prompts = [text];
     }
     
+    // Filter out any accidental conversational filler that might have snuck into the array items
+    prompts = prompts.map(p => p.trim()).filter(p => p.length > 20 && !p.toLowerCase().includes("here are 3 ways") && !p.toLowerCase().includes("would you like to use"));
+
     return NextResponse.json({ success: true, prompts });
   } catch (error) {
     console.error("[api/suggest-template-prompt] Error:", error);
