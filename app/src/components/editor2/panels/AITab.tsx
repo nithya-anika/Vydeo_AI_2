@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useEditorStore } from "@/store/editorStore";
+import { useAssistantStore } from "@/store/assistantStore";
 
 const QUICK_ACTIONS = [
   { label: "Generate captions", icon: "✦", prompt: "Add captions to all scenes based on the content" },
@@ -15,6 +16,7 @@ const QUICK_ACTIONS = [
 
 export default function AITab() {
   const { isGenerating, setIsGenerating, scenes, setScenes, aspectRatio } = useEditorStore();
+  const assistantName = useAssistantStore(s => s.name);
   const [prompt, setPrompt] = useState("");
   const [response, setResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export default function AITab() {
           flexShrink: 0,
         }} />
         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ai)" }}>
-          {isGenerating ? "AI is thinking…" : "AI Creative Director"}
+          {isGenerating ? `${assistantName} is thinking…` : assistantName}
         </span>
       </div>
 

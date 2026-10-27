@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestSession } from "@/lib/session";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/api/auth/login", "/api/auth/signup"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/api/auth/login", "/api/auth/signup", "/workspace/new"];
 const AUTH_ONLY_PATHS = ["/login", "/signup", "/forgot-password"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Skip static assets, media files, and API routes (except auth)
   if (
     pathname.startsWith("/_next") ||
     pathname.match(/\.(ico|png|jpg|jpeg|svg|mp4|webm|mp3)$/) ||
@@ -18,12 +17,10 @@ export async function middleware(req: NextRequest) {
 
   const session = await getRequestSession(req);
 
-  // Logged-in user trying to access login/signup → redirect to home
   if (session && AUTH_ONLY_PATHS.some(p => pathname.startsWith(p))) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  // Unauthenticated user trying to access protected routes
   if (!session && !PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
