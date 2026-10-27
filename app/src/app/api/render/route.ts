@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       aspectRatio?: string;
       totalDuration?: number;
       outputFilename?: string;
+      resolution?: string;
     };
 
     const body = envelope.compressed && envelope.payload
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
           aspectRatio?: string;
           totalDuration?: number;
           outputFilename?: string;
+          resolution?: string;
         })
       : envelope;
 
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest) {
       aspectRatio,
       totalDuration,
       outputFilename,
+      resolution,
     } = body as {
       scenes: SceneInput[];
       audio?: AudioInput;
@@ -51,6 +54,7 @@ export async function POST(req: NextRequest) {
       aspectRatio?: string;
       totalDuration?: number;
       outputFilename?: string;
+      resolution?: string;
     };
 
     // Validate scenes
@@ -110,6 +114,7 @@ export async function POST(req: NextRequest) {
         aspectRatio,
         totalDuration,
         outputFilename: filename,
+        resolution,
       },
       createdAt: new Date(),
     });
@@ -124,6 +129,7 @@ export async function POST(req: NextRequest) {
       aspectRatio,
       totalDuration,
       outputFilename: filename,
+      resolution,
     });
 
     if (!queued) {

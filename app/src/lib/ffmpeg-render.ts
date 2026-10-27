@@ -691,38 +691,28 @@ function captionToFilter(
 /* -------------------------------------------------------------------------- */
 
 export function ratioDimensions(
-  ratio: string
+  ratio: string,
+  resolution: string = "1080p"
 ): [number, number] {
+  let base = 1080;
+  if (resolution === "720p") base = 720;
+  else if (resolution === "1080p") base = 1080;
+  else if (resolution === "1440p") base = 1440;
+  else if (resolution === "2160p") base = 2160;
+
+  const makeEven = (n: number) => Math.round(n / 2) * 2;
+
   switch (ratio) {
     case "16:9":
-      return [
-        1920,
-        1080,
-      ];
-
+      return [makeEven(base * 16 / 9), base];
     case "1:1":
-      return [
-        1080,
-        1080,
-      ];
-
+      return [base, base];
     case "4:5":
-      return [
-        1080,
-        1350,
-      ];
-
+      return [base, makeEven(base * 5 / 4)];
     case "3:4":
-      return [
-        1080,
-        1440,
-      ];
-
+      return [base, makeEven(base * 4 / 3)];
     default:
-      return [
-        1080,
-        1920,
-      ];
+      return [base, makeEven(base * 16 / 9)];
   }
 }
 
@@ -918,7 +908,8 @@ export async function renderWithFfmpeg(
 
   const [W, H] =
     ratioDimensions(
-      aspectRatio
+      aspectRatio,
+      params.resolution
     );
 
   const tempFiles:

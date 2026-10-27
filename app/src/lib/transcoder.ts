@@ -79,7 +79,8 @@ export interface RenderParams {
   brand?: BrandRenderInput;
   aspectRatio?: string;
   totalDuration?: number;
-  outputFilename: string;
+  outputFilename?: string;
+  resolution?: string;
 }
 
 export interface RenderResult {

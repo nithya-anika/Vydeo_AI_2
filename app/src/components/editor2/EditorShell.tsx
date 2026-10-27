@@ -4962,12 +4962,24 @@ export default function EditorShell({
         }
       }
 
+      let resolution = "1080p";
+      try {
+        const rawPrefs = localStorage.getItem("vydeo_export_prefs");
+        if (rawPrefs) {
+          const prefs = JSON.parse(rawPrefs);
+          if (prefs.resolution) resolution = prefs.resolution;
+        }
+      } catch (e) {
+        console.warn("[Export] Could not read export prefs", e);
+      }
+
       const payload = {
         scenes: payloadScenes,
         audio: audioPayload,
         aspectRatio,
         totalDuration: payloadScenes.reduce((sum, scene) => sum + scene.duration, 0),
         outputFilename: isSingleScene ? `${storeName.replace(/\s+/g, "-")}-scene-${Date.now()}.mp4` : `${storeName.replace(/\s+/g, "-")}-${Date.now()}.mp4`,
+        resolution,
       };
 
       setRenderStatus("Compressing payload...");
