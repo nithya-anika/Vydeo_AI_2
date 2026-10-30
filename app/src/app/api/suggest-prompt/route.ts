@@ -75,11 +75,40 @@ CRITICAL INSTRUCTIONS:
       contents,
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 2000,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            prompts: {
+              type: "ARRAY",
+              description: "Exactly 3 distinct editorial prompt strings enclosed in <suggested_prompt> tags. Do not include conversational text, greetings, or questions.",
+              items: { type: "STRING" }
+            }
+          },
+          required: ["prompts"]
+        }
       },
     });
 
-    const raw = (response as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const text = (response as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    let prompts: string[] = [];
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.prompts && Array.isArray(parsed.prompts)) {
+        prompts = parsed.prompts;
+      }
+    } catch {}
+
+    // Combine them into the expected raw string format for the frontend regex parser
+    let raw = "";
+    for (const p of prompts) {
+      let clean = p.trim();
+      if (!clean.startsWith("<suggested_prompt>")) {
+        clean = `<suggested_prompt>${clean}</suggested_prompt>`;
+      }
+      raw += clean + "\n";
+    }
 
     return NextResponse.json({ success: true, text: raw });
   } catch (error) {
