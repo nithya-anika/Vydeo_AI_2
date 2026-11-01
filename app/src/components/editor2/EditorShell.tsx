@@ -4660,52 +4660,22 @@ export default function EditorShell({
         return new Blob([byteArray], { type: clipMime });
       })();
 
-      const uploadInitRes = await fetch("/api/upload-media", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: `scene_${scene.id}.${clipExt}`, contentType: clipMime }),
-      });
-      
-      if (uploadInitRes.ok) {
-        const initData = await uploadInitRes.json();
-        const { url, gcsPath, token, isS3, publicUrl } = initData;
-
-        let lastLoggedPct = -1;
-        const uploadRes = await uploadBlobWithProgress(
-          url,
-          isS3 ? "PUT" : "POST",
-          isS3 ? { "Content-Type": clipMime } : { "Authorization": `Bearer ${token}`, "Content-Type": clipMime, "Content-Length": String(uploadBlob.size) },
-          uploadBlob,
-          (pct, loaded, total) => {
-            const step = 5;
-            if (pct >= lastLoggedPct + step || pct === 100) {
-              lastLoggedPct = pct;
-              const loadedMB = (loaded / 1024 / 1024).toFixed(1);
-              const totalMB = (total / 1024 / 1024).toFixed(1);
-              console.log(`[Export] Uploading "${scene.label}": ${pct}% (${loadedMB} / ${totalMB} MB)`);
-            }
-            if (onProgress) {
-              onProgress(pct, loaded, total);
-            }
+      let lastLoggedPct = -1;
+      try {
+        const uploadedUrl = await uploadFileMultipart(uploadBlob as File, (pct) => {
+          const step = 5;
+          if (pct >= lastLoggedPct + step) {
+            setRenderStatus(`Uploading clip ${i + 1}/${totalClips} (${pct}%)`);
+            lastLoggedPct = pct;
           }
-        );
-
-        if (uploadRes.ok) {
-          if (isS3) {
-            console.log(`[Export] Direct S3 (Storj) upload successful: ${publicUrl}`);
-            scene.clipSrc = publicUrl;
-          } else {
-            console.log(`[Export] Direct GCS upload successful: gs://${gcsPath}`);
-            scene.clipSrc = `gs://${gcsPath}`; // Server transcoder natively understands gs://
-          }
-          clipData = null; // Clear base64 to keep payload tiny
-          rawBinary = null; // Clear raw binary reference to let GC free up RAM
-        } else {
-          console.warn(`[Export] Direct upload failed with status ${uploadRes.status}`);
-        }
-      } else {
-        const errJson = await uploadInitRes.json();
-        console.warn(`[Export] Direct upload init failed:`, errJson);
+          if (onProgress) onProgress(pct, 0, 100);
+        });
+        scene.clipSrc = uploadedUrl;
+        console.log(`[Export] Direct multipart upload successful: ${uploadedUrl}`);
+        clipData = null;
+        rawBinary = null;
+      } catch (err) {
+        console.warn(`[Export] Multipart upload failed: `, err);
       }
     } catch (err) {
       console.warn(`[Export] Direct GCS upload failed for scene "${scene.label}", falling back to base64 payload.`, err);
@@ -4909,44 +4879,12 @@ export default function EditorShell({
               const byteArray = new Uint8Array(byteNumbers);
               const uploadBlob = new Blob([byteArray], { type: "audio/mpeg" });
 
-              const uploadInitRes = await fetch("/api/upload-media", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ filename: `audio_${activeAudio.id || uuidv4()}.mp3`, contentType: "audio/mpeg" }),
-              });
-
-              if (uploadInitRes.ok) {
-                const initData = await uploadInitRes.json();
-                const { url, gcsPath, token, isSupabase, publicUrl } = initData;
-
-                let uploadRes;
-                if (isSupabase) {
-                  uploadRes = await fetch(url, {
-                    method: "PUT",
-                    headers: { "Content-Type": "audio/mpeg" },
-                    body: uploadBlob,
-                  });
-                } else {
-                  uploadRes = await fetch(url, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "audio/mpeg", "Content-Length": String(uploadBlob.size) },
-                    body: uploadBlob,
-                  });
-                }
-
-                if (uploadRes.ok) {
-                  if (isSupabase) {
-                    console.log(`[Export] Direct audio upload successful: ${publicUrl}`);
-                    audioData = publicUrl;
-                  } else {
-                    console.log(`[Export] Direct GCS audio upload successful: gs://${gcsPath}`);
-                    audioData = `gs://${gcsPath}`;
-                  }
-                } else {
-                  console.warn(`[Export] Direct audio upload failed with status ${uploadRes.status}`);
-                }
-              } else {
-                console.warn(`[Export] Direct audio upload init failed`);
+              try {
+                const uploadedUrl = await uploadFileMultipart(uploadBlob as File, (pct) => {});
+                console.log(`[Export] Direct multipart audio upload successful: ${uploadedUrl}`);
+                audioData = uploadedUrl;
+              } catch (err) {
+                console.warn(`[Export] Multipart audio upload failed:`, err);
               }
             } catch (err) {
               console.warn(`[Export] Direct audio upload failed, falling back to base64.`, err);
