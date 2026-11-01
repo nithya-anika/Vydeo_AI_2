@@ -1,4 +1,10 @@
-export async function uploadFileMultipart(file: File, onProgress: (pct: number) => void): Promise<string> {
+export async function uploadFileMultipart(
+  file: File | Blob,
+  filename?: string,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  const safeFilename = filename || (file as File).name || `upload_${Date.now()}.mp4`;
+  const safeContentType = file.type || "video/mp4";
   const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
   
   if (file.size < CHUNK_SIZE) {
@@ -6,17 +12,18 @@ export async function uploadFileMultipart(file: File, onProgress: (pct: number) 
     const initRes = await fetch("/api/upload-media", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, contentType: file.type || "video/mp4" })
+      body: JSON.stringify({ filename: safeFilename, contentType: safeContentType })
     });
     const initData = await initRes.json();
     if (!initRes.ok) throw new Error(initData.error || "Failed standard upload init");
     
     await fetch(initData.url, {
       method: "PUT",
-      headers: { "Content-Type": file.type || "video/mp4" },
+      headers: { "Content-Type": safeContentType },
       body: file
     });
     
+    if (onProgress) onProgress(100);
     return initData.publicUrl || initData.gcsPath;
   }
 
@@ -24,7 +31,7 @@ export async function uploadFileMultipart(file: File, onProgress: (pct: number) 
   const initRes = await fetch("/api/upload-media-multipart-init", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename: file.name, contentType: file.type || "video/mp4" })
+    body: JSON.stringify({ filename: safeFilename, contentType: safeContentType })
   });
   const { uploadId, key } = await initRes.json();
   if (!uploadId) throw new Error("Failed to initialize multipart upload");
@@ -56,7 +63,7 @@ export async function uploadFileMultipart(file: File, onProgress: (pct: number) 
     if (!eTag) throw new Error("Missing ETag from AWS after chunk upload");
 
     parts.push({ eTag, partNumber });
-    onProgress(Math.round(((i + 1) / totalChunks) * 100));
+    if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
   }
 
   // 4. Complete

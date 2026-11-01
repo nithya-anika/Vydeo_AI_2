@@ -1127,7 +1127,7 @@ export async function renderWithFfmpeg(
 
       let raw = "";
 
-      if (scene.clipData) {
+      if (scene.clipData && scene.clipData.startsWith("data:")) {
          raw = await saveBase64(
             scene.clipData,
             fallbackExt,
@@ -1531,7 +1531,7 @@ export async function renderWithFfmpeg(
           await downloadFile(`http://localhost:3000${resolvedAudioSrc}`, audioFile);
           tempFiles.push(audioFile);
         }
-      } else {
+      } else if (resolvedAudioSrc && resolvedAudioSrc.startsWith("data:")) {
         audioFile = await saveBase64(resolvedAudioSrc, "m4a", tmpDir);
         tempFiles.push(audioFile);
       }

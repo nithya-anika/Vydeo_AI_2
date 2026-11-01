@@ -173,7 +173,7 @@ Note: Do NOT include overallScore or passedQA in the JSON. They are computed pro
   try {
     const data = await geminiRequest(activeModel, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 2000 } },
+      generationConfig: { responseMimeType: "application/json", temperature: 0.7, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } },
     });
 
     const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })

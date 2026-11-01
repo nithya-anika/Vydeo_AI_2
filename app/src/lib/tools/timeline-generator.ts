@@ -187,9 +187,9 @@ Return ONLY this JSON:
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
       responseMimeType: "application/json",
-      temperature: 1.0,
-      maxOutputTokens: 8192,
-      thinkingConfig: { thinkingBudget: 8000 },
+      temperature: 0.7,
+      maxOutputTokens: 16384,
+      thinkingConfig: { thinkingBudget: 2048 },
     },
   });
 
@@ -272,6 +272,10 @@ EDITORIAL RULES & SELECTION:
 4. TRANSITIONS & PACING:
    - Match pacing to the brief: fast-paced = sharp cuts; cinematic = smooth dissolves/fades; talking-head = clean cuts.
    - Do NOT force every cut to a beat. Use transitions purposefully. Default to "cut" when in doubt.
+5. TRIMMING & DURATION CONTROL:
+   - When the user asks to trim, cut dead space, or shorten clips, explicitly provide "customTrimStart" and "customTrimEnd" on each candidate in selectedCandidates.
+   - Example: to select the best 4 seconds of a 10s candidate, provide:
+     "customTrimStart": 2.0, "customTrimEnd": 6.0
 
 BRAND: ${input.brand.name} | Aspect ratio: ${ratio} | Color grade: ${input.overrides?.colorGrade ?? colorGradeDefault ?? input.brand.colorGrade.name}
 Captions: ${input.brand.captionStyle.position}, max ${input.brand.captionStyle.maxCharsPerLine} chars/line
@@ -292,7 +296,9 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
         "label": "<brief description>",
         "captionText": "<punchy on-screen caption>",
         "transitionType": "cut",
-        "playbackSpeed": 1.0
+        "playbackSpeed": 1.0,
+        "customTrimStart": 0.0,
+        "customTrimEnd": 4.5
       }
     ]
   },
@@ -322,9 +328,9 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
     contents: [{ role: "user", parts }],
     generationConfig: {
       responseMimeType: "application/json",
-      temperature: 1.0,
-      maxOutputTokens: 8192,
-      thinkingConfig: { thinkingBudget: 8000 },
+      temperature: 0.7,
+      maxOutputTokens: 16384,
+      thinkingConfig: { thinkingBudget: 2048 },
     },
   });
 

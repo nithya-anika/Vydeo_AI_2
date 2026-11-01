@@ -615,8 +615,9 @@ export default function FootageEditorSetup() {
             }),
           });
           const data = await res.json();
-          if (data.timeline) {
-            timelineData = data.timeline;
+          const receivedTimeline = data.lineup?.timeline ?? data.timeline;
+          if (receivedTimeline?.scenes?.length) {
+            timelineData = receivedTimeline;
             score = data.evaluation?.overallScore ?? null;
             feedback = data.evaluation?.improvements?.join("\n") ?? null;
           } else {
@@ -645,12 +646,22 @@ export default function FootageEditorSetup() {
       // 3. Load full timeline into store
       if (timelineData) {
         loadTimeline({
-          scenes: (timelineData as any).scenes.map((s: any) => ({
-            ...s,
-            // Restore any blob URLs that the Timeline type strips
-            clipSrc: clips.find(c => c.id === s.clipId)?.src || s.clipSrc
-          })),
-          audioTracks: (timelineData as any).audioLayers.map((a: any) => ({
+          scenes: (timelineData as any).scenes.map((s: any, idx: number) => {
+            const matchedClip = clips.find(c => c.id === s.clipId || c.name === s.label) || clips[idx % clips.length];
+            const sourceDur = matchedClip?.duration ?? s.duration;
+            const trimStart = typeof s.clipTrimStart === "number" ? Math.max(0, s.clipTrimStart) : 0;
+            const trimEnd = typeof s.clipTrimEnd === "number" ? Math.min(sourceDur, s.clipTrimEnd) : (trimStart + (s.duration || sourceDur));
+            const activeDuration = Math.max(0.5, s.duration ?? (trimEnd - trimStart));
+
+            return {
+              ...s,
+              clipSrc: matchedClip?.src || s.clipSrc,
+              clipTrimStart: trimStart,
+              clipTrimEnd: trimEnd,
+              duration: activeDuration,
+            };
+          }),
+          audioTracks: ((timelineData as any).audioLayers || []).map((a: any) => ({
             id: a.id,
             name: a.id,
             src: a.src ?? "",

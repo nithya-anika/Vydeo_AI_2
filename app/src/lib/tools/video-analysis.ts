@@ -128,8 +128,8 @@ export const videoAnalysisTool: Tool<VideoAnalysisInput, VideoAnalysisOutput> = 
         generationConfig: {
           responseMimeType: "application/json",
           temperature: 0.7,
-          maxOutputTokens: 4096,
-          thinkingConfig: { thinkingBudget: 4000 },
+          maxOutputTokens: 16384,
+          thinkingConfig: { thinkingBudget: 2048 },
         },
       });
 

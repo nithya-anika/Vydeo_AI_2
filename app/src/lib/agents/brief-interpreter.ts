@@ -28,6 +28,8 @@ export interface StructuredBrief {
   // Pacing
   pacingIntent: "very-fast" | "fast" | "natural" | "slow" | "cinematic";
   allowCutsWithinClip: boolean;  // false = keep each person's full answer uncut
+  trimmingDirectives?: string[]; // e.g. ["trim dead space", "trim to 3s per clip", "cut out silence"]
+  targetSceneDuration?: number;
 
   // Captions
   captionTone: "all-caps-punchy" | "natural-speech" | "narrative" | "minimal" | "none";
@@ -65,13 +67,14 @@ USER'S BRIEF:
 
 Extract:
 1. What they want in the video, in the exact order they described it
-2. Whether segments should play completely uncut (e.g. "keep each answer complete")
+2. Whether segments should play completely uncut OR if they should be trimmed/shortened
 3. The pacing and energy they described
 4. Caption style implied by the brief
 5. Hard rules: what MUST be in the video, what MUST NOT happen
-6. Speed: if the user says "2x", "double speed", "slow motion", "0.5x", etc. — extract as a number (2.0, 0.5, etc.)
-7. Visual effects/filters: if the user says "black and white", "vignette", "warm", "cinematic", "blur", etc.
-8. Transition style: if the user says "fade", "dissolve", "wipe", etc.
+6. Trimming directives: if user asked to trim clips, cut dead space, shorten, or keep under Xs
+7. Speed: if the user says "2x", "double speed", "slow motion", "0.5x", etc. — extract as a number (2.0, 0.5, etc.)
+8. Visual effects/filters: if the user says "black and white", "vignette", "warm", "cinematic", "blur", etc.
+9. Transition style: if the user says "fade", "dissolve", "wipe", etc.
 
 Return ONLY valid JSON:
 {
@@ -80,16 +83,17 @@ Return ONLY valid JSON:
     {
       "position": 1,
       "description": "exact description of what should appear here, using the user's own words",
-      "mustBeComplete": true,
+      "mustBeComplete": false,
       "personOrSubject": "girl speaking (if mentioned)"
     }
   ],
   "pacingIntent": "natural",
-  "allowCutsWithinClip": false,
+  "allowCutsWithinClip": true,
+  "trimmingDirectives": ["trim dead space", "cut to best moments"],
   "captionTone": "natural-speech",
   "captionStyle": "short subtitle-style captions matching the spoken tone",
   "mustHaves": ["start with the girl speaking", "end with the guy in sunglasses"],
-  "mustNots": ["do not cut mid-answer", "do not add generic captions"],
+  "mustNots": ["do not cut mid-sentence", "do not add generic captions"],
   "globalPlaybackSpeed": 1.0,
   "visualEffects": [],
   "transitionStyle": "zoom-in",
@@ -115,7 +119,7 @@ If the brief doesn't specify something, infer it from the overall context.`;
         { role: "model", parts: [{ text: "Understood. I will extract the user's exact intent without adding assumptions." }] },
         { role: "user", parts: [{ text: userPrompt }] },
       ],
-      generationConfig: { responseMimeType: "application/json", temperature: 1.0, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 2000 } },
+      generationConfig: { responseMimeType: "application/json", temperature: 0.7, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } },
     });
 
     const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
@@ -127,11 +131,13 @@ If the brief doesn't specify something, infer it from the overall context.`;
   } catch (e) {
     // Fallback: minimal structured brief
     console.warn("[brief-interpreter] fallback due to error:", e instanceof Error ? e.message : String(e));
+    const hasTrimIntent = /\b(trim|cut|short|shorten|clip|dead space|silence|quick|fast)\b/i.test(prompt);
     return {
       coreIntent: prompt.slice(0, 120),
       sceneOrder: [],
-      pacingIntent: "natural",
-      allowCutsWithinClip: false,
+      pacingIntent: hasTrimIntent ? "fast" : "natural",
+      allowCutsWithinClip: hasTrimIntent,
+      trimmingDirectives: hasTrimIntent ? ["Trim dead space and shorten clips to highlight peak moments"] : [],
       captionTone: "natural-speech",
       captionStyle: "match the tone of the brief",
       mustHaves: [],
@@ -164,10 +170,14 @@ export function formatBriefForPrompt(brief: StructuredBrief): string {
   const transitionLine = brief.transitionStyle && brief.transitionStyle !== "cut"
     ? `TRANSITION STYLE: use "${brief.transitionStyle}" transitions between all scenes`
     : "";
+  const trimLine = brief.trimmingDirectives?.length
+    ? `TRIMMING & SHORTENING DIRECTIVES:\n${brief.trimmingDirectives.map(t => `  • ${t}`).join("\n")}\n  → IMPORTANT: You MUST actively trim dead space and use customTrimStart / customTrimEnd on selectedCandidates.`
+    : (brief.allowCutsWithinClip ? `TRIMMING: Allowed and encouraged — trim dead space and cut to best moments.` : "");
 
   return [
     `INTENT: ${brief.coreIntent}`,
     orderLines,
+    trimLine,
     `PACING: ${brief.pacingIntent} | ENERGY: ${brief.energyLevel} | CUTS WITHIN CLIP: ${brief.allowCutsWithinClip ? "allowed" : "NOT allowed — use full segment"}`,
     `CAPTIONS: ${brief.captionTone} — ${brief.captionStyle}`,
     speedLine,

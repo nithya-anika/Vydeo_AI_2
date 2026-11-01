@@ -4662,7 +4662,7 @@ export default function EditorShell({
 
       let lastLoggedPct = -1;
       try {
-        const uploadedUrl = await uploadFileMultipart(uploadBlob as File, (pct) => {
+        const uploadedUrl = await uploadFileMultipart(uploadBlob, `scene_${scene.id}.${clipExt}`, (pct) => {
           const step = 5;
           if (pct >= lastLoggedPct + step) {
             setRenderStatus(`Uploading clip ${i + 1}/${totalClips} (${pct}%)`);
@@ -4675,10 +4675,18 @@ export default function EditorShell({
         clipData = null;
         rawBinary = null;
       } catch (err) {
-        console.warn(`[Export] Multipart upload failed: `, err);
+        console.warn(`[Export] Multipart upload failed, falling back to base64: `, err);
+        if (rawBinary) {
+          clipData = await blobToDataUrl(rawBinary);
+          rawBinary = null;
+        }
       }
     } catch (err) {
-      console.warn(`[Export] Direct GCS upload failed for scene "${scene.label}", falling back to base64 payload.`, err);
+      console.warn(`[Export] Direct upload failed for scene "${scene.label}", falling back to base64 payload.`, err);
+      if (rawBinary) {
+        clipData = await blobToDataUrl(rawBinary);
+        rawBinary = null;
+      }
     }
   }
 
@@ -4686,11 +4694,14 @@ export default function EditorShell({
   // 4. Validate REAL base64 payload
   // ---------------------------------------------------------
 
-  if (clipData !== null && clipData !== "NATIVE_BINARY_BYPASS") {
+  if (clipData && clipData.startsWith("data:")) {
     clipData = validateDataUrl(
       clipData,
       scene.label
     );
+  } else {
+    // Never send non-data URLs (such as placeholders like NATIVE_BINARY_BYPASS) as clipData
+    clipData = null;
   }
 
   console.log(
@@ -4745,7 +4756,7 @@ export default function EditorShell({
       clip?.src ??
       undefined,
 
-    clipData: clipData ?? undefined,
+    clipData: (clipData && clipData.startsWith("data:")) ? clipData : undefined,
 
     playbackRate:
       scene.playbackRate ?? 1,

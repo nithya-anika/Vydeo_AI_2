@@ -140,6 +140,36 @@ export function buildCandidateSegmentInventory(
       const isFailed = clip.transcriptionStatus === "failed";
       const isConfirmedSilence = clip.transcriptionStatus === "completed_no_speech";
 
+      // If clip is longer than 5 seconds, provide sub-segments so the AI can easily trim it
+      if (clipDuration > 5.0) {
+        const step = Math.min(4.0, clipDuration / 2);
+        let sStart = 0;
+        let segIdx = 0;
+        while (sStart < clipDuration - 1.0) {
+          const sEnd = Math.min(clipDuration, sStart + step);
+          clipCandidates.push({
+            candidateId: `cand_c${clipIndex}_s${segIdx}`,
+            clipId,
+            clipIndex,
+            clipName: clip.name,
+            sourceTrimStart: parseFloat(sStart.toFixed(3)),
+            sourceTrimEnd: parseFloat(sEnd.toFixed(3)),
+            duration: parseFloat((sEnd - sStart).toFixed(3)),
+            visualDescription: `${clip.name} (segment ${segIdx + 1})`,
+            action: segIdx === 0 ? "opening action" : "follow-up action",
+            cameraMovement: "static",
+            visualQuality: "high",
+            confidence: 0.85,
+            hasHuman: false,
+            hasProduct: false,
+            isSilence: isConfirmedSilence ? true : (isFailed ? false : true),
+            suitableAsHook: segIdx === 0,
+          });
+          sStart += step;
+          segIdx++;
+        }
+      }
+
       const candidate: CandidateSegment = {
         candidateId: `cand_c${clipIndex}_full`,
         clipId,
@@ -243,12 +273,12 @@ export function resolveSelectedCandidatesToScenes(params: {
     let start = candidate.sourceTrimStart;
     let end = candidate.sourceTrimEnd;
 
-    // Optional fine-trimming within candidate boundaries only
+    // Optional fine-trimming within candidate or source clip boundaries
     if (typeof sel.customTrimStart === "number" && !isNaN(sel.customTrimStart)) {
-      start = Math.max(candidate.sourceTrimStart, Math.min(candidate.sourceTrimEnd - 0.2, sel.customTrimStart));
+      start = Math.max(0, Math.min(sourceDuration - 0.2, sel.customTrimStart));
     }
     if (typeof sel.customTrimEnd === "number" && !isNaN(sel.customTrimEnd)) {
-      end = Math.max(start + 0.2, Math.min(candidate.sourceTrimEnd, sel.customTrimEnd));
+      end = Math.max(start + 0.2, Math.min(sourceDuration, sel.customTrimEnd));
     }
 
     const speed = sel.playbackSpeed && sel.playbackSpeed > 0 && sel.playbackSpeed <= 16 ? sel.playbackSpeed : 1.0;

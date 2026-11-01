@@ -103,7 +103,7 @@ tools[].toolName must be valid tool names from the registry above.`;
     const model = getModel("planning");
     const data = await geminiRequest(model, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 2000 } },
+      generationConfig: { responseMimeType: "application/json", temperature: 0.7, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } },
     });
 
     const raw = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
