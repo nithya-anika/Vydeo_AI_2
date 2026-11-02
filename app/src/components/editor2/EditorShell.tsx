@@ -1,4 +1,5 @@
 "use client";
+import { uploadFileMultipart } from "@/lib/multipart-uploader";
 
 import {
   useEffect,
@@ -4675,17 +4676,21 @@ export default function EditorShell({
         clipData = null;
         rawBinary = null;
       } catch (err) {
-        console.warn(`[Export] Multipart upload failed, falling back to base64: `, err);
-        if (rawBinary) {
+        console.warn(`[Export] Multipart upload failed: `, err);
+        if (rawBinary && rawBinary.size < 15 * 1024 * 1024) { // Only fallback for small files
           clipData = await blobToDataUrl(rawBinary);
           rawBinary = null;
+        } else if (rawBinary) {
+          throw new Error(`Failed to upload media to cloud storage, and file is too large for memory fallback. (${err instanceof Error ? err.message : String(err)})`);
         }
       }
     } catch (err) {
-      console.warn(`[Export] Direct upload failed for scene "${scene.label}", falling back to base64 payload.`, err);
-      if (rawBinary) {
+      console.warn(`[Export] Direct upload failed for scene "${scene.label}": `, err);
+      if (rawBinary && rawBinary.size < 15 * 1024 * 1024) {
         clipData = await blobToDataUrl(rawBinary);
         rawBinary = null;
+      } else if (rawBinary) {
+        throw new Error(`Failed to upload media to cloud storage, and file is too large for memory fallback. (${err instanceof Error ? err.message : String(err)})`);
       }
     }
   }
