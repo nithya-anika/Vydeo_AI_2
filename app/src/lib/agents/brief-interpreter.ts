@@ -76,7 +76,9 @@ Extract:
 8. Visual effects/filters: if the user says "black and white", "vignette", "warm", "cinematic", "blur", etc.
 9. Transition style: if the user says "fade", "dissolve", "wipe", etc.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON.
+CRITICAL: If the user DOES NOT explicitly ask to trim, cut, or shorten clips, you MUST set "allowCutsWithinClip" to false and "trimmingDirectives" to an empty array []. Do not assume they want trimming unless asked.
+
 {
   "coreIntent": "one sentence — what this video should achieve",
   "sceneOrder": [
@@ -88,8 +90,8 @@ Return ONLY valid JSON:
     }
   ],
   "pacingIntent": "natural",
-  "allowCutsWithinClip": true,
-  "trimmingDirectives": ["trim dead space", "cut to best moments"],
+  "allowCutsWithinClip": false,
+  "trimmingDirectives": [],
   "captionTone": "natural-speech",
   "captionStyle": "short subtitle-style captions matching the spoken tone",
   "mustHaves": ["start with the girl speaking", "end with the guy in sunglasses"],

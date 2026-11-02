@@ -190,6 +190,47 @@ Return ONLY this JSON:
       temperature: 0.7,
       maxOutputTokens: 16384,
       thinkingConfig: { thinkingBudget: 2048 },
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          timeline: {
+            type: "OBJECT",
+            properties: {
+              title: { type: "STRING" },
+              aspectRatio: { type: "STRING" },
+              targetPlatform: { type: "STRING" },
+              selectedCandidates: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    candidateId: { type: "STRING" },
+                    role: { type: "STRING" },
+                    label: { type: "STRING" },
+                    captionText: { type: "STRING" },
+                    transitionType: { type: "STRING" },
+                    playbackSpeed: { type: "NUMBER" },
+                    customTrimStart: { type: "NUMBER" },
+                    customTrimEnd: { type: "NUMBER" }
+                  },
+                  required: ["candidateId", "role", "transitionType", "playbackSpeed"]
+                }
+              }
+            },
+            required: ["title", "selectedCandidates"]
+          },
+          suggestions: {
+            type: "OBJECT",
+            properties: {
+              captionTiming: { type: "STRING" },
+              transitionRationale: { type: "STRING" },
+              brandNotes: { type: "STRING" },
+              improvements: { type: "ARRAY", items: { type: "STRING" } }
+            }
+          }
+        },
+        required: ["timeline", "suggestions"]
+      }
     },
   });
 
@@ -273,7 +314,8 @@ EDITORIAL RULES & SELECTION:
    - Match pacing to the brief: fast-paced = sharp cuts; cinematic = smooth dissolves/fades; talking-head = clean cuts.
    - Do NOT force every cut to a beat. Use transitions purposefully. Default to "cut" when in doubt.
 5. TRIMMING & DURATION CONTROL:
-   - When the user asks to trim, cut dead space, or shorten clips, explicitly provide "customTrimStart" and "customTrimEnd" on each candidate in selectedCandidates.
+   - If the Brief overrides say "CUTS WITHIN CLIP: NOT allowed", you MUST omit "customTrimStart" and "customTrimEnd" and use the full candidate segment duration.
+   - ONLY when the user asks to trim, cut dead space, or shorten clips, explicitly provide "customTrimStart" and "customTrimEnd" on each candidate in selectedCandidates.
    - Example: to select the best 4 seconds of a 10s candidate, provide:
      "customTrimStart": 2.0, "customTrimEnd": 6.0
 
