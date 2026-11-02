@@ -408,7 +408,8 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
     sanitized.timeline.scenes = sanitized.timeline.scenes.map((scene, idx) => {
       const a = clipAssignments.find(ca => ca.sceneId === scene.id)
         ?? (idx < clipAssignments.length ? clipAssignments[idx] : undefined);
-      const sourceClip = a && a.clipIndex >= 0 && a.clipIndex < clips.length ? clips[a.clipIndex] : undefined;
+      const clipIndex = a?.clipIndex ?? (scene as any).clipIndex ?? -1;
+      const sourceClip = clipIndex >= 0 && clipIndex < clips.length ? clips[clipIndex] : undefined;
       let trimStart = a?.trimStart ?? scene.clipTrimStart ?? 0;
       let trimEnd = a?.trimEnd ?? scene.clipTrimEnd ?? sourceClip?.duration;
 
