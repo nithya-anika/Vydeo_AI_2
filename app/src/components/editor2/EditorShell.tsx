@@ -4752,8 +4752,8 @@ export default function EditorShell({
       undefined,
 
     clipSrc:
-      scene.clipSrc ??
-      clip?.src ??
+      (scene.clipSrc && !scene.clipSrc.startsWith("blob:")) ? scene.clipSrc :
+      (clip?.src && !clip.src.startsWith("blob:")) ? clip.src :
       undefined,
 
     clipData: (clipData && clipData.startsWith("data:")) ? clipData : undefined,
