@@ -46,7 +46,8 @@ export async function extractAudioTrackAsWav(file: File): Promise<Blob | null> {
     const decoded = await audioCtx.decodeAudioData(arrayBuffer);
     await audioCtx.close();
 
-    const targetRate = 16000;
+    // Use 8000Hz (telephone quality) to keep the WAV payload small enough to bypass Gemini's 20MB inlineData limit for long videos.
+    const targetRate = 8000;
     const offlineCtx = new OfflineAudioContext(1, Math.ceil(decoded.duration * targetRate), targetRate);
     const source = offlineCtx.createBufferSource();
     source.buffer = decoded;
