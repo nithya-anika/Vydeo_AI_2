@@ -348,12 +348,24 @@ import http from 'http';
 import fs from 'fs';
 
 async function downloadFile(url: string, outputPath: string): Promise<void> {
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) {
-    throw new Error(`Failed to download ${url}. HTTP ${res.status}`);
+  let attempt = 0;
+  let lastError;
+  while (attempt < 3) {
+    try {
+      const res = await fetch(url, { redirect: "follow" });
+      if (!res.ok) {
+        throw new Error(`Failed to download ${url}. HTTP ${res.status}`);
+      }
+      const buffer = Buffer.from(await res.arrayBuffer());
+      await writeFile(outputPath, buffer);
+      return;
+    } catch (e) {
+      lastError = e;
+      attempt++;
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
   }
-  const buffer = Buffer.from(await res.arrayBuffer());
-  await writeFile(outputPath, buffer);
+  throw lastError;
 }
 
 async function fetchMediaDataUrl(url: string): Promise<string> {
