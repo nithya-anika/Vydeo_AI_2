@@ -4666,7 +4666,7 @@ export default function EditorShell({
         const uploadedUrl = await uploadFileMultipart(uploadBlob, `scene_${scene.id}.${clipExt}`, (pct) => {
           const step = 5;
           if (pct >= lastLoggedPct + step) {
-            setRenderStatus(`Uploading clip ${i + 1}/${totalClips} (${pct}%)`);
+            setRenderStatus(`Uploading segment... (${pct}%)`);
             lastLoggedPct = pct;
           }
           if (onProgress) onProgress(pct, 0, 100);
