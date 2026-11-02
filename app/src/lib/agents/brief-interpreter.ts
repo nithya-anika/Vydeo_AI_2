@@ -77,7 +77,8 @@ Extract:
 9. Transition style: if the user says "fade", "dissolve", "wipe", etc.
 
 Return ONLY valid JSON.
-CRITICAL: If the user DOES NOT explicitly ask to trim, cut, or shorten clips, you MUST set "allowCutsWithinClip" to false and "trimmingDirectives" to an empty array []. Do not assume they want trimming unless asked.
+CRITICAL EDITORIAL RULE: You are a master editor. By default, you MUST proactively trim "dead space", "setup time", and "trails" from clips to make the video 100% better, even if the user just asks to "make a video". 
+Set "allowCutsWithinClip" to true and add "trim dead space and trails" to "trimmingDirectives" UNLESS the user explicitly asks to "keep clips uncut", "don't trim", or "use full videos".
 
 {
   "coreIntent": "one sentence — what this video should achieve",
@@ -133,13 +134,15 @@ If the brief doesn't specify something, infer it from the overall context.`;
   } catch (e) {
     // Fallback: minimal structured brief
     console.warn("[brief-interpreter] fallback due to error:", e instanceof Error ? e.message : String(e));
+    const dontTrim = /\b(uncut|don't cut|do not cut|don't trim|do not trim|full video|keep everything)\b/i.test(prompt);
     const hasTrimIntent = /\b(trim|cut|short|shorten|clip|dead space|silence|quick|fast)\b/i.test(prompt);
+    
     return {
       coreIntent: prompt.slice(0, 120),
       sceneOrder: [],
       pacingIntent: hasTrimIntent ? "fast" : "natural",
-      allowCutsWithinClip: hasTrimIntent,
-      trimmingDirectives: hasTrimIntent ? ["Trim dead space and shorten clips to highlight peak moments"] : [],
+      allowCutsWithinClip: !dontTrim,
+      trimmingDirectives: dontTrim ? [] : ["Proactively trim dead space, setup time, and trails to make the video 100% better"],
       captionTone: "natural-speech",
       captionStyle: "match the tone of the brief",
       mustHaves: [],

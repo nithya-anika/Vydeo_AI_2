@@ -200,10 +200,10 @@ function buildAnalysisPrompt(clipCount: number): string {
   return `Analyze all ${clipCount} video clips with scene-aware precision.
 For each clip, record:
 1. WHO and WHAT appears (subjects, clothing, environment).
-2. Useful ACTIONS performed during specific timestamps.
+2. Useful ACTIONS performed during specific timestamps. Identify "dead space", "setup time", and "awkward trails".
 3. CAMERA MOVEMENT (static, pan, tilt, zoom, tracking, handheld, shaky).
 4. VISUAL QUALITY (low, medium, high, cinematic) and confidence (0.0 to 1.0).
-5. Exact best in/out timestamps bounded by the clip duration.
+5. Exact best in/out timestamps. YOU MUST aggressively trim out setup time and trailing dead space to isolate the absolute best, most engaging action for "bestSegmentStart" and "bestSegmentEnd".
 
 Return ONLY valid JSON:
 {
@@ -232,7 +232,10 @@ Return ONLY valid JSON:
     "quality": "high",
     "usability": 0.9,
     "suggestedUse": "A-roll hook or core product demonstration",
-    "bestSegmentStart": 0.0,
+    "bestSegmentStart": 0.5,
+    "bestSegmentEnd": 2.8,
+    "structuredEvidence": "Contains 0.5s of dead space at the start and a 0.4s trailing silence at the end, so best segment is 0.5 to 2.8."
+  }],
     "bestSegmentEnd": 3.2
   }],
   "overallQuality": 0.88,

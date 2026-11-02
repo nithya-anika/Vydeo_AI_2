@@ -313,9 +313,9 @@ EDITORIAL RULES & SELECTION:
 4. TRANSITIONS & PACING:
    - Match pacing to the brief: fast-paced = sharp cuts; cinematic = smooth dissolves/fades; talking-head = clean cuts.
    - Do NOT force every cut to a beat. Use transitions purposefully. Default to "cut" when in doubt.
-5. TRIMMING & DURATION CONTROL:
-   - If the Brief overrides say "CUTS WITHIN CLIP: NOT allowed", you MUST omit "customTrimStart" and "customTrimEnd" and use the full candidate segment duration.
-   - ONLY when the user asks to trim, cut dead space, or shorten clips, explicitly provide "customTrimStart" and "customTrimEnd" on each candidate in selectedCandidates.
+5. TRIMMING & DURATION CONTROL (CRITICAL):
+   - You are a master editor. Unless the Brief explicitly says "CUTS WITHIN CLIP: NOT allowed", you MUST proactively use "customTrimStart" and "customTrimEnd" on every candidate to remove 'dead space', 'setup time' (e.g. walking to camera), and 'trails' (e.g. awkward silence after action).
+   - ONLY KEEP THE PEAK ACTION OR DIALOGUE. Cut out the boring parts to make the video 100% better, even if the user didn't explicitly ask for it!
    - Example: to select the best 4 seconds of a 10s candidate, provide:
      "customTrimStart": 2.0, "customTrimEnd": 6.0
 
