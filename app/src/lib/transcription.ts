@@ -324,7 +324,7 @@ export async function transcribeClipWithGemini(params: {
   model?: string;
 }): Promise<ClipTranscription> {
   const { base64Data, mimeType, duration, clipIndex = 0, clipId, model } = params;
-  const targetModel = model || getModel("vision");
+  const targetModel = model || getModel("evaluate");
 
   try {
     const response = await geminiRequest(targetModel, {

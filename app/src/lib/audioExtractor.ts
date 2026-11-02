@@ -55,6 +55,25 @@ export async function extractAudioTrackAsWav(file: File): Promise<Blob | null> {
     const resampled = await offlineCtx.startRendering();
 
     const channelData = resampled.getChannelData(0);
+    
+    // --- Audio Gain Normalization (Pre-Boost) ---
+    // Calculate the peak amplitude to find the loudest sound
+    let maxAbs = 0;
+    for (let i = 0; i < channelData.length; i++) {
+      const abs = Math.abs(channelData[i]);
+      if (abs > maxAbs) maxAbs = abs;
+    }
+    
+    // If the audio is extremely quiet, aggressively boost it to a peak of 0.9.
+    // We cap the multiplier at 10.0 (+20dB) to avoid blowing out mic hiss/static in pure silence.
+    if (maxAbs > 0.001 && maxAbs < 0.9) {
+      const multiplier = Math.min(0.9 / maxAbs, 10.0);
+      console.log(`[AudioExtractor] Quiet audio detected (peak ${maxAbs.toFixed(3)}). Boosting gain by ${multiplier.toFixed(2)}x for AI transcription.`);
+      for (let i = 0; i < channelData.length; i++) {
+        channelData[i] *= multiplier;
+      }
+    }
+
     const wavBuffer = encodeWav16Bit(channelData, targetRate);
     return new Blob([wavBuffer], { type: "audio/wav" });
   } catch (err) {
