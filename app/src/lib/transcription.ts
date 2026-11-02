@@ -270,7 +270,8 @@ export function snapTrimToSpeechBoundaries(
         snappedStart = true;
         break;
       }
-      if (trimStart > seg.startTime && trimStart < seg.startTime + snapThresholdSec) {
+      // If the trim falls right in the middle of a speech segment, expand outward to the start of the phrase
+      if (trimStart > seg.startTime && trimStart < seg.endTime) {
         finalStart = seg.startTime;
         snappedStart = true;
         break;
@@ -285,7 +286,8 @@ export function snapTrimToSpeechBoundaries(
         snappedEnd = true;
         break;
       }
-      if (trimEnd > seg.endTime - snapThresholdSec && trimEnd < seg.endTime) {
+      // If the trim falls right in the middle of a speech segment, expand outward to the end of the phrase
+      if (trimEnd > seg.startTime && trimEnd < seg.endTime) {
         finalEnd = Math.min(clipDuration, seg.endTime);
         snappedEnd = true;
         break;

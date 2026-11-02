@@ -1537,7 +1537,8 @@ export async function renderWithFfmpeg(
       }
 
       const totalDur = params.totalDuration ?? scaledFiles.reduce((sum, scene) => sum + scene.displayDuration, 0);
-      const volume = audio.volume ?? 0.7;
+      // Auto-duck BGM volume significantly if original audio (like dialogue) is present
+      const volume = audio.volume ?? (hasOriginalAudio ? 0.15 : 0.7);
       const fadeIn = audio.fadeIn ?? 0.5;
       const fadeOut = audio.fadeOut ?? 1;
       const fadeOutStart = Math.max(0, totalDur - fadeOut);
