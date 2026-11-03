@@ -2999,7 +2999,7 @@ function CanvasPreview({
       }
       const localTime = Math.max(0, store.currentTime - elapsed);
       v.playbackRate = activeScene?.playbackRate ?? 1;
-      v.currentTime = localTime * (activeScene?.playbackRate ?? 1);
+      v.currentTime = (localTime * (activeScene?.playbackRate ?? 1)) + (activeScene?.clipTrimStart ?? 0);
       if (store.isPlaying) {
         applyVideoAudioPreference(v);
         void playMediaElement(v);
@@ -3045,7 +3045,8 @@ function CanvasPreview({
           const local = Math.max(0, state.currentTime - sceneStartTime);
           const rate = activeScene?.playbackRate ?? 1;
           v.playbackRate = rate;
-          if (Math.abs(v.currentTime - local * rate) > 0.35) v.currentTime = local * rate;
+          const targetTime = (local * rate) + (activeScene?.clipTrimStart ?? 0);
+          if (Math.abs(v.currentTime - targetTime) > 0.35) v.currentTime = targetTime;
           applyVideoAudioPreference(v);
           void playMediaElement(v);
         } else {
@@ -3764,10 +3765,12 @@ export default function EditorShell({
     }
 
     const local = Math.max(0, state.currentTime - elapsed);
-    const playbackRate = state.scenes.find((scene) => scene.id === activeSceneId)?.playbackRate ?? 1;
+    const activeScene = state.scenes.find((scene) => scene.id === activeSceneId);
+    const playbackRate = activeScene?.playbackRate ?? 1;
     video.playbackRate = playbackRate;
-    if (Math.abs(video.currentTime - local * playbackRate) > 0.35) {
-      video.currentTime = local * playbackRate;
+    const targetTime = (local * playbackRate) + (activeScene?.clipTrimStart ?? 0);
+    if (Math.abs(video.currentTime - targetTime) > 0.35) {
+      video.currentTime = targetTime;
     }
   }, []);
 
