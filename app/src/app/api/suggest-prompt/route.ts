@@ -39,6 +39,14 @@ CRITICAL INSTRUCTIONS:
     if (clips && clips.length > 0) {
       clips.forEach((c: any, index: number) => {
         clipContextText += `- Clip ${index + 1}: "${c.name}" (Duration: ${c.duration.toFixed(1)}s)\n`;
+        if (c.transcript) {
+          clipContextText += `  Spoken Transcript: "${c.transcript}"\n`;
+        }
+        if (c.speechSegments && c.speechSegments.length > 0) {
+          c.speechSegments.forEach((seg: any) => {
+            clipContextText += `  - "${seg.text}" (${seg.startTime.toFixed(2)}s to ${seg.endTime.toFixed(2)}s)\n`;
+          });
+        }
         if (c.frames && Array.isArray(c.frames)) {
           c.frames.forEach((frameBase64: string, frameIdx: number) => {
             if (frameBase64) {

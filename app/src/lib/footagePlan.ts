@@ -19,6 +19,9 @@ export interface UploadedClip {
   height?: number;
   thumbnail: string;
   frames?: string[];
+  speechSegments?: { text: string; startTime: number; endTime: number }[];
+  transcript?: string;
+  transcriptionStatus?: "pending" | "completed_with_speech" | "completed_no_speech" | "failed";
 }
 
 export interface EditPlan {

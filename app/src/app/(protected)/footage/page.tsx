@@ -286,6 +286,9 @@ export default function FootageEditorSetup() {
         name: c.name,
         duration: c.duration,
         frames: (c.frames ?? []).slice(0, 2),
+        speechSegments: c.speechSegments,
+        transcript: c.transcript,
+        transcriptionStatus: c.transcriptionStatus
       }));
 
       const res = await fetch("/api/suggest-prompt", {
@@ -480,6 +483,32 @@ export default function FootageEditorSetup() {
     }
 
     setIngesting(null);
+    
+    // Kick off background transcription for the new clips so suggest-prompt can use it
+    newClips.forEach(async (c) => {
+      if (c.file instanceof File && c.file.size > 0) {
+        try {
+          const audioWav = await extractAudioTrackAsWav(c.file);
+          if (audioWav && audioWav.size > 500) {
+            const formData = new FormData();
+            formData.append("file", audioWav, "audio.wav");
+            formData.append("duration", String(c.duration));
+            const transRes = await fetch("/api/transcribe-clip", { method: "POST", body: formData });
+            if (transRes.ok) {
+              const transData = await transRes.json();
+              setClips(prev => prev.map(existing => existing.id === c.id ? {
+                ...existing,
+                speechSegments: transData.captions ?? [],
+                transcript: transData.fullTranscript ?? "",
+                transcriptionStatus: (transData.captions?.length ? "completed_with_speech" : "completed_no_speech") as any
+              } : existing));
+            }
+          }
+        } catch (e) {
+          console.warn("[Background Transcription] skipped:", e);
+        }
+      }
+    });
 
     setClips(prev => {
       // Deduplicate by a content signature so two distinct files that happen to
