@@ -3055,10 +3055,12 @@ function CanvasPreview({
       }
 
       // Scrub sync while paused
-      if (!state.isPlaying && state.currentTime !== prevCurrentTime) {
+      if (!state.isPlaying && Math.abs(state.currentTime - prevCurrentTime) > 0.05) {
         prevCurrentTime = state.currentTime;
         const local = Math.max(0, state.currentTime - sceneStartTime);
-        if (Math.abs(v.currentTime - local) > 0.05) v.currentTime = local;
+        const rate = activeScene?.playbackRate ?? 1;
+        const targetTime = (local * rate) + (activeScene?.clipTrimStart ?? 0);
+        if (Math.abs(v.currentTime - targetTime) > 0.05) v.currentTime = targetTime;
       }
     });
   }, [applyVideoAudioPreference, sceneStartTime]);
