@@ -295,6 +295,10 @@ export function snapTrimToSpeechBoundaries(
     }
   }
 
+  // Add a natural breathing buffer around speech to prevent abrupt cuts
+  if (snappedStart) finalStart = Math.max(0, finalStart - 2.0);
+  if (snappedEnd) finalEnd = Math.min(clipDuration, finalEnd + 2.0);
+
   // Final bounding safety
   finalStart = Math.max(0, Math.min(clipDuration - 0.1, finalStart));
   finalEnd = Math.max(finalStart + 0.1, Math.min(clipDuration, finalEnd));
