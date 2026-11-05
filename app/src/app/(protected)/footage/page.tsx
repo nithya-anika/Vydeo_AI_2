@@ -516,15 +516,23 @@ export default function FootageEditorSetup() {
       const sig = (f?: File) => f ? `${f.name}-${f.size}-${f.lastModified}` : null;
       const seen = new Set(prev.map(c => c.file ? sig(c.file) : c.src));
       const deduped: UploadedClip[] = [];
+      let foundDupes = 0;
+      
       for (const c of newClips) {
         const s = c.file ? sig(c.file) : c.src;
         if (seen.has(s)) {
+          foundDupes++;
           URL.revokeObjectURL(c.src); // skipped — release its object URL
           continue;
         }
         seen.add(s);
         deduped.push(c);
       }
+      
+      if (foundDupes > 0) {
+        setTimeout(() => alert(`We skipped ${foundDupes} duplicate clip(s) you already uploaded.`), 100);
+      }
+      
       return [...prev, ...deduped];
     });
   }, []);
