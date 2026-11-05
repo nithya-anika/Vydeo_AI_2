@@ -3013,7 +3013,7 @@ function CanvasPreview({
       return () => v.removeEventListener("loadeddata", seekAndPlay);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeScene?.clipSrc, activeScene?.playbackRate]);
+  }, [activeScene?.clipSrc, activeScene?.playbackRate, activeScene?.clipTrimStart]);
 
   // Play / pause + scrub sync — single subscription avoids re-rendering CanvasPreview every RAF frame
   useEffect(() => {
@@ -3021,12 +3021,15 @@ function CanvasPreview({
     let prevCurrentTime = useEditorStore.getState().currentTime;
 
     // Sync immediately on mount
-    const { isPlaying: initPlaying, currentTime: initTime } = useEditorStore.getState();
+    const { isPlaying: initPlaying, currentTime: initTime, scenes: initScenes, activeSceneId: initSceneId } = useEditorStore.getState();
+    const initActiveScene = initScenes.find(s => s.id === initSceneId) ?? initScenes[0];
     const v0 = videoRef.current;
     if (v0) {
       if (initPlaying) {
         const local = Math.max(0, initTime - sceneStartTime);
-        if (Math.abs(v0.currentTime - local) > 0.35) v0.currentTime = local;
+        const rate = initActiveScene?.playbackRate ?? 1;
+        const targetTime = (local * rate) + (initActiveScene?.clipTrimStart ?? 0);
+        if (Math.abs(v0.currentTime - targetTime) > 0.35) v0.currentTime = targetTime;
         applyVideoAudioPreference(v0);
         void playMediaElement(v0);
       } else {
@@ -3038,14 +3041,16 @@ function CanvasPreview({
       const v = videoRef.current;
       if (!v) return;
 
+      const currentActiveScene = state.scenes.find(s => s.id === state.activeSceneId) ?? state.scenes[0];
+
       // isPlaying changed
       if (state.isPlaying !== prevIsPlaying) {
         prevIsPlaying = state.isPlaying;
         if (state.isPlaying) {
           const local = Math.max(0, state.currentTime - sceneStartTime);
-          const rate = activeScene?.playbackRate ?? 1;
+          const rate = currentActiveScene?.playbackRate ?? 1;
           v.playbackRate = rate;
-          const targetTime = (local * rate) + (activeScene?.clipTrimStart ?? 0);
+          const targetTime = (local * rate) + (currentActiveScene?.clipTrimStart ?? 0);
           if (Math.abs(v.currentTime - targetTime) > 0.35) v.currentTime = targetTime;
           applyVideoAudioPreference(v);
           void playMediaElement(v);
@@ -3058,8 +3063,8 @@ function CanvasPreview({
       if (!state.isPlaying && Math.abs(state.currentTime - prevCurrentTime) > 0.05) {
         prevCurrentTime = state.currentTime;
         const local = Math.max(0, state.currentTime - sceneStartTime);
-        const rate = activeScene?.playbackRate ?? 1;
-        const targetTime = (local * rate) + (activeScene?.clipTrimStart ?? 0);
+        const rate = currentActiveScene?.playbackRate ?? 1;
+        const targetTime = (local * rate) + (currentActiveScene?.clipTrimStart ?? 0);
         if (Math.abs(v.currentTime - targetTime) > 0.05) v.currentTime = targetTime;
       }
     });
