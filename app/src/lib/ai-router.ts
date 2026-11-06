@@ -13,11 +13,11 @@
 
 export const AI_MODELS = {
   // Planning & structured reasoning
-  planning: process.env.VYDEO_MODEL_PLANNING || 'gemini-3.1-pro-preview',
+  planning: process.env.VYDEO_MODEL_PLANNING || 'gemini-4-argon',
   // Fast conversational turns
   chat: process.env.VYDEO_MODEL_CHAT || 'gemini-3.8-flash',
   // Storyboard / candidate selection
-  storyboard: process.env.VYDEO_MODEL_STORYBOARD || 'gemini-3.1-pro-preview',
+  storyboard: process.env.VYDEO_MODEL_STORYBOARD || 'gemini-4-argon',
   // Clarifying questions (fast, cheap)
   clarify: process.env.VYDEO_MODEL_CLARIFY || 'gemini-3.8-flash',
   // Video QA evaluation & compliance auditing
@@ -31,7 +31,7 @@ export const AI_MODELS = {
   // Embeddings / semantic search
   embeddings: 'text-embedding-005',
   // Vision / multimodal analysis
-  vision: process.env.VYDEO_MODEL_VISION || 'gemini-3.1-pro-preview',
+  vision: process.env.VYDEO_MODEL_VISION || 'gemini-4-argon',
 } as const
 
 export const FALLBACK_MODELS = {
