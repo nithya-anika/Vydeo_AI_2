@@ -689,13 +689,15 @@ export default function FootageEditorSetup() {
             const trimStart = typeof s.clipTrimStart === "number" ? Math.max(0, s.clipTrimStart) : 0;
             const trimEnd = typeof s.clipTrimEnd === "number" ? Math.min(sourceDur, s.clipTrimEnd) : (trimStart + (s.duration || sourceDur));
             const speed = s.playbackRate ?? 1.0;
-            const activeDuration = Math.max(0.5, (trimEnd - trimStart) / speed);
+            const rawDur = trimEnd - trimStart;
+            // Prevent empty or negative scene durations
+            const activeDuration = Math.max(0.1, (rawDur > 0 ? rawDur : sourceDur) / speed);
 
             return {
               ...s,
               clipSrc: matchedClip?.src || s.clipSrc,
               clipTrimStart: trimStart,
-              clipTrimEnd: trimEnd,
+              clipTrimEnd: trimEnd > trimStart ? trimEnd : (trimStart + sourceDur),
               duration: activeDuration,
             };
           }),
