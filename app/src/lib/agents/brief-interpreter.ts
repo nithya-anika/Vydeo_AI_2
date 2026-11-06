@@ -78,7 +78,7 @@ Extract:
 
 Return ONLY valid JSON.
 CRITICAL EDITORIAL RULE: You are a master editor. By default, you MUST proactively trim "dead space", "setup time", and "trails" from clips to make the video 100% better, even if the user just asks to "make a video". 
-Set "allowCutsWithinClip" to true and add "trim dead space and trails" to "trimmingDirectives" UNLESS the user explicitly asks to "keep clips uncut", "don't trim", or "use full videos".
+Set "allowCutsWithinClip" to true and ALWAYS add the specific trimming logic requested by the user into "trimmingDirectives" (e.g. "trim from 0:00 to 0:04 dead space", "omit Clip 3 as it is a duplicate"). UNLESS the user explicitly asks to "keep clips uncut", "don't trim", or "use full videos".
 
 {
   "coreIntent": "one sentence — what this video should achieve",
