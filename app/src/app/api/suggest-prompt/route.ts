@@ -20,14 +20,15 @@ The user has uploaded some video clips. You must analyze the provided clip metad
 
 CRITICAL INSTRUCTIONS:
 1. When the user asks for initial suggestions, you MUST provide EXACTLY 3 different prompt suggestions.
-2. These suggestions MUST NOT ONLY focus on rearranging the clips (e.g., clip sequence). You MUST also include explicit directions for trimming (e.g. cutting dead space, ensuring active audio is not cut off), audio flow (e.g. ducking background music, keeping dialogue crystal clear), and neat transitions (e.g. smooth dissolves, precise cuts).
-3. You MUST wrap EACH suggested prompt individually inside its own <suggested_prompt> tags. 
+2. YOU MUST USE ALL CLIPS: Your suggested prompts MUST explicitly instruct the editor to use EVERY SINGLE uploaded clip. Do not leave any clips out of your suggestions.
+3. These suggestions MUST NOT ONLY focus on rearranging the clips (e.g., clip sequence). You MUST also include explicit directions for trimming (e.g. cutting dead space, adding 2-second buffers around speech), audio flow (e.g. ducking background music, keeping dialogue crystal clear), and neat transitions (e.g. smooth dissolves, precise cuts).
+4. You MUST wrap EACH suggested prompt individually inside its own <suggested_prompt> tags. 
    Example:
-   <suggested_prompt>Start with the laptop girl clip, cut to the best moment without interrupting speech. Use smooth dissolves. Duck background audio so her dialogue is crystal clear, and end with the white dress girl.</suggested_prompt>
-   <suggested_prompt>Begin with a fast-paced sequence of the black dress girl, using hard cuts. Keep the native audio crisp, remove dead space, and place remaining clips at the end.</suggested_prompt>
-   <suggested_prompt>Create a cinematic, slow-paced flow starting with the white dress girl. Use seamless transitions and ensure the audio mix is smooth and professional.</suggested_prompt>
-4. DO NOT include any conversational filler like "Here are 3 ways we can arrange your clips:" or "Would you like to use one of these arrangements...". Output ONLY the <suggested_prompt> blocks, and nothing else.
-5. EXTREMELY IMPORTANT: Keep your suggestions concise but highly descriptive. You MUST finish your entire response completely. NEVER cut off your response mid-sentence. Ensure all 3 <suggested_prompt> tags are fully closed.`;
+   <suggested_prompt>Start with Clip 1, cut to the best moment without interrupting speech. Use smooth dissolves to transition into Clip 2 and Clip 3. Duck background audio so dialogue is crystal clear, and end with Clip 4.</suggested_prompt>
+   <suggested_prompt>Begin with a fast-paced sequence of Clip 4, using hard cuts. Transition to Clip 2, then Clip 1, and finish with Clip 3. Keep the native audio crisp and remove all dead space.</suggested_prompt>
+   <suggested_prompt>Create a cinematic, slow-paced flow starting with Clip 3, moving to Clip 1, then Clip 4, and ending with Clip 2. Use seamless transitions and ensure the audio mix is professional.</suggested_prompt>
+5. DO NOT include any conversational filler like "Here are 3 ways we can arrange your clips:". Output ONLY the <suggested_prompt> blocks, and nothing else.
+6. EXTREMELY IMPORTANT: Keep your suggestions concise but highly descriptive. You MUST finish your entire response completely. NEVER cut off your response mid-sentence. Ensure all 3 <suggested_prompt> tags are fully closed.`;
 
     // Construct the parts payload for Gemini
     const contents: any[] = [];
