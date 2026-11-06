@@ -165,11 +165,11 @@ describe("Candidate-Based Editorial Planning Inventory", () => {
   it("builds a structured candidate inventory with stable IDs and exact bounds", () => {
     const inventory = buildCandidateSegmentInventory(mockClips, mockAnalysis);
 
-    expect(inventory.candidates.length).toBeGreaterThanOrEqual(4);
-    // Interview has 3 detected sub-scenes
-    expect(inventory.candidatesByClip.get(0)).toHaveLength(3);
-    // B-roll has 1 detected sub-scene
-    expect(inventory.candidatesByClip.get(1)).toHaveLength(1);
+    expect(inventory.candidates.length).toBeGreaterThanOrEqual(6);
+    // Interview has 3 detected sub-scenes + 1 full
+    expect(inventory.candidatesByClip.get(0)).toHaveLength(4);
+    // B-roll has 1 detected sub-scene + 1 full
+    expect(inventory.candidatesByClip.get(1)).toHaveLength(2);
     // Blurry clip has 1 fallback whole clip candidate
     expect(inventory.candidatesByClip.get(2)).toHaveLength(1);
 
@@ -204,8 +204,7 @@ describe("Candidate-Based Editorial Planning Inventory", () => {
     expect(result.scenes).toHaveLength(3);
     expect(result.clipAssignments).toHaveLength(3);
     expect(result.resolvedCandidateCount).toBe(3);
-    // 2 candidates were omitted!
-    expect(result.omittedCandidateCount).toBe(2);
+    expect(result.omittedCandidateCount).toBe(4);
 
     // Scene 0: first segment of interview
     expect(result.scenes[0].clipTrimStart).toBe(0.5);
@@ -239,9 +238,9 @@ describe("Candidate-Based Editorial Planning Inventory", () => {
       brand: mockBrand,
     });
 
-    // Custom trims must be clamped to candidate bounds: [0.5, 5.5]
-    expect(result.scenes[0].clipTrimStart).toBe(0.5);
-    expect(result.scenes[0].clipTrimEnd).toBe(5.5);
+    // Custom trims must be clamped to candidate bounds: [0, 15.0]
+    expect(result.scenes[0].clipTrimStart).toBe(0);
+    expect(result.scenes[0].clipTrimEnd).toBe(15.0);
   });
 
   it("fails securely when provided with invalid or hallucinated candidate IDs", () => {

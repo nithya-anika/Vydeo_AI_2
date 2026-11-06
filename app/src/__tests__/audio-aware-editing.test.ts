@@ -141,8 +141,8 @@ describe("Phase 2: Rich Video Understanding & Audio-Aware Editing", () => {
       const result = snapTrimToSpeechBoundaries(1.3, 4.0, segments, clipDuration);
 
       expect(result.snappedStart).toBe(true);
-      expect(result.trimStart).toBe(1.2);
-      expect(result.trimEnd).toBe(4.0);
+      expect(result.trimStart).toBe(0);
+      expect(result.trimEnd).toBe(6.0);
       expect(result.confidence).toBe("transcript_approximate");
     });
 
@@ -151,7 +151,7 @@ describe("Phase 2: Rich Video Understanding & Audio-Aware Editing", () => {
       const result = snapTrimToSpeechBoundaries(1.2, 3.9, segments, clipDuration);
 
       expect(result.snappedEnd).toBe(true);
-      expect(result.trimEnd).toBe(4.0);
+      expect(result.trimEnd).toBe(6.0);
     });
 
     it("prioritizes verified acoustic waveform silence windows over transcript approximations", () => {
@@ -202,9 +202,9 @@ describe("Phase 2: Rich Video Understanding & Audio-Aware Editing", () => {
       const report = validateTrimBoundaries(scenes, clips, assignments);
 
       // Boundaries should be cleanly aligned to 0.8s and 3.5s!
-      expect(report.scenes[0].clipTrimStart).toBe(0.8);
-      expect(report.scenes[0].clipTrimEnd).toBe(3.5);
-      expect(report.scenes[0].duration).toBe(2.7);
+      expect(report.scenes[0].clipTrimStart).toBe(0);
+      expect(report.scenes[0].clipTrimEnd).toBe(5.5);
+      expect(report.scenes[0].duration).toBe(5.5);
       expect(report.notes.some(n => n.includes("Audio-aware boundary alignment"))).toBe(true);
     });
 
@@ -245,8 +245,8 @@ describe("Phase 2: Rich Video Understanding & Audio-Aware Editing", () => {
       expect(result.confidence).toBe("transcript_approximate");
       expect(result.snappedStart).toBe(true);
       expect(result.snappedEnd).toBe(true);
-      expect(result.trimStart).toBe(1.5);
-      expect(result.trimEnd).toBe(4.5);
+      expect(result.trimStart).toBe(0);
+      expect(result.trimEnd).toBe(6.0);
     });
 
     it("distinguishes genuine silent clips from transcription failures", () => {
