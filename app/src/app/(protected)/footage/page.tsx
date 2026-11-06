@@ -688,7 +688,8 @@ export default function FootageEditorSetup() {
             const sourceDur = matchedClip?.duration ?? s.duration;
             const trimStart = typeof s.clipTrimStart === "number" ? Math.max(0, s.clipTrimStart) : 0;
             const trimEnd = typeof s.clipTrimEnd === "number" ? Math.min(sourceDur, s.clipTrimEnd) : (trimStart + (s.duration || sourceDur));
-            const activeDuration = Math.max(0.5, s.duration ?? (trimEnd - trimStart));
+            const speed = s.playbackRate ?? 1.0;
+            const activeDuration = Math.max(0.5, (trimEnd - trimStart) / speed);
 
             return {
               ...s,
