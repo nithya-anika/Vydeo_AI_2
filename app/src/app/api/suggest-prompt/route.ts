@@ -109,29 +109,43 @@ CRITICAL INSTRUCTIONS:
       },
     });
 
-    const text = (response as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-    let prompts: string[] = [];
+    const text = (response as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    
+    // Instead of strict JSON parsing (which fails if the AI hits a token limit mid-generation),
+    // we use a resilient Regex extraction to pull whatever suggested prompts the AI successfully wrote.
+    let raw = "";
+    const regex = /<suggested_prompt>([\s\S]*?)(?:<\/suggested_prompt>|$)/g;
+    let match;
+    let count = 0;
+    
+    // First try to parse as JSON just in case it is well-formed
     try {
       const parsed = JSON.parse(text.replace(/^\s*(```json|```)/i, '').replace(/```\s*$/i, '').trim());
       if (parsed.prompts && Array.isArray(parsed.prompts)) {
-        prompts = parsed.prompts;
+        for (const p of parsed.prompts) {
+          let clean = p.trim();
+          if (!clean.startsWith("<suggested_prompt>")) {
+            clean = `<suggested_prompt>\n${clean}\n</suggested_prompt>`;
+          }
+          raw += clean + "\n";
+          count++;
+        }
       }
     } catch (e) {
-       console.error("Failed to parse suggest-prompt JSON:", text, e);
+      console.warn("[suggest-prompt] JSON parse failed, falling back to raw regex extraction due to truncation.");
     }
 
-    if (prompts.length === 0) {
-      throw new Error("No valid prompts returned from AI.");
-    }
-
-    // Combine them into the expected raw string format for the frontend regex parser
-    let raw = "";
-    for (const p of prompts) {
-      let clean = p.trim();
-      if (!clean.startsWith("<suggested_prompt>")) {
-        clean = `<suggested_prompt>${clean}</suggested_prompt>`;
+    // If JSON parsing failed or returned nothing, extract manually
+    if (count === 0 && text.includes("<suggested_prompt>")) {
+      while ((match = regex.exec(text)) !== null) {
+        raw += `<suggested_prompt>\n${match[1].trim()}\n</suggested_prompt>\n`;
+        count++;
       }
-      raw += clean + "\n";
+    }
+
+    if (count === 0) {
+      console.error("Raw AI Output:", text);
+      throw new Error("No valid prompts returned from AI.");
     }
 
     return NextResponse.json({ success: true, text: raw });
