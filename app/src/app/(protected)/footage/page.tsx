@@ -1299,7 +1299,7 @@ export default function FootageEditorSetup() {
                   const suggestions: string[] = [];
                   
                   if (isAi) {
-                    const regex = /<suggested_prompt>([\s\S]*?)<\/suggested_prompt>/g;
+                    const regex = /<suggested_prompt>([\s\S]*?)(?:<\/suggested_prompt>|$)/g;
                     let match;
                     while ((match = regex.exec(m.content)) !== null) {
                       suggestions.push(match[1].trim());
