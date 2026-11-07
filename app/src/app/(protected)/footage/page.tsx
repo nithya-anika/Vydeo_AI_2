@@ -227,7 +227,6 @@ export default function FootageEditorSetup() {
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [transcribingCount, setTranscribingCount] = useState(0);
-  const [transcribingCount, setTranscribingCount] = useState(0);
   const [aspectRatio, setAspectRatioLocal] = useState<AspectRatio>("9:16");
   const [references, setReferences] = useState<ReferenceMedia[]>([]);
   const [referenceProfile, setReferenceProfile] = useState<ReferenceStyleProfile | null>(null);
