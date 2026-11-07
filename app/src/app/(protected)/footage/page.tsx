@@ -1313,6 +1313,26 @@ export default function FootageEditorSetup() {
                           whiteSpace: 'pre-wrap'
                         }}>
                           {displayContent}
+                          
+                          {(displayContent.includes("error generating a suggestion") || displayContent.includes("Network error")) && (
+                            <button
+                              onClick={() => {
+                                // Remove the error message and trigger the automated request again
+                                setSuggestorMessages(prev => prev.slice(0, -1));
+                                handleSuggestPrompt(true, "Please analyze the uploaded clips and provide 3 prompt suggestions.");
+                              }}
+                              style={{
+                                marginTop: 12, padding: "8px 16px", background: "var(--bg-surface)",
+                                border: "1px solid var(--border)", borderRadius: "var(--r-md)",
+                                color: "var(--text-primary)", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                display: "flex", alignItems: "center", gap: 6
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.borderColor = "var(--text-muted)"}
+                              onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}
+                            >
+                              <Undo2 size={14} /> Try Again
+                            </button>
+                          )}
                         </div>
                       )}
                       
