@@ -226,6 +226,7 @@ export default function FootageEditorSetup() {
   const [prompt, setPrompt] = useState("");
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [transcribingCount, setTranscribingCount] = useState(0);
   const [aspectRatio, setAspectRatioLocal] = useState<AspectRatio>("9:16");
   const [references, setReferences] = useState<ReferenceMedia[]>([]);
   const [referenceProfile, setReferenceProfile] = useState<ReferenceStyleProfile | null>(null);
@@ -485,6 +486,10 @@ export default function FootageEditorSetup() {
     setIngesting(null);
     
     // Kick off background transcription for the new clips so suggest-prompt can use it
+    let pendingCount = 0;
+    newClips.forEach(c => { if (c.file instanceof File && c.file.size > 0) pendingCount++; });
+    setTranscribingCount(prev => prev + pendingCount);
+
     newClips.forEach(async (c) => {
       if (c.file instanceof File && c.file.size > 0) {
         try {
@@ -506,6 +511,8 @@ export default function FootageEditorSetup() {
           }
         } catch (e) {
           console.warn("[Background Transcription] skipped:", e);
+        } finally {
+          setTranscribingCount(prev => Math.max(0, prev - 1));
         }
       }
     });
