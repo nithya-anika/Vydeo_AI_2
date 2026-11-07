@@ -89,7 +89,7 @@ CRITICAL INSTRUCTIONS:
       contents.push({ role, parts });
     }
 
-    const response = await geminiRequest(getModel("chat"), {
+    const response = await geminiRequest(getModel("planning"), {
       contents,
       generationConfig: {
         temperature: 0.7,

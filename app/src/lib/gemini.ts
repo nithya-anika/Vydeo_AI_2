@@ -135,7 +135,7 @@ export async function geminiRequest(
 
   // Add a long 60s timeout for heavy AI generation requests
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
 
   let res;
   try {
