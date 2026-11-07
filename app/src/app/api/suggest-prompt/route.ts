@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { geminiRequest } from "@/lib/gemini";
 import { getModel } from "@/lib/ai-router";
 
-export const maxDuration = 120;
+export const maxDuration = 300; // Increased to 5 mins for heavy diagnostic processing
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
