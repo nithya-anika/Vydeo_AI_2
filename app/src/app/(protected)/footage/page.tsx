@@ -227,6 +227,7 @@ export default function FootageEditorSetup() {
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [transcribingCount, setTranscribingCount] = useState(0);
+  const [transcribingCount, setTranscribingCount] = useState(0);
   const [aspectRatio, setAspectRatioLocal] = useState<AspectRatio>("9:16");
   const [references, setReferences] = useState<ReferenceMedia[]>([]);
   const [referenceProfile, setReferenceProfile] = useState<ReferenceStyleProfile | null>(null);
@@ -990,18 +991,21 @@ export default function FootageEditorSetup() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setShowSuggestor(true);
+                          if (transcribingCount === 0) setShowSuggestor(true);
                         }}
+                        disabled={transcribingCount > 0}
                         style={{
                           display: "flex", alignItems: "center", gap: 6,
                           padding: "6px 12px", borderRadius: "var(--r-md)",
-                          background: "var(--accent-subtle)", border: "1px solid var(--accent-border)",
-                          color: "var(--accent-light)", fontSize: 11, fontWeight: 700,
-                          cursor: "pointer", transition: "all 0.15s ease",
+                          background: transcribingCount > 0 ? "var(--bg-elevated)" : "var(--accent-subtle)", 
+                          border: `1px solid ${transcribingCount > 0 ? "var(--border)" : "var(--accent-border)"}`,
+                          color: transcribingCount > 0 ? "var(--text-muted)" : "var(--accent-light)", 
+                          fontSize: 11, fontWeight: 700,
+                          cursor: transcribingCount > 0 ? "wait" : "pointer", transition: "all 0.15s ease",
                         }}
                       >
-                        <Sparkles size={12} />
-                        Prompt Suggestor
+                        <Sparkles size={13} color={transcribingCount > 0 ? "var(--text-muted)" : "var(--accent)"} />
+                        {transcribingCount > 0 ? `Transcribing (${transcribingCount})⏳` : 'Prompt Suggestor'}
                       </button>
                     </div>
                   </>
