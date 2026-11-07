@@ -112,11 +112,17 @@ CRITICAL INSTRUCTIONS:
     const text = (response as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     let prompts: string[] = [];
     try {
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(text.replace(/^\s*(```json|```)/i, '').replace(/```\s*$/i, '').trim());
       if (parsed.prompts && Array.isArray(parsed.prompts)) {
         prompts = parsed.prompts;
       }
-    } catch {}
+    } catch (e) {
+       console.error("Failed to parse suggest-prompt JSON:", text, e);
+    }
+
+    if (prompts.length === 0) {
+      throw new Error("No valid prompts returned from AI.");
+    }
 
     // Combine them into the expected raw string format for the frontend regex parser
     let raw = "";
