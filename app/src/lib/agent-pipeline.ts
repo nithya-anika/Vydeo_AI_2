@@ -518,6 +518,9 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
               }
 
               if (bestTrack) {
+                // User specifically requested to disable music to avoid stuttering/crashing during compilation
+                // We run the AI selection for logging but do NOT push it to the timeline.
+                /*
                 timeline.audioLayers = [{
                   id: `audio-${bestTrack.id}`,
                   type: "bgm",
@@ -528,7 +531,8 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                   fadeIn: template ? 1.0 : 0.5,
                   fadeOut: template ? 2.0 : 1.0,
                 }];
-                console.log(`[pipeline] Auto-selected music: ${bestTrack.title} (Score: ${bestScore})`);
+                */
+                console.log(`[pipeline] Auto-selected music: ${bestTrack.title} (Score: ${bestScore}) -> INJECTION DISABLED BY USER`);
               }
             }
           }
