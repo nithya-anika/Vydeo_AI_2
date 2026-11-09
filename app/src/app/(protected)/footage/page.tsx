@@ -1323,7 +1323,7 @@ export default function FootageEditorSetup() {
                     while ((match = regex.exec(m.content)) !== null) {
                       suggestions.push(match[1].trim());
                     }
-                    displayContent = m.content.replace(/<suggested_prompt>[\s\S]*?<\/suggested_prompt>/g, "").trim();
+                    displayContent = m.content.replace(/<suggested_prompt>[\s\S]*?(?:<\/suggested_prompt>|$)/g, "").trim();
                   }
 
                   return (
