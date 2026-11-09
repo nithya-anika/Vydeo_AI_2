@@ -295,9 +295,24 @@ export function snapTrimToSpeechBoundaries(
     }
   }
 
-  // Add a natural breathing buffer around speech to prevent abrupt cuts
-  if (snappedStart) finalStart = Math.max(0, finalStart - 2.0);
-  if (snappedEnd) finalEnd = Math.min(clipDuration, finalEnd + 2.0);
+  // Add 1.5s buffer around the identified speech boundaries, ensuring we don't accidentally expand into neighboring speech.
+  if (snappedStart || snappedEnd) {
+    // Find the speech segments we are currently overlapping
+    const firstSpeech = segments.find(s => finalEnd > s.startTime && finalStart < s.endTime);
+    const lastSpeech = [...segments].reverse().find(s => finalStart < s.endTime && finalEnd > s.startTime);
+    
+    if (firstSpeech) {
+      finalStart = Math.max(0, Math.min(finalStart, firstSpeech.startTime - 1.5));
+    } else if (snappedStart) {
+      finalStart = Math.max(0, finalStart - 1.5);
+    }
+    
+    if (lastSpeech) {
+      finalEnd = Math.min(clipDuration, Math.max(finalEnd, lastSpeech.endTime + 1.5));
+    } else if (snappedEnd) {
+      finalEnd = Math.min(clipDuration, finalEnd + 1.5);
+    }
+  }
 
   // Final bounding safety
   finalStart = Math.max(0, Math.min(clipDuration - 0.1, finalStart));

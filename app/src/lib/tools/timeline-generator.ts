@@ -300,8 +300,7 @@ ${candidateList}
 EDITORIAL RULES & SELECTION:
 1. SELECT BY CANDIDATE ID:
    - Select candidate IDs from the CANDIDATE SEGMENT INVENTORY above.
-   - Choose only the best, most compelling moments that serve the brief.
-   - YOU MUST ATTEMPT TO INCLUDE AT LEAST ONE SEGMENT FROM EVERY SOURCE CLIP to tell a complete story. Only omit a clip entirely if it is completely identical/duplicate to another clip, hopelessly blurry, or completely irrelevant.
+   - Choose only the best, most compelling moments that serve the brief. You MAY omit unnecessary, repetitive, or irrelevant clips. There is no need to include every clip.
    - You MAY select multiple distinct candidate segments from the same source clip (sub-clipping).
 2. ORDERING & NARRATIVE STRUCTURE:
    - Hook candidates belong at the start (scene 0).
