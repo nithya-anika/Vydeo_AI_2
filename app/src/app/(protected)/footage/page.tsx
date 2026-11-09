@@ -689,8 +689,7 @@ export default function FootageEditorSetup() {
 
       // 3. Load full timeline into store
       if (timelineData) {
-        loadTimeline({
-          scenes: (timelineData as any).scenes.map((s: any, idx: number) => {
+        const mappedScenes = (timelineData as any).scenes.map((s: any, idx: number) => {
             const matchedClip = clips.find(c => c.id === s.clipId || c.name === s.label) || clips[idx % clips.length];
             const sourceDur = matchedClip?.duration ?? s.duration;
             const trimStart = typeof s.clipTrimStart === "number" ? Math.max(0, s.clipTrimStart) : 0;
@@ -707,7 +706,10 @@ export default function FootageEditorSetup() {
               clipTrimEnd: trimEnd > trimStart ? trimEnd : (trimStart + sourceDur),
               duration: activeDuration,
             };
-          }),
+          });
+
+        loadTimeline({
+          scenes: mappedScenes,
           audioTracks: ((timelineData as any).audioLayers || []).map((a: any) => ({
             id: a.id,
             name: a.id,
@@ -720,7 +722,7 @@ export default function FootageEditorSetup() {
             muted: false,
             type: "bgm"
           })),
-          totalDuration: (timelineData as any).totalDuration,
+          totalDuration: mappedScenes.reduce((sum: number, sc: any) => sum + sc.duration, 0),
           aspectRatio,
         });
       } else {

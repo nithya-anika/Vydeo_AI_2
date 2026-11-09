@@ -15,6 +15,7 @@ import type { GeminiClip, ClipAssignment, SpeechSegment } from "@/lib/gemini";
 import type { VideoAnalysisOutput, ClipAnalysis, SceneDetection } from "@/lib/tools/video-analysis";
 import type { Scene, Timeline } from "@/types/timeline";
 import type { BrandWorkspace } from "@/types/brand";
+import { snapTrimToSpeechBoundaries } from "@/lib/transcription";
 
 export interface CandidateSegment {
   candidateId: string;          // e.g. "cand_c0_s0"
@@ -169,27 +170,27 @@ export function buildCandidateSegmentInventory(
           segIdx++;
         }
       }
+    } // <-- Added missing closing brace
 
-      const candidate: CandidateSegment = {
-        candidateId: `cand_c${clipIndex}_full`,
-        clipId,
-        clipIndex,
-        clipName: clip.name,
-        sourceTrimStart: 0.0,
-        sourceTrimEnd: parseFloat(clipDuration.toFixed(3)),
-        duration: parseFloat(clipDuration.toFixed(3)),
-        visualDescription: clip.name,
-        action: isFailed ? "full take (speech status unverified)" : "full clip take",
-        cameraMovement: "static",
-        visualQuality: "high",
-        confidence: 0.8,
-        hasHuman: false,
-        hasProduct: false,
-        isSilence: isConfirmedSilence ? true : (isFailed ? false : true),
-        suitableAsHook: clipIndex === 0,
-      };
-      clipCandidates.push(candidate);
-    }
+    // Always provide the full clip as a baseline candidate, crucial for long-form video editing
+    clipCandidates.push({
+      candidateId: `cand_c${clipIndex}_full`,
+      clipId,
+      clipIndex,
+      clipName: clip.name,
+      sourceTrimStart: 0.0,
+      sourceTrimEnd: parseFloat(clipDuration.toFixed(3)),
+      duration: parseFloat(clipDuration.toFixed(3)),
+      visualDescription: `Entire clip: ${clip.name}`,
+      action: "full unedited sequence",
+      cameraMovement: "various/static",
+      visualQuality: "high",
+      confidence: 1.0,
+      hasHuman: true,
+      hasProduct: false,
+      isSilence: false,
+      suitableAsHook: clipIndex === 0,
+    });
 
     candidates.push(...clipCandidates);
     candidatesByClip.set(clipIndex, clipCandidates);
@@ -279,6 +280,13 @@ export function resolveSelectedCandidatesToScenes(params: {
     }
     if (typeof sel.customTrimEnd === "number" && !isNaN(sel.customTrimEnd)) {
       end = Math.max(start + 0.2, Math.min(sourceDuration, sel.customTrimEnd));
+    }
+
+    // Apply audio-aware padding to prevent cutting off sentences
+    if (sourceClip?.speechSegments?.length && sourceClip.duration) {
+      const snapped = snapTrimToSpeechBoundaries(start, end, sourceClip.speechSegments, sourceClip.duration);
+      start = snapped.trimStart;
+      end = snapped.trimEnd;
     }
 
     const speed = sel.playbackSpeed && sel.playbackSpeed > 0 && sel.playbackSpeed <= 16 ? sel.playbackSpeed : 1.0;
