@@ -21,6 +21,7 @@ export interface UploadedClip {
   frames?: string[];
   speechSegments?: { text: string; startTime: number; endTime: number }[];
   transcript?: string;
+  silenceWindows?: { start: number; end: number; duration: number }[];
   transcriptionStatus?: "pending" | "completed_with_speech" | "completed_no_speech" | "failed";
 }
 

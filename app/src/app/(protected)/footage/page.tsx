@@ -505,6 +505,7 @@ export default function FootageEditorSetup() {
                 ...existing,
                 speechSegments: transData.captions ?? [],
                 transcript: transData.fullTranscript ?? "",
+                silenceWindows: transData.silenceWindows ?? [],
                 transcriptionStatus: (transData.captions?.length ? "completed_with_speech" : "completed_no_speech") as any
               } : existing));
             }
@@ -584,6 +585,22 @@ export default function FootageEditorSetup() {
 
       for (let i = 0; i < clips.length; i++) {
         const c = clips[i];
+        
+        // Skip redundant transcription if the background worker already handled it
+        if (c.transcriptionStatus === "completed_with_speech" || c.transcriptionStatus === "completed_no_speech") {
+          console.log(`[Footage] Clip ${i} ("${c.name}") used cached transcription.`);
+          clipInfosWithDialogue.push({
+            index: i,
+            name: c.name,
+            duration: c.duration,
+            frames: c.frames ?? [],
+            speechSegments: c.speechSegments ?? [],
+            transcript: c.transcript ?? "",
+            silenceWindows: c.silenceWindows ?? [],
+          });
+          continue;
+        }
+
         setProcessingStep(`Transcribing dialogue (${i + 1}/${clips.length}): "${c.name}"...`);
 
         let speechSegments: any[] = [];
@@ -608,7 +625,7 @@ export default function FootageEditorSetup() {
                 speechSegments = transData.captions ?? [];
                 fullTranscript = transData.fullTranscript ?? "";
                 silenceWindows = transData.silenceWindows ?? [];
-                console.log(`[Footage] Clip ${i} ("${c.name}") transcribed: ${speechSegments.length} dialogue segments, ${silenceWindows.length} silence windows.`);
+                console.log(`[Footage] Clip ${i} ("${c.name}") transcribed: ${speechSegments.length} dialogue segments.`);
               }
             }
           }
