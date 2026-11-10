@@ -228,6 +228,7 @@ export default function FootageEditorSetup() {
   const [dragging, setDragging] = useState(false);
   const [transcribingCount, setTranscribingCount] = useState(0);
   const [aspectRatio, setAspectRatioLocal] = useState<AspectRatio>("9:16");
+  const [qualityMode, setQualityMode] = useState<"standard" | "premium">("standard");
   const [references, setReferences] = useState<ReferenceMedia[]>([]);
   const [referenceProfile, setReferenceProfile] = useState<ReferenceStyleProfile | null>(null);
 
@@ -660,6 +661,7 @@ export default function FootageEditorSetup() {
               workspaceSlug: "asaya",
               aspectRatio: aspectRatio,
               templateId: urlTemplateId || activeTemplate?.id,
+              qualityMode: qualityMode,
               references: references.length > 0 ? references : undefined,
               referenceProfile: referenceProfile || undefined,
               geminiClips: clipInfosWithDialogue.map((c) => ({
@@ -1161,6 +1163,39 @@ export default function FootageEditorSetup() {
                   </button>
                 ))}
               </div>
+            </motion.div>
+
+            {/* Quality Toggle */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "4px",
+                background: "var(--bg-elevated)", borderRadius: "var(--r-lg)", border: "1px solid var(--border)"
+              }}
+            >
+              <button
+                onClick={() => setQualityMode("standard")}
+                style={{
+                  flex: 1, padding: "10px", borderRadius: "var(--r-md)",
+                  background: qualityMode === "standard" ? "var(--accent)" : "transparent",
+                  color: qualityMode === "standard" ? "#fff" : "var(--text-secondary)",
+                  border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s"
+                }}
+              >
+                Standard (Gemini)
+              </button>
+              <button
+                onClick={() => setQualityMode("premium")}
+                style={{
+                  flex: 1, padding: "10px", borderRadius: "var(--r-md)", display: "flex", justifyContent: "center", alignItems: "center", gap: 6,
+                  background: qualityMode === "premium" ? "linear-gradient(135deg, #FFD700 0%, #F7971E 100%)" : "transparent",
+                  color: qualityMode === "premium" ? "#000" : "var(--text-secondary)",
+                  border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all 0.2s"
+                }}
+              >
+                <Sparkles size={14} /> Premium (Kling 4.0)
+              </button>
             </motion.div>
 
             {/* Error */}

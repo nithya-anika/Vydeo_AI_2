@@ -30,11 +30,21 @@ export async function POST(req: NextRequest) {
       templateId,
       references,
       referenceProfile,
+      qualityMode,
     } = body;
 
     const isRefinement = Boolean(existingTimeline);
     const hasClips =
       Array.isArray(geminiClips) && geminiClips.length > 0;
+
+    //------------------------------------
+    // Kling 4.0 Premium Mode Check
+    //------------------------------------
+    if (qualityMode === "premium") {
+      console.log("[lineup] User requested Kling 4.0 Premium Editor Mode");
+      // Note: Kling is a generative model, not an editorial JSON reasoner.
+      // A Kling API block would go here, falling back to Gemini for the structural math.
+    }
 
     //------------------------------------
     // Validation
