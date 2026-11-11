@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
     //------------------------------------
     if (qualityMode === "premium") {
       console.log("[lineup] User requested Kling 4.0 Premium Editor Mode");
-      if (!process.env.KLING_API_KEY) {
-        return NextResponse.json({ error: "Kling AI Premium mode is selected, but the KLING_API_KEY environment variable is missing on the server." }, { status: 400 });
+      if (!process.env.KLING_API_KEY && !process.env.kling_api_key) {
+        return NextResponse.json({ error: "Kling AI Premium mode is selected, but the kling_api_key environment variable is missing on the server." }, { status: 400 });
       }
       // Note: Kling 4.0 does not support structured JSON Timeline generation (it is a generative video model, not a reasoning agent).
       // We log the API key authentication check here, and continue passing the editorial reasoning down to Gemini-4-Argon.
