@@ -176,7 +176,7 @@ export function formatBriefForPrompt(brief: StructuredBrief): string {
     ? `TRANSITION STYLE: use "${brief.transitionStyle}" transitions between all scenes`
     : "";
   const trimLine = brief.trimmingDirectives?.length
-    ? `TRIMMING & SHORTENING DIRECTIVES:\n${brief.trimmingDirectives.map(t => `  • ${t}`).join("\n")}\n  → IMPORTANT: You MUST actively trim dead space and use customTrimStart / customTrimEnd on selectedCandidates.`
+    ? `TRIMMING, OMISSIONS & EXACT TIMESTAMPS DIRECTIVES:\n${brief.trimmingDirectives.map(t => `  • ${t}`).join("\n")}\n  → EXTREMELY IMPORTANT: YOU MUST OBEY THESE EXACT TIMESTAMPS AND OMISSIONS. DO NOT INVENT YOUR OWN.`
     : (brief.allowCutsWithinClip ? `TRIMMING: Allowed and encouraged — trim dead space and cut to best moments.` : "");
 
   return [
