@@ -298,10 +298,10 @@ CANDIDATE SEGMENT INVENTORY (Pre-verified media segments with exact source bound
 ${candidateList}
 
 EDITORIAL RULES & SELECTION:
-1. SELECT BY CANDIDATE ID:
+1. SELECT BY CANDIDATE ID & OMISSIONS:
    - Select candidate IDs from the CANDIDATE SEGMENT INVENTORY above.
-   - Choose only the best, most compelling moments that serve the brief. You MAY omit unnecessary, repetitive, or irrelevant clips. There is no need to include every clip.
-   - You MAY select multiple distinct candidate segments from the same source clip (sub-clipping).
+   - If the Brief explicitly tells you to OMIT a clip (e.g. "Omit completely", "Duplicate"), YOU MUST NEVER include any candidates from that clip.
+   - Otherwise, YOU MUST ATTEMPT TO INCLUDE AT LEAST ONE SEGMENT FROM EVERY SOURCE CLIP to tell a complete story.
 2. ORDERING & NARRATIVE STRUCTURE:
    - Hook candidates belong at the start (scene 0).
    - Sequence candidates to build natural rhythm, progression, and a clear call-to-action payoff.
@@ -312,9 +312,9 @@ EDITORIAL RULES & SELECTION:
 4. TRANSITIONS & PACING:
    - Match pacing to the brief: fast-paced = sharp cuts; cinematic = smooth dissolves/fades; talking-head = clean cuts.
    - Do NOT force every cut to a beat. Use transitions purposefully. Default to "cut" when in doubt.
-5. TRIMMING & DURATION CONTROL (CRITICAL):
-   - You are a master editor. Unless the Brief explicitly says "CUTS WITHIN CLIP: NOT allowed", you MUST proactively use "customTrimStart" and "customTrimEnd" on every candidate to remove 'dead space', 'setup time' (e.g. walking to camera), and 'trails' (e.g. awkward silence after action).
-   - ONLY KEEP THE ENGAGING ACTION OR DIALOGUE. Cut out the boring parts to make the video 100% better, but DO NOT over-condense or randomly chop up long narrative videos unless requested. Maintain the story!
+5. TRIMMING & EXACT TIMESTAMPS (CRITICAL):
+   - If the Brief provides EXACT timestamps for a clip (e.g., "Keep from 0.44s to 27.10s", "Trim 0:00 to 0:04"), YOU MUST USE EXACTLY THOSE TIMESTAMPS for "customTrimStart" and "customTrimEnd". Do not invent your own cuts if the Brief has already done the math.
+   - If no exact timestamps are provided, you MUST proactively use "customTrimStart" and "customTrimEnd" to remove 'dead space', 'setup time', and 'trails'.
    - Example: to select the best 4 seconds of a 10s candidate, provide:
      "customTrimStart": 2.0, "customTrimEnd": 6.0
 
