@@ -284,7 +284,15 @@ export function resolveSelectedCandidatesToScenes(params: {
 
     // Apply audio-aware padding to prevent cutting off sentences
     if (sourceClip?.speechSegments?.length && sourceClip.duration) {
-      const snapped = snapTrimToSpeechBoundaries(start, end, sourceClip.speechSegments, sourceClip.duration);
+      const snapped = snapTrimToSpeechBoundaries(
+        start, 
+        end, 
+        sourceClip.speechSegments, 
+        sourceClip.duration, 
+        0.35, 
+        [], 
+        sourceClip.transcriptionStatus
+      );
       start = snapped.trimStart;
       end = snapped.trimEnd;
     }
