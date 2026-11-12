@@ -66,7 +66,7 @@ USER'S BRIEF:
 "${prompt}"
 
 Extract:
-1. What they want in the video, in the exact order they described it
+1. What they want in the video. IF THE USER PROVIDES AN EXACT SEQUENCE OR LIST OF CLIPS TO PLAY (e.g. "open with Clip 12, then alternate rapidly between Clip 2, Clip 6..."), YOU MUST COPY THEIR EXACT LIST INTO THE "sceneOrder" ARRAY. DO NOT CHANGE THE ORDER OR INVENT A DIFFERENT STRUCTURE.
 2. Whether segments should play completely uncut OR if they should be trimmed/shortened
 3. The pacing and energy they described
 4. Caption style implied by the brief
@@ -160,7 +160,7 @@ If the brief doesn't specify something, infer it from the overall context.`;
 
 export function formatBriefForPrompt(brief: StructuredBrief): string {
   const orderLines = brief.sceneOrder.length
-    ? `REQUIRED SCENE ORDER:\n${brief.sceneOrder.map(s => `  ${s.position}. ${s.description}${s.mustBeComplete ? " [KEEP COMPLETE — do not cut]" : ""}${s.personOrSubject ? ` → subject: ${s.personOrSubject}` : ""}`).join("\n")}`
+    ? `REQUIRED SCENE ORDER:\n${brief.sceneOrder.map(s => `  ${s.position}. ${s.description}${s.mustBeComplete ? " [KEEP COMPLETE — do not cut]" : ""}${s.personOrSubject ? ` → subject: ${s.personOrSubject}` : ""}`).join("\n")}\n  → STRICT REQUIREMENT: YOU MUST OUTPUT THE TIMELINE IN THIS EXACT SEQUENCE.`
     : "";
 
   const mustHaveLines = brief.mustHaves.length ? `MUST HAVE:\n${brief.mustHaves.map(m => `  • ${m}`).join("\n")}` : "";
