@@ -366,7 +366,13 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                  if (!clipDirectivesMatch) {
                     // Try filename matching (e.g. Clip "IMG_1234": )
                     // Escape regex special chars in filename just in case
+                    const safeName = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\                 let clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
+                 if (!clipDirectivesMatch) {
+                    // Try filename matching (e.g. Clip "IMG_1234": )
+                    // Escape regex special chars in filename just in case
                     const safeName = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\                 const clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);');
+                    clipDirectivesMatch = new RegExp(`Clip \"${safeName}\":(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
+                 }');
                     clipDirectivesMatch = new RegExp(`Clip \"${safeName}\":(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
                  }
                  if (clipDirectivesMatch) {
