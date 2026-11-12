@@ -318,7 +318,104 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
           },
         };
 
-        let result = await timelineGeneratorTool.execute(generatorPayload, ctx);
+
+        // ── CODE-ONLY DETERMINISTIC BYPASS ──
+        // If the user's prompt follows the exact explicit format from "Suggest Prompt"
+        // (listing Clip numbers and specific trim timestamps), bypass the LLM Timeline Generator
+        // completely. We can physically construct the timeline in 0ms using string parsing.
+        
+        let bypassResult: any = null;
+        if (hasClips && enrichedPrompt.includes("TRIMMING") && enrichedPrompt.includes("Flow & Style:")) {
+           try {
+             const flowMatch = enrichedPrompt.match(/(?:Flow & Style|Rearrange the clips|Sequence the remaining clips)[:\s]+([\s\S]*)/i);
+             const flowText = flowMatch ? flowMatch[1] : enrichedPrompt;
+             
+             // Extract sequence
+             const sequence: number[] = [];
+             const clipRegex = /Clip\s*(\d+)/ig;
+             let m;
+             while ((m = clipRegex.exec(flowText)) !== null) {
+               const idx = parseInt(m[1]) - 1;
+               if (!sequence.includes(idx) && idx >= 0 && idx < clips.length) sequence.push(idx);
+             }
+             
+             if (sequence.length > 0) {
+               const generatedScenes: any[] = [];
+               const generatedAssignments: any[] = [];
+               let tDur = 0;
+               
+               sequence.forEach((clipIdx, orderIdx) => {
+                 const c = clips[clipIdx];
+                 let trimStart = 0;
+                 let trimEnd = c.duration || 5;
+                 
+                 // Look for trim instructions for this specific clip
+                 const clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
+                 if (clipDirectivesMatch) {
+                    const times = [...clipDirectivesMatch[1].matchAll(/([0-9]+\.?[0-9]*)s?/g)].map(x => parseFloat(x[1]));
+                    if (times.length >= 2) {
+                       trimStart = Math.min(times[0], times[1]);
+                       trimEnd = Math.max(times[0], times[1]);
+                    }
+                 }
+                 
+                 const dur = trimEnd - trimStart;
+                 tDur += dur;
+                 const sid = crypto.randomUUID();
+                 
+                 generatedScenes.push({
+                   id: sid,
+                   order: orderIdx,
+                   label: c.name,
+                   description: c.name,
+                   duration: dur,
+                   clipTrimStart: trimStart,
+                   clipTrimEnd: trimEnd,
+                   clipType: "video",
+                   playbackSpeed: 1.0,
+                   transition: { type: "cut", duration: 0 },
+                   captions: [],
+                   overlays: []
+                 });
+                 
+                 generatedAssignments.push({
+                   sceneId: sid,
+                   clipIndex: clipIdx,
+                   trimStart: trimStart,
+                   trimEnd: trimEnd
+                 });
+               });
+               
+               bypassResult = {
+                 success: true,
+                 modelUsed: "deterministic-regex-parser",
+                 durationMs: 5,
+                 data: {
+                   timeline: {
+                     id: crypto.randomUUID(),
+                     title: "Direct Code Sequence",
+                     brandWorkspaceId: brand.id,
+                     createdAt: new Date().toISOString(),
+                     updatedAt: new Date().toISOString(),
+                     totalDuration: tDur,
+                     aspectRatio: aspectRatio || "9:16",
+                     isLocked: false,
+                     scenes: generatedScenes,
+                     audioLayers: []
+                   },
+                   suggestions: {},
+                   clipAssignments: generatedAssignments
+                 }
+               };
+               console.log("[agent-pipeline] Bypassed LLM successfully! Executed deterministic string parsing.");
+             }
+           } catch(e) {
+             console.warn("[agent-pipeline] Deterministic bypass failed, falling back to LLM", e);
+           }
+        }
+        
+        let result = bypassResult || await timelineGeneratorTool.execute(generatorPayload, ctx);
+        
         void saveToolExecution({ runId, toolName, modelUsed: result.modelUsed, durationMs: result.durationMs, success: result.success, errorMsg: result.error });
         if (!result.success || !result.data) throw new Error(result.error ?? "Timeline generation failed");
 
