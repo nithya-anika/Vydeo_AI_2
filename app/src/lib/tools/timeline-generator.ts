@@ -349,7 +349,8 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
 
   const parts: Record<string, unknown>[] = [];
   for (const clip of clips) {
-    parts.push({ text: `Clip ${clip.index}: "${clip.name}"${clip.duration ? ` (${clip.duration.toFixed(1)}s total)` : ""}` });
+    parts.push({ text: `Clip ${clip.index} (Name: "${clip.name}")${clip.duration ? ` (${clip.duration.toFixed(1)}s total)` : ""}
+[NOTE: When referencing this clip, you must output candidates matching "clipIndex": ${clip.index}]` });
     if (clip.frames?.length) {
       for (let fi = 0; fi < clip.frames.length; fi++) {
         const ts = clip.frameTimestamps?.[fi];
