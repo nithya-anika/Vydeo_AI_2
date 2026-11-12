@@ -66,7 +66,7 @@ USER'S BRIEF:
 "${prompt}"
 
 Extract:
-1. What they want in the video. IF THE USER PROVIDES AN EXACT SEQUENCE OR LIST OF CLIPS TO PLAY (e.g. "open with Clip 12, then alternate rapidly between Clip 2, Clip 6..."), YOU MUST COPY THEIR EXACT LIST INTO THE "sceneOrder" ARRAY. DO NOT CHANGE THE ORDER OR INVENT A DIFFERENT STRUCTURE.
+1. What they want in the video. IF THE USER PROVIDES AN EXACT SEQUENCE OR LIST OF CLIPS TO PLAY (e.g. "open with Clip 12, then alternate rapidly between Clip 2, Clip 6..."), YOU MUST COPY THEIR EXACT LIST INTO THE "sceneOrder" ARRAY WITH EXPLICIT CLIP REFERENCES (e.g., "Clip 12", "Clip 2"). DO NOT SUMMARIZE OR INVENT A DIFFERENT STRUCTURE.
 2. Whether segments should play completely uncut OR if they should be trimmed/shortened
 3. The pacing and energy they described
 4. Caption style implied by the brief
