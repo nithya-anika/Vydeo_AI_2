@@ -331,12 +331,13 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
              const flowText = flowMatch ? flowMatch[1] : enrichedPrompt;
              
              // Extract sequence
+             // Allow multiple instances of the same clip to exist in the array (e.g., jump cuts)
              const sequence: number[] = [];
              const clipRegex = /Clip\s*(\d+)/ig;
              let m;
              while ((m = clipRegex.exec(flowText)) !== null) {
                const idx = parseInt(m[1]) - 1;
-               if (!sequence.includes(idx) && idx >= 0 && idx < clips.length) sequence.push(idx);
+               if (idx >= 0 && idx < clips.length) sequence.push(idx);
              }
              
              if (sequence.length > 0) {
@@ -362,7 +363,18 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                       return parseFloat(m[2]);
                     }).filter(t => !isNaN(t));
                     
-                    if (times.length >= 2) {
+                    // If a clip is used multiple times (e.g. jump cuts), we need to extract the specific 
+                    // time pair that corresponds to its current appearance in the array.
+                    // We figure out which 'instance' of this clip we are currently rendering.
+                    const instancesSoFar = sequence.slice(0, orderIdx + 1).filter(idx => idx === clipIdx).length;
+                    
+                    if (times.length >= instancesSoFar * 2) {
+                       const t1 = times[(instancesSoFar - 1) * 2];
+                       const t2 = times[(instancesSoFar - 1) * 2 + 1];
+                       trimStart = Math.min(t1, t2);
+                       trimEnd = Math.max(t1, t2);
+                    } else if (times.length >= 2) {
+                       // Fallback to the first pair if no specific jump cut times were provided
                        trimStart = Math.min(times[0], times[1]);
                        trimEnd = Math.max(times[0], times[1]);
                     }
