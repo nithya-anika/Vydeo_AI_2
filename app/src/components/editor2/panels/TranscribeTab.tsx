@@ -3,7 +3,7 @@ import { useEditorStore } from "@/store/editorStore";
 export default function TranscribeTab() {
   const { scenes, activeSceneId, clips } = useEditorStore();
   const activeScene = scenes.find(s => s.id === activeSceneId) || scenes[0];
-  const clip = activeScene?.clipId ? clips.find(c => c.id === activeScene.clipId) : null;
+  const clip = activeScene ? clips.find(c => c.id === activeScene.clipId || c.src === activeScene.clipSrc || c.name === activeScene.label) : null;
 
   return (
     <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
