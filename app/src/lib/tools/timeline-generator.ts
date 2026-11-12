@@ -390,7 +390,8 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
 
   // ── CODE-LEVEL FORCED SEQUENCING ──
   // If the user provided a hardcoded list of clips in the prompt, we physically override the AI's sort order here in code to guarantee perfection.
-  if (Array.isArray(rawSelections) && rawSelections.length > 0) {
+  let finalSelections = [...(rawSelections || [])];
+  if (Array.isArray(finalSelections) && finalSelections.length > 0) {
     const flowMatch = input.prompt.match(/(?:Flow & Style|Rearrange the clips|Sequence the remaining clips)[:\s]+([\s\S]*)/i);
     const textToScan = flowMatch ? flowMatch[1] : input.prompt;
     
@@ -437,14 +438,14 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
       }
       
       // Append any remaining clips that the AI decided to use which weren't in the explicit sequence list
-      rawSelections = [...reorderedSelections, ...remainingSelections];
+      finalSelections = [...reorderedSelections, ...remainingSelections];
     }
   }
 
   // Candidate-based deterministic resolution: map selected candidate IDs to exact media bounds
-  if (Array.isArray(rawSelections) && rawSelections.length > 0) {
+  if (Array.isArray(finalSelections) && finalSelections.length > 0) {
     const resolved = resolveSelectedCandidatesToScenes({
-      selections: rawSelections,
+      selections: finalSelections,
       inventory: candidateInventory,
       clips,
       brand: input.brand,
