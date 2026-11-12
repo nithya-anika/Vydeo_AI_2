@@ -360,14 +360,8 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                  let trimStart = 0;
                  let trimEnd = c.duration || 5;
                  
-                 // Look for trim instructions for this specific clip
                  // Look for trim instructions for this specific clip by either number or filename
                  let clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
-                 if (!clipDirectivesMatch) {
-                    const safeName = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    clipDirectivesMatch = new RegExp(`Clip \"${safeName}\":(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
-                 }
-                    const safeName = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\                 let clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
                  if (!clipDirectivesMatch) {
                     const safeName = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                     clipDirectivesMatch = new RegExp(`Clip \"${safeName}\":(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
