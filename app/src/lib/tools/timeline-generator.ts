@@ -388,6 +388,59 @@ Return ONLY this JSON schema with "selectedCandidates" specifying the ordered se
 
   const sanitized = validateAndSanitizeLineup(parsed, input.brand, input.aspectRatio);
 
+  // ── CODE-LEVEL FORCED SEQUENCING ──
+  // If the user provided a hardcoded list of clips in the prompt, we physically override the AI's sort order here in code to guarantee perfection.
+  if (Array.isArray(rawSelections) && rawSelections.length > 0) {
+    const flowMatch = input.prompt.match(/(?:Flow & Style|Rearrange the clips|Sequence the remaining clips)[:\s]+([\s\S]*)/i);
+    const textToScan = flowMatch ? flowMatch[1] : input.prompt;
+    
+    const explicitSequence: number[] = [];
+    
+    // Strategy 1: Extract "Clip 12, Clip 2"
+    const clipRegex = /Clip\s*(\d+)/ig;
+    let match;
+    while ((match = clipRegex.exec(textToScan)) !== null) {
+      const idx = parseInt(match[1]) - 1;
+      if (!explicitSequence.includes(idx) && idx >= 0 && idx < clips.length) {
+        explicitSequence.push(idx);
+      }
+    }
+    
+    // Strategy 2: Extract by exact filenames (e.g. "IMG_7372 2")
+    if (explicitSequence.length === 0) {
+      const namePos: {idx: number, pos: number}[] = [];
+      clips.forEach(c => {
+        const pos = textToScan.indexOf(c.name);
+        if (pos !== -1) namePos.push({ idx: c.index, pos });
+      });
+      namePos.sort((a, b) => a.pos - b.pos).forEach(n => {
+        if (!explicitSequence.includes(n.idx)) explicitSequence.push(n.idx);
+      });
+    }
+
+    if (explicitSequence.length > 0) {
+      console.log("[timeline-generator] Enforcing code-level explicit sequence:", explicitSequence);
+      const reorderedSelections: any[] = [];
+      const remainingSelections = [...rawSelections];
+
+      // Rebuild the array exactly in the sequence requested
+      for (const reqIdx of explicitSequence) {
+        // Find the first selection that matches this clip index
+        const selIdx = remainingSelections.findIndex(sel => {
+          const m = sel.candidateId.match(/cand_c(\d+)/);
+          return m && parseInt(m[1]) === reqIdx;
+        });
+        if (selIdx !== -1) {
+          reorderedSelections.push(remainingSelections[selIdx]);
+          remainingSelections.splice(selIdx, 1);
+        }
+      }
+      
+      // Append any remaining clips that the AI decided to use which weren't in the explicit sequence list
+      rawSelections = [...reorderedSelections, ...remainingSelections];
+    }
+  }
+
   // Candidate-based deterministic resolution: map selected candidate IDs to exact media bounds
   if (Array.isArray(rawSelections) && rawSelections.length > 0) {
     const resolved = resolveSelectedCandidatesToScenes({
