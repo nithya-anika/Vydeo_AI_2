@@ -20,7 +20,7 @@ The user has uploaded some video clips. You must analyze the provided clip metad
 
 CRITICAL INSTRUCTIONS:
 1. Provide EXACTLY 3 different prompt suggestions.
-2. Your suggestions MUST be formatted exactly like a Master Editor's brief. You must explicitly list the clips you choose to use, but there is no need to include all clips. Select only the best ones to form a narrative.
+2. Your suggestions MUST be formatted exactly like a Master Editor's brief. YOU MUST EXPLICITLY LIST EVERY SINGLE UPLOADED CLIP provided in the CLIP CONTEXT below, without exception. For each clip, you must dictate exactly what to do with it (e.g. trim it, keep it intact, or explicitly omit it if it is a duplicate or unusable).
 3. Follow this EXACT template structure for EVERY suggestion:
 
    Example format you MUST follow:
