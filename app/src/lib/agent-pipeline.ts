@@ -325,7 +325,7 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
         // completely. We can physically construct the timeline in 0ms using string parsing.
         
         let bypassResult: any = null;
-        if (hasClips && enrichedPrompt.includes("TRIMMING") && enrichedPrompt.includes("Flow & Style:")) {
+        if (hasClips && (enrichedPrompt.includes("TRIMMING") || enrichedPrompt.includes("Clip 1:")) && enrichedPrompt.includes("Flow & Style:")) {
            try {
              const flowMatch = enrichedPrompt.match(/(?:Flow & Style|Rearrange the clips|Sequence the remaining clips)[:\s]+([\s\S]*)/i);
              const flowText = flowMatch ? flowMatch[1] : enrichedPrompt;
@@ -352,7 +352,16 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                  // Look for trim instructions for this specific clip
                  const clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
                  if (clipDirectivesMatch) {
-                    const times = [...clipDirectivesMatch[1].matchAll(/([0-9]+\.?[0-9]*)s?/g)].map(x => parseFloat(x[1]));
+                    // Extract all possible timestamp formats e.g., 0.44s, 4.20s, 9.30s, 0:04, 4:20
+                    const matches = [...clipDirectivesMatch[1].matchAll(/(?:([0-9]+):)?([0-9]+\.?[0-9]*)s?/g)];
+                    const times = matches.map(m => {
+                      if (m[1]) {
+                        // Minute:Second format (e.g. 1:30)
+                        return (parseInt(m[1]) * 60) + parseFloat(m[2]);
+                      }
+                      return parseFloat(m[2]);
+                    }).filter(t => !isNaN(t));
+                    
                     if (times.length >= 2) {
                        trimStart = Math.min(times[0], times[1]);
                        trimEnd = Math.max(times[0], times[1]);
