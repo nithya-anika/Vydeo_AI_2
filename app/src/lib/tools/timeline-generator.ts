@@ -300,12 +300,12 @@ ${candidateList}
 EDITORIAL RULES & SELECTION:
 1. SELECT BY CANDIDATE ID & OMISSIONS:
    - Select candidate IDs from the CANDIDATE SEGMENT INVENTORY above.
-   - EXTREME WARNING ON OMISSIONS: Look closely at the Brief's TRIMMING DIRECTIVES or MUST NOT section. If it says to OMIT a clip (e.g. "omit Clip 3", "omit Clip 4"), YOU MUST NEVER output a scene using that clip index. Double check your output before responding.
+   - STRICT OMISSION REQUIREMENT: Review the Brief's TRIMMING DIRECTIVES and MUST NOT sections carefully. If the user requests to OMIT a clip (e.g. "omit Clip 3"), you are strictly prohibited from including any scenes using that clip.
    - Otherwise, YOU MUST ATTEMPT TO INCLUDE AT LEAST ONE SEGMENT FROM EVERY SOURCE CLIP to tell a complete story.
 2. ORDERING & NARRATIVE STRUCTURE:
-   - EXTREME WARNING ON ORDER: If the brief specifies an EXACT sequence or ordering of clips (e.g. "alternate rapidly between Clip 12, Clip 2, Clip 6...", "sequence chronologically"), YOU MUST OUTPUT THE SCENES IN THAT EXACT ORDER matching either the clip index or filename.
-   - If the user explicitly asks you to "Hook" or "Start" with a specific clip (e.g. "open with Clip 12"), THAT CLIP MUST ABSOLUTELY BE THE VERY FIRST ITEM IN YOUR selectedCandidates ARRAY (index 0). Do not place any other clips before it.
-   - Sequence candidates exactly as dictated. Do not invent your own structure if the brief has done the math.
+   - STRICT SEQUENCING REQUIREMENT: If the brief specifies a sequence or ordering of clips (e.g. "alternate between Clip 12, Clip 2, Clip 6...", "sequence chronologically"), YOU MUST OUTPUT THE SCENES IN THAT EXACT ORDER matching either the clip index or filename.
+   - If the user specifies a starting clip (e.g. "open with Clip 12"), THAT CLIP MUST BE THE FIRST ITEM IN YOUR selectedCandidates ARRAY (index 0).
+   - Do not deviate from the user's requested arrangement.
 3. AUDIO & SPEECH CONTINUITY:
    - NEVER cut a person off mid-sentence. If someone is speaking, you MUST align your "customTrimStart" and "customTrimEnd" timestamps with the natural pauses in the Spoken Transcript provided in the inventory.
    - B-roll / silence candidates can be cut shorter or used as cutaways.
