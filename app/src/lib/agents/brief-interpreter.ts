@@ -164,7 +164,7 @@ export function formatBriefForPrompt(brief: StructuredBrief): string {
     : "";
 
   const mustHaveLines = brief.mustHaves.length ? `MUST HAVE:\n${brief.mustHaves.map(m => `  • ${m}`).join("\n")}` : "";
-  const mustNotLines = brief.mustNots.length ? `MUST NOT:\n${brief.mustNots.map(m => `  • ${m}`).join("\n")}` : "";
+  const mustNotLines = brief.mustNots.length ? `MUST NOT:\n${brief.mustNots.map(m => `  • ${m}`).join("\n")}\n  → STRICT REQUIREMENT: IF A CLIP IS LISTED IN MUST NOT OR OMISSIONS, YOU MUST DELETE IT FROM THE TIMELINE.` : "";
 
   const speedLine = brief.globalPlaybackSpeed && brief.globalPlaybackSpeed !== 1
     ? `SPEED: ${brief.globalPlaybackSpeed}x — set playbackSpeed=${brief.globalPlaybackSpeed} on ALL scenes AND divide each scene duration by ${brief.globalPlaybackSpeed}`
@@ -176,7 +176,7 @@ export function formatBriefForPrompt(brief: StructuredBrief): string {
     ? `TRANSITION STYLE: use "${brief.transitionStyle}" transitions between all scenes`
     : "";
   const trimLine = brief.trimmingDirectives?.length
-    ? `TRIMMING, OMISSIONS & EXACT TIMESTAMPS DIRECTIVES:\n${brief.trimmingDirectives.map(t => `  • ${t}`).join("\n")}\n  → EXTREMELY IMPORTANT: YOU MUST OBEY THESE EXACT TIMESTAMPS AND OMISSIONS. DO NOT INVENT YOUR OWN.`
+    ? `TRIMMING, OMISSIONS & EXACT TIMESTAMPS DIRECTIVES:\n${brief.trimmingDirectives.map(t => `  • ${t}`).join("\n")}\n  → STRICT REQUIREMENT: YOU MUST OBEY THESE EXACT TIMESTAMPS AND OMISSIONS. DO NOT DEVIATE.`
     : (brief.allowCutsWithinClip ? `TRIMMING: Allowed and encouraged — trim dead space and cut to best moments.` : "");
 
   return [
