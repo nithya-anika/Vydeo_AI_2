@@ -325,7 +325,7 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
         // completely. We can physically construct the timeline in 0ms using string parsing.
         
         let bypassResult: any = null;
-        if (hasClips && (enrichedPrompt.includes("TRIMMING") || enrichedPrompt.includes("Clip 1:")) && enrichedPrompt.includes("Flow & Style:")) {
+        if (hasClips && enrichedPrompt.toLowerCase().includes("flow & style:")) {
            try {
              const flowMatch = enrichedPrompt.match(/(?:Flow & Style|Rearrange the clips|Sequence the remaining clips)[:\s]+([\s\S]*)/i);
              const flowText = flowMatch ? flowMatch[1] : enrichedPrompt;
