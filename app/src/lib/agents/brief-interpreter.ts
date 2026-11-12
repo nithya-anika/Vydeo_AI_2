@@ -96,7 +96,7 @@ Set "allowCutsWithinClip" to true and ALWAYS add the specific trimming logic req
   "captionTone": "natural-speech",
   "captionStyle": "short subtitle-style captions matching the spoken tone",
   "mustHaves": ["start with the girl speaking", "end with the guy in sunglasses"],
-  "mustNots": ["do not cut mid-sentence", "do not add generic captions"],
+  "mustNots": ["do not cut mid-sentence", "do not add generic captions", "omit Clip 3", "omit Clip 4"],
   "globalPlaybackSpeed": 1.0,
   "visualEffects": [],
   "transitionStyle": "zoom-in",

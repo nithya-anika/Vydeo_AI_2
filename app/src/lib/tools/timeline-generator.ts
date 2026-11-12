@@ -300,7 +300,7 @@ ${candidateList}
 EDITORIAL RULES & SELECTION:
 1. SELECT BY CANDIDATE ID & OMISSIONS:
    - Select candidate IDs from the CANDIDATE SEGMENT INVENTORY above.
-   - If the Brief explicitly tells you to OMIT a clip (e.g. "Omit completely", "Duplicate"), YOU MUST NEVER include any candidates from that clip.
+   - EXTREME WARNING ON OMISSIONS: Look closely at the Brief's TRIMMING DIRECTIVES or MUST NOT section. If it says to OMIT a clip (e.g. "omit Clip 3", "omit Clip 4"), YOU MUST NEVER output a scene using that clip index. Double check your output before responding.
    - Otherwise, YOU MUST ATTEMPT TO INCLUDE AT LEAST ONE SEGMENT FROM EVERY SOURCE CLIP to tell a complete story.
 2. ORDERING & NARRATIVE STRUCTURE:
    - Hook candidates belong at the start (scene 0).
