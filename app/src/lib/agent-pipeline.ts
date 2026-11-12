@@ -333,10 +333,20 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
              // Extract sequence
              // Allow multiple instances of the same clip to exist in the array (e.g., jump cuts)
              const sequence: number[] = [];
-             const clipRegex = /Clip\s*(\d+)/ig;
+             // Match 'Clip X' or 'Clip "filename"' from the flow text
+             const clipRegex = /Clip\s*(?:\"([^\"]+)\"|(\d+))/ig;
              let m;
              while ((m = clipRegex.exec(flowText)) !== null) {
-               const idx = parseInt(m[1]) - 1;
+               let idx = -1;
+               if (m[1]) {
+                 // Match by filename (e.g. Clip "IMG_1234")
+                 const name = m[1];
+                 idx = clips.findIndex(c => c.name === name);
+               } else if (m[2]) {
+                 // Match by Clip Number (e.g. Clip 12)
+                 idx = parseInt(m[2]) - 1;
+               }
+               
                if (idx >= 0 && idx < clips.length) sequence.push(idx);
              }
              
@@ -351,7 +361,14 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                  let trimEnd = c.duration || 5;
                  
                  // Look for trim instructions for this specific clip
-                 const clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
+                 // Look for trim instructions for this specific clip by either number or filename
+                 let clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
+                 if (!clipDirectivesMatch) {
+                    // Try filename matching (e.g. Clip "IMG_1234": )
+                    // Escape regex special chars in filename just in case
+                    const safeName = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\                 const clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);');
+                    clipDirectivesMatch = new RegExp(`Clip \"${safeName}\":(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
+                 }
                  if (clipDirectivesMatch) {
                     // Extract all possible timestamp formats e.g., 0.44s, 4.20s, 9.30s, 0:04, 4:20
                     const matches = [...clipDirectivesMatch[1].matchAll(/(?:([0-9]+):)?([0-9]+\.?[0-9]*)s?/g)];
