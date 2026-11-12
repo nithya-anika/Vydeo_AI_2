@@ -303,9 +303,9 @@ EDITORIAL RULES & SELECTION:
    - EXTREME WARNING ON OMISSIONS: Look closely at the Brief's TRIMMING DIRECTIVES or MUST NOT section. If it says to OMIT a clip (e.g. "omit Clip 3", "omit Clip 4"), YOU MUST NEVER output a scene using that clip index. Double check your output before responding.
    - Otherwise, YOU MUST ATTEMPT TO INCLUDE AT LEAST ONE SEGMENT FROM EVERY SOURCE CLIP to tell a complete story.
 2. ORDERING & NARRATIVE STRUCTURE:
-   - Hook candidates belong at the start (scene 0).
+   - EXTREME WARNING ON ORDER: If the brief specifies an EXACT sequence or ordering of clips (e.g. "alternate rapidly between Clip 2, Clip 6, Clip 15...", "sequence chronologically"), YOU MUST OUTPUT THE SCENES IN THAT EXACT ORDER. Do not invent your own structure if the brief has done the math.
+   - Hook candidates belong at the start (scene 0) UNLESS the brief explicitly tells you to start with a specific clip (e.g. "open with Clip 12").
    - Sequence candidates to build natural rhythm, progression, and a clear call-to-action payoff.
-   - When the brief specifies ordering (e.g. "start with X", "end with Y"), place matching candidates at those positions.
 3. AUDIO & SPEECH CONTINUITY:
    - NEVER cut a person off mid-sentence. If someone is speaking, you MUST align your "customTrimStart" and "customTrimEnd" timestamps with the natural pauses in the Spoken Transcript provided in the inventory.
    - B-roll / silence candidates can be cut shorter or used as cutaways.
