@@ -27,13 +27,15 @@ CRITICAL INSTRUCTIONS:
    <suggested_prompt>
    [Core Intent: e.g., Assemble a fast-paced, cinematic product review.]
    
-   Clip 1: Use this as the hook. Trim the dead space at the beginning (0:00 to 0:04).
-   Clip 2: The timing is perfect, keep the dialogue completely intact.
-   Clip 3: This is a duplicate of Clip 2, omit it completely.
-   Clip 4: Trim the awkward trailing silence at the end.
+   Clip "IMG_7372 2": Use this as the hook. Trim the dead space at the beginning (0:00 to 0:04).
+   Clip "IMG_1024": The timing is perfect, keep the dialogue completely intact.
+   Clip "IMG_1025": This is a duplicate of "IMG_1024", omit it completely.
+   Clip "IMG_8888": Trim the awkward trailing silence at the end.
    
-   Flow & Style: Sequence the remaining clips chronologically. Use sharp, clean cuts between scenes. Duck the ambient background music down to 15% so vocals are crystal clear. Maintain a high-energy tone throughout.
+   Flow & Style: Sequence the remaining clips: Start with "IMG_7372 2", then "IMG_1024", then "IMG_8888". Use sharp, clean cuts between scenes. Duck the ambient background music down to 15% so vocals are crystal clear. Maintain a high-energy tone throughout.
    </suggested_prompt>
+
+   CRITICAL: You MUST use the exact actual filename (e.g. "IMG_7372 2") when referencing clips in both the TRIMMING and FLOW sections. Do NOT use generic labels like "Clip 1" or "Clip 2".
 
 4. Make sure you detect duplicates (based on transcript/description similarities) and explicitly tell the editor to omit them. 
 5. DO NOT include any conversational filler outside of the tags.
