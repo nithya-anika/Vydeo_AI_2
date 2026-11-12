@@ -42,6 +42,9 @@ export interface Clip {
   type: "video" | "image";
   duration: number;
   thumbnail?: string;
+  speechSegments?: { text: string; startTime: number; endTime: number }[];
+  transcript?: string;
+  transcriptionStatus?: "pending" | "completed_with_speech" | "completed_no_speech" | "failed";
 }
 
 export interface AudioTrack {

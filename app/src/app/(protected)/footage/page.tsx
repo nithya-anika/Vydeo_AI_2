@@ -700,6 +700,9 @@ export default function FootageEditorSetup() {
         useEditorStore.getState().addClip({
           id: c.id, name: c.name, src: c.src, file: c.file,
           type: "video" as const, duration: c.duration, thumbnail: c.thumbnail,
+          speechSegments: c.speechSegments,
+          transcript: c.transcript,
+          transcriptionStatus: c.transcriptionStatus
         });
       });
 
