@@ -124,7 +124,7 @@ export interface BrandKit {
   logoOverlay?: BrandLogoOverlay;
 }
 
-export type LeftTab = "media" | "text" | "music" | "transitions" | "brand" | "ai" | "effects";
+export type LeftTab = "media" | "text" | "music" | "transitions" | "brand" | "ai" | "effects" | "transcribe";
 export type InspectorTarget =
   | { type: "scene"; id: string }
   | { type: "caption"; sceneId: string; captionId: string }

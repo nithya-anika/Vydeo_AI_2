@@ -38,6 +38,7 @@ import {
   VolumeX,
   Sliders,
   Scissors,
+  FileText,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -207,6 +208,7 @@ const LEFT_TABS: { id: LeftTab; label: string; Icon: React.ElementType }[] = [
   { id: "brand", label: "Brand", Icon: Palette },
   { id: "ai", label: "AI", Icon: Sparkles },
   { id: "effects", label: "FX", Icon: Wand2 },
+  { id: "transcribe", label: "Transcript", Icon: FileText },
 ];
 
 const MUSIC_TRACKS = [
