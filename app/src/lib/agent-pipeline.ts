@@ -325,76 +325,40 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
         // completely. We can physically construct the timeline in 0ms using string parsing.
         
         let bypassResult: any = null;
-        if (hasClips && enrichedPrompt.toLowerCase().includes("flow & style:")) {
+        if (hasClips && enrichedPrompt.includes("[TIMELINE_CODE]")) {
            try {
-             const flowMatch = enrichedPrompt.match(/(?:Flow & Style|Rearrange the clips|Sequence the remaining clips)[:\s]+([\s\S]*)/i);
-             const flowText = flowMatch ? flowMatch[1] : enrichedPrompt;
-             
-             // Extract sequence
-             // Allow multiple instances of the same clip to exist in the array (e.g., jump cuts)
-             const sequence: number[] = [];
-             // Match 'Clip X' or 'Clip "filename"' from the flow text
-             const clipRegex = /Clip\s*(?:\"([^\"]+)\"|(\d+))/ig;
-             let m;
-             while ((m = clipRegex.exec(flowText)) !== null) {
-               let idx = -1;
-               if (m[1]) {
-                 // Match by filename (e.g. Clip "IMG_1234")
-                 const name = m[1];
-                 idx = clips.findIndex(c => c.name === name);
-               } else if (m[2]) {
-                 // Match by Clip Number (e.g. Clip 12)
-                 idx = parseInt(m[2]) - 1;
-               }
+             const codeMatch = enrichedPrompt.match(/\[TIMELINE_CODE\]([\s\S]*?)\[\/TIMELINE_CODE\]/i);
+             if (codeMatch) {
+               const lines = codeMatch[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('-'));
                
-               if (idx >= 0 && idx < clips.length) sequence.push(idx);
-             }
-             
-             if (sequence.length > 0) {
                const generatedScenes: any[] = [];
                const generatedAssignments: any[] = [];
                let tDur = 0;
-               
-               sequence.forEach((clipIdx, orderIdx) => {
+               let orderIdx = 0;
+
+               for (const line of lines) {
+                 // Match filename: - "IMG_1234"
+                 const nameMatch = line.match(/- \"([^\"]+)\"/);
+                 if (!nameMatch) continue;
+                 
+                 const name = nameMatch[1];
+                 const clipIdx = clips.findIndex(c => c.name === name);
+                 if (clipIdx === -1) continue;
+                 
                  const c = clips[clipIdx];
                  let trimStart = 0;
                  let trimEnd = c.duration || 5;
-                 
-                 // Look for trim instructions for this specific clip by either number or filename
-                 let clipDirectivesMatch = new RegExp(`Clip ${clipIdx + 1}:(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
-                 if (!clipDirectivesMatch) {
-                    const safeName = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    clipDirectivesMatch = new RegExp(`Clip \"${safeName}\":(.*?)(?:\n|$)`, 'i').exec(enrichedPrompt);
+
+                 // Match times: (0.0 to 4.5)
+                 const timeMatch = line.match(/\(([0-9.]+)\s+to\s+([0-9.]+)\)/);
+                 if (timeMatch) {
+                   trimStart = parseFloat(timeMatch[1]);
+                   trimEnd = parseFloat(timeMatch[2]);
                  }
-                 if (clipDirectivesMatch) {
-                    // Extract all possible timestamp formats e.g., 0.44s, 4.20s, 9.30s, 0:04, 4:20
-                    const matches = [...clipDirectivesMatch[1].matchAll(/(?:([0-9]+):)?([0-9]+\.?[0-9]*)s?/g)];
-                    const times = matches.map(m => {
-                      if (m[1]) {
-                        // Minute:Second format (e.g. 1:30)
-                        return (parseInt(m[1]) * 60) + parseFloat(m[2]);
-                      }
-                      return parseFloat(m[2]);
-                    }).filter(t => !isNaN(t));
-                    
-                    // If a clip is used multiple times (e.g. jump cuts), we need to extract the specific 
-                    // time pair that corresponds to its current appearance in the array.
-                    // We figure out which 'instance' of this clip we are currently rendering.
-                    const instancesSoFar = sequence.slice(0, orderIdx + 1).filter(idx => idx === clipIdx).length;
-                    
-                    if (times.length >= instancesSoFar * 2) {
-                       const t1 = times[(instancesSoFar - 1) * 2];
-                       const t2 = times[(instancesSoFar - 1) * 2 + 1];
-                       trimStart = Math.min(t1, t2);
-                       trimEnd = Math.max(t1, t2);
-                    } else if (times.length >= 2) {
-                       // Fallback to the first pair if no specific jump cut times were provided
-                       trimStart = Math.min(times[0], times[1]);
-                       trimEnd = Math.max(times[0], times[1]);
-                    }
-                 }
-                 
+
                  const dur = trimEnd - trimStart;
+                 if (dur <= 0) continue;
+                 
                  tDur += dur;
                  const sid = crypto.randomUUID();
                  
@@ -419,7 +383,8 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                    trimStart: trimStart,
                    trimEnd: trimEnd
                  });
-               });
+                 orderIdx++;
+               }
                
                bypassResult = {
                  success: true,
