@@ -696,13 +696,14 @@ export default function FootageEditorSetup() {
       // The EditorStore is completely persistent and shared across pages natively!
       // We do NOT need to cram megabytes of data into sessionStorage.
       // 1. Add all clips (including heavy raw File references) to the global store safely:
-      clips.forEach(c => {
+      clips.forEach((c, idx) => {
+        const dialogInfo = clipInfosWithDialogue.find(info => info.index === idx);
         useEditorStore.getState().addClip({
           id: c.id, name: c.name, src: c.src, file: c.file,
           type: "video" as const, duration: c.duration, thumbnail: c.thumbnail,
-          speechSegments: c.speechSegments,
-          transcript: c.transcript,
-          transcriptionStatus: c.transcriptionStatus
+          speechSegments: dialogInfo?.speechSegments || c.speechSegments,
+          transcript: dialogInfo?.transcript || c.transcript,
+          transcriptionStatus: (dialogInfo?.speechSegments?.length ? "completed_with_speech" : "completed_no_speech") as any
         });
       });
 
