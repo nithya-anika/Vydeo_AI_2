@@ -695,7 +695,7 @@ function captionToFilter(
     )},${end.toFixed(
       3
     )})'`,
-  ].filter(Boolean).join("");
+  ].filter(f => f && f.trim() !== "").join("");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1233,9 +1233,9 @@ export async function renderWithFfmpeg(
       }
       
       const gradeFilter = scene.colorGrade ? effectToVfFilter(scene.colorGrade) : "";
-      const effectFilter = [scene.visualEffect ? effectToVfFilter(scene.visualEffect) : "", gradeFilter, eqFilter].filter(Boolean).join(",");
+      const effectFilter = [scene.visualEffect ? effectToVfFilter(scene.visualEffect) : "", gradeFilter, eqFilter].filter(f => f && f.trim() !== "").join(",");
 
-      const captionFilters = (scene.captions || []).map(c => captionToFilter({ ...c, fontFamily: c.fontFamily || brand?.fontFamily, color: c.color || brand?.primaryColor }, W, H)).filter(Boolean).join(",");
+      const captionFilters = (scene.captions || []).map(c => captionToFilter({ ...c, fontFamily: c.fontFamily || brand?.fontFamily, color: c.color || brand?.primaryColor }, W, H)).filter(f => f && f.trim() !== "").join(",");
 
       const vf = [
         scaleFilter,
@@ -1244,7 +1244,7 @@ export async function renderWithFfmpeg(
         effectFilter,
         captionFilters
       ]
-        .filter(Boolean)
+        .filter(f => f && f.trim() !== "")
         .join(",");
 
       /* -------------------------------------------------------------------- */
