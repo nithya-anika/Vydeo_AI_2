@@ -4654,14 +4654,12 @@ export default function EditorShell({
     }
   }
 
-  // --- VERCEL PAYLOAD BYPASS (Direct GCS Upload) ---
-  // If the generated base64 is larger than 100KB, upload it directly to GCS
-  // from the browser to bypass Vercel's strict 4.5MB Serverless request limits.
-  // This executes for BOTH local files and fetched blobs.
+  // --- EC2 DIRECT BINARY UPLOAD BYPASS ---
+  // Instead of failing over to base64 which crashes the browser, we stream the raw binary
+  // directly to the EC2 server's /var/tmp SSD space using standard FormData multipart uploads.
   if (clipData && (rawBinary || clipData.length > 100_000)) {
-    console.log(`[Export] Media detected for scene "${scene.label}" (${rawBinary ? (rawBinary.size / 1024 / 1024).toFixed(2) : (clipData.length / 1024 / 1024).toFixed(2)} MB). Bypassing payload via direct cloud upload...`);
+    console.log(`[Export] Media detected for scene "${scene.label}" (${rawBinary ? (rawBinary.size / 1024 / 1024).toFixed(2) : (clipData.length / 1024 / 1024).toFixed(2)} MB). Streaming directly to EC2 server...`);
     try {
-      // Use the raw File/Blob directly if available, otherwise compile from base64
       const uploadBlob = rawBinary || (() => {
         const b64Data = clipData!.split(",")[1];
         const byteCharacters = atob(b64Data);
@@ -4674,36 +4672,42 @@ export default function EditorShell({
       })();
 
       let lastLoggedPct = -1;
-      try {
-        const uploadedUrl = await uploadFileMultipart(uploadBlob, `scene_${scene.id}.${clipExt}`, (pct) => {
-          const step = 5;
-          if (pct >= lastLoggedPct + step) {
-            setRenderStatus(`Uploading segment... (${pct}%)`);
-            lastLoggedPct = pct;
+      const data: any = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const formData = new FormData();
+        formData.append("file", uploadBlob);
+        formData.append("ext", clipExt || "mp4");
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const pct = Math.round((event.loaded / event.total) * 100);
+            const step = 5;
+            if (pct >= lastLoggedPct + step) {
+              setRenderStatus(`Uploading segment... (${pct}%)`);
+              lastLoggedPct = pct;
+            }
           }
-          if (onProgress) onProgress(pct, 0, 100);
-        });
-        scene.clipSrc = uploadedUrl;
-        console.log(`[Export] Direct multipart upload successful: ${uploadedUrl}`);
-        clipData = null;
-        rawBinary = null;
-      } catch (err) {
-        console.warn(`[Export] Multipart upload failed: `, err);
-        if (rawBinary && rawBinary.size < 15 * 1024 * 1024) { // Only fallback for small files
-          clipData = await blobToDataUrl(rawBinary);
-          rawBinary = null;
-        } else if (rawBinary) {
-          throw new Error(`Failed to upload media to cloud storage, and file is too large for memory fallback. (${err instanceof Error ? err.message : String(err)})`);
-        }
-      }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { resolve(JSON.parse(xhr.responseText)); } catch { reject(new Error("Invalid JSON")); }
+          } else {
+            reject(new Error("Upload failed"));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload network error"));
+        xhr.open("POST", "/api/upload-binary");
+        xhr.send(formData);
+      });
+
+      scene.clipSrc = `local://${data.filepath}`;
+      console.log(`[Export] Stream to EC2 successful for "${scene.label}" -> ${data.filepath}`);
+      rawBinary = null;
+      clipData = null;
     } catch (err) {
-      console.warn(`[Export] Direct upload failed for scene "${scene.label}": `, err);
-      if (rawBinary && rawBinary.size < 15 * 1024 * 1024) {
-        clipData = await blobToDataUrl(rawBinary);
-        rawBinary = null;
-      } else if (rawBinary) {
-        throw new Error(`Failed to upload media to cloud storage, and file is too large for memory fallback. (${err instanceof Error ? err.message : String(err)})`);
-      }
+      console.warn(`[Export] Direct stream to EC2 crashed for scene "${scene.label}".`, err);
+      throw new Error(`Failed to upload scene "${scene.label}". Network dropped or file too large.`);
     }
   }
 
