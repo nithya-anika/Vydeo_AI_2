@@ -1014,9 +1014,7 @@ export async function renderWithFfmpeg(
         isLast
           ? 0
           : xfadeType
-            ? transition
-                ?.duration ??
-              0.5
+            ? Math.min(scene.duration / 2, transition?.duration || 0.5)
             : 0;
 
       const overlapSec =
