@@ -433,7 +433,7 @@ export default function TopBar({ projectId }: { projectId?: string }) {
         setExportProgress(0);
 
         let attempts = 0;
-        const maxAttempts = 400; // 400 * 2.5s = 1000 seconds
+        const maxAttempts = 1200; // 1200 * 2.5s = 3000 seconds (50 minutes)
         let completed = false;
         
         while (attempts < maxAttempts) {

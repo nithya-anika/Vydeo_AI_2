@@ -4990,7 +4990,7 @@ export default function EditorShell({
         console.log(`[Export] Server is rendering asynchronously. Entering browser polling loop for jobId: ${data.jobId}`);
         
         let attempts = 0;
-        const maxAttempts = 400; // 400 * 3s = 1200 seconds = 20 minutes!
+        const maxAttempts = 1200; // 1200 * 3s = 3600 seconds = 60 minutes!
         let completed = false;
         
         while (attempts < maxAttempts) {
