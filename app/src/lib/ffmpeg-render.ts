@@ -535,30 +535,13 @@ function escapeDrawtext(
   value: string
 ): string {
   return value
-    .replace(
-      /\\/g,
-      "\\\\"
-    )
-    .replace(
-      /'/g,
-      "\\'"
-    )
-    .replace(
-      /:/g,
-      "\\:"
-    )
-    .replace(
-      /\[/g,
-      "\\["
-    )
-    .replace(
-      /\]/g,
-      "\\]"
-    )
-    .replace(
-      /%/g,
-      "\\%"
-    );
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "'\\\\\\''")
+    .replace(/:/g, "\\\\:")
+    .replace(/\[/g, "\\\[")
+    .replace(/\]/g, "\\\\]")
+    .replace(/%/g, "\\\\%")
+    .replace(/,/g, "\\\\,");
 }
 
 function captionToFilter(
@@ -840,6 +823,7 @@ export function toXfadeType(
       return "fade";
 
     case "dissolve":
+    case "crossfade":
       return "dissolve";
 
     case "wipe-left":
@@ -1448,7 +1432,7 @@ export async function renderWithFfmpeg(
         const outLabel = lastTransition ? "[vout]" : `[vx${i}]`;
         const nextLabel = `[${i + 1}:v]`;
 
-        if (scene.xfadeType && scene.xfadeDur > 0) {
+        if (scene.xfadeType && typeof scene.xfadeType === "string" && !scene.xfadeType.match(/^[0-9.]+$/) && scene.xfadeDur > 0) {
           // Standard native xfade transition
           const offset = Math.max(0, timeAcc + scene.displayDuration - scene.xfadeDur);
           
