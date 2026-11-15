@@ -1043,6 +1043,7 @@ export async function renderWithFfmpeg(
           "libx264",
           "-preset",
           "ultrafast",
+          "-video_track_timescale", "90000",
 
           "-t",
           String(
@@ -1251,6 +1252,7 @@ export async function renderWithFfmpeg(
           "libx264",
           "-preset",
           "ultrafast",
+          "-video_track_timescale", "90000",
           "-c:a",
           "aac",
           "-ar",
