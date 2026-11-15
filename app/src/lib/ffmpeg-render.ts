@@ -1195,7 +1195,8 @@ export async function renderWithFfmpeg(
         ? `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,settb=1/90000,format=yuv420p`
         : `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,settb=1/90000,format=yuv420p`;
 
-      const fpsFilter = "fps=30";
+      // Set explicit timebase in the filtergraph to force compatibility across all inputs
+      const fpsFilter = "fps=30,settb=1/90000";
 
       const speedFilter =
         speed !== 1
