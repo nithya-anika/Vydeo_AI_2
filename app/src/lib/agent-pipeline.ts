@@ -342,7 +342,10 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                  if (!nameMatch) continue;
                  
                  const name = nameMatch[1];
-                 const clipIdx = clips.findIndex(c => c.name === name);
+                 let clipIdx = clips.findIndex(c => c.name === name);
+                 if (clipIdx === -1) {
+                   clipIdx = clips.findIndex(c => c.name.split('.')[0] === name.split('.')[0]);
+                 }
                  if (clipIdx === -1) continue;
                  
                  const c = clips[clipIdx];

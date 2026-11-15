@@ -3,7 +3,19 @@ import { useEditorStore } from "@/store/editorStore";
 export default function TranscribeTab() {
   const { scenes, activeSceneId, clips } = useEditorStore();
   const activeScene = scenes.find(s => s.id === activeSceneId) || scenes[0];
-  const clip = activeScene ? clips.find(c => c.id === activeScene.clipId || c.src === activeScene.clipSrc || c.name === activeScene.label) : null;
+  
+  // Try to find the clip.
+  // 1. By exact ID
+  // 2. By exact blob src URL
+  // 3. By filename (ignoring extensions if needed, but exact is fine first)
+  // Fallback: If scenes map straight to index, try to fallback roughly.
+  let clip = activeScene ? clips.find(c => c.id === activeScene.clipId || c.src === activeScene.clipSrc || c.name === activeScene.label) : null;
+  
+  // Extra fallback: Extract base name without extension for fuzzier matching
+  if (!clip && activeScene) {
+    const activeLabelBase = activeScene.label ? activeScene.label.split('.')[0] : "";
+    clip = clips.find(c => c.name.split('.')[0] === activeLabelBase) || null;
+  }
 
   return (
     <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -17,19 +29,7 @@ export default function TranscribeTab() {
         <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
           No source clip found for this scene.
         </div>
-      ) : clip.transcriptionStatus === "pending" ? (
-        <div style={{ fontSize: 12, color: "var(--accent)", textAlign: "center", marginTop: 20 }}>
-          Transcribing audio...
-        </div>
-      ) : clip.transcriptionStatus === "failed" ? (
-        <div style={{ fontSize: 12, color: "var(--error)", textAlign: "center", marginTop: 20 }}>
-          Transcription failed for this clip.
-        </div>
-      ) : clip.transcriptionStatus === "completed_no_speech" ? (
-        <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
-          No speech detected in this clip.
-        </div>
-      ) : (
+      ) : (clip.speechSegments && clip.speechSegments.length > 0) || clip.transcript ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {clip.speechSegments && clip.speechSegments.length > 0 ? (
             clip.speechSegments.map((seg, i) => (
@@ -50,9 +50,25 @@ export default function TranscribeTab() {
             ))
           ) : (
              <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
-               {clip.transcript || "No transcript available."}
+               {clip.transcript}
              </div>
           )}
+        </div>
+      ) : clip.transcriptionStatus === "pending" ? (
+        <div style={{ fontSize: 12, color: "var(--accent)", textAlign: "center", marginTop: 20 }}>
+          Transcribing audio...
+        </div>
+      ) : clip.transcriptionStatus === "failed" ? (
+        <div style={{ fontSize: 12, color: "var(--error)", textAlign: "center", marginTop: 20 }}>
+          Transcription failed for this clip.
+        </div>
+      ) : clip.transcriptionStatus === "completed_no_speech" ? (
+        <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
+          No speech detected in this clip.
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", textAlign: "center", marginTop: 20 }}>
+           No transcript available.
         </div>
       )}
     </div>
