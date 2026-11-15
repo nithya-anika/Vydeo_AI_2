@@ -372,7 +372,7 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                    clipTrimEnd: trimEnd,
                    clipType: "video",
                    playbackSpeed: 1.0,
-                   transition: { type: "cut", duration: 0 },
+                   transition: enrichedPrompt.toLowerCase().includes("dissolve") || enrichedPrompt.toLowerCase().includes("fade") ? { type: "crossfade", duration: 0.3 } : { type: "cut", duration: 0 },
                    captions: [],
                    overlays: []
                  });
