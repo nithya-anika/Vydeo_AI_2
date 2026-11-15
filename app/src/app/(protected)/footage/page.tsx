@@ -703,7 +703,7 @@ export default function FootageEditorSetup() {
           type: "video" as const, duration: c.duration, thumbnail: c.thumbnail,
           speechSegments: dialogInfo?.speechSegments || c.speechSegments,
           transcript: dialogInfo?.transcript || c.transcript,
-          transcriptionStatus: (dialogInfo?.speechSegments?.length ? "completed_with_speech" : "completed_no_speech") as any
+          transcriptionStatus: c.transcriptionStatus || (dialogInfo?.speechSegments?.length ? "completed_with_speech" : "completed_no_speech") as any
         });
       });
 
