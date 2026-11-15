@@ -46,10 +46,12 @@ CRITICAL INSTRUCTIONS:
    - You MUST use the exact actual filename wrapped in quotes.
    - For timestamps, use format (start to end) in seconds, or (full).
    - Omitted clips MUST NOT appear in this block.
+   - ANY clip that is NOT explicitly omitted MUST appear in this block.
 
 4. Make sure you detect duplicates (based on transcript/description similarities) and explicitly tell the editor to omit them. 
-5. DO NOT include any conversational filler outside of the tags.
-6. EXTREMELY IMPORTANT: You MUST finish your entire response completely. NEVER cut off your response mid-sentence. Ensure all 3 <suggested_prompt> tags are fully closed.`;
+5. You MUST explicitly describe the transitions (e.g. cross-dissolves, hard cuts) in the Flow & Style section.
+6. DO NOT include any conversational filler outside of the tags.
+7. EXTREMELY IMPORTANT: You MUST finish your entire response completely. NEVER cut off your response mid-sentence. Ensure all 3 <suggested_prompt> tags are fully closed.`;
 
     // Construct the parts payload for Gemini
     const contents: any[] = [];

@@ -4683,7 +4683,7 @@ export default function EditorShell({
             const pct = Math.round((event.loaded / event.total) * 100);
             const step = 5;
             if (pct >= lastLoggedPct + step) {
-              setRenderStatus(`Uploading segment... (${pct}%)`);
+              if (onProgress) onProgress(pct, event.loaded, event.total);
               lastLoggedPct = pct;
             }
           }
