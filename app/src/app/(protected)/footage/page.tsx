@@ -642,6 +642,7 @@ export default function FootageEditorSetup() {
           speechSegments,
           transcript: fullTranscript,
           silenceWindows,
+          transcriptionStatus: speechSegments.length > 0 ? "completed_with_speech" : "completed_no_speech"
         });
       }
 
@@ -701,9 +702,9 @@ export default function FootageEditorSetup() {
         useEditorStore.getState().addClip({
           id: c.id, name: c.name, src: c.src, file: c.file,
           type: "video" as const, duration: c.duration, thumbnail: c.thumbnail,
-          speechSegments: dialogInfo?.speechSegments || c.speechSegments,
+          speechSegments: dialogInfo?.speechSegments?.length ? dialogInfo.speechSegments : c.speechSegments,
           transcript: dialogInfo?.transcript || c.transcript,
-          transcriptionStatus: c.transcriptionStatus || (dialogInfo?.speechSegments?.length ? "completed_with_speech" : "completed_no_speech") as any
+          transcriptionStatus: dialogInfo?.transcriptionStatus || c.transcriptionStatus || (dialogInfo?.speechSegments?.length ? "completed_with_speech" : "completed_no_speech") as any
         });
       });
 
