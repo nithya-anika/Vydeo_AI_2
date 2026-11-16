@@ -346,6 +346,10 @@ CRITICAL SAFETY MANDATE: Reference media is strictly for stylistic guidance. Do 
                  if (clipIdx === -1) {
                    clipIdx = clips.findIndex(c => c.name.split('.')[0] === name.split('.')[0]);
                  }
+                 // Handle spaces in names or exact prompt matching issues
+                 if (clipIdx === -1) {
+                   clipIdx = clips.findIndex(c => c.name.replace(/\s/g, '') === name.replace(/\s/g, ''));
+                 }
                  if (clipIdx === -1) continue;
                  
                  const c = clips[clipIdx];
