@@ -19,7 +19,34 @@ export default function TranscribeTab() {
 
   return (
     <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Clip Transcript</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", display: 'flex', justifyContent: 'space-between' }}>
+        <span>Clip Transcript</span>
+        <button onClick={() => {
+            console.log("DEBUG TRANSCRIBE TAB:", {
+                activeScene,
+                clip,
+                allStoreClips: clips,
+                clipHasSpeechSegments: clip?.speechSegments ? true : false,
+                clipSpeechLen: clip?.speechSegments?.length,
+                clipTranscript: clip?.transcript,
+                clipStatus: clip?.transcriptionStatus
+            });
+            alert("Debug data logged to browser console! Checking console...");
+        }} style={{ fontSize: 10, background: 'red', color: 'white', padding: '2px 6px', borderRadius: 4 }}>DEBUG</button>
+      </div>
+      
+      {/* VISUAL DEBUG TOOL: REMOVE BEFORE PROD */}
+      <div style={{ fontSize: 9, fontFamily: 'monospace', color: '#ffb86c', background: '#282a36', padding: 8, borderRadius: 4, whiteSpace: 'pre-wrap', maxHeight: 150, overflowY: 'auto' }}>
+        {JSON.stringify({
+           sceneId: activeScene?.id,
+           foundClip: !!clip,
+           clipName: clip?.name,
+           hasSegments: !!clip?.speechSegments,
+           segmentCount: clip?.speechSegments?.length,
+           hasText: !!clip?.transcript,
+           status: clip?.transcriptionStatus
+        }, null, 2)}
+      </div>
       
       {!activeScene ? (
         <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
