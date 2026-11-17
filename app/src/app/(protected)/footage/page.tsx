@@ -697,14 +697,32 @@ export default function FootageEditorSetup() {
       // The EditorStore is completely persistent and shared across pages natively!
       // We do NOT need to cram megabytes of data into sessionStorage.
       // 1. Add all clips (including heavy raw File references) to the global store safely:
+      // Clear preexisting store clips to prevent duplicate injection
+      useEditorStore.setState({ clips: [] });
+
       clips.forEach((c, idx) => {
-        const dialogInfo = clipInfosWithDialogue.find(info => info.index === idx);
+        const dialogInfo = clipInfosWithDialogue.find(info => info.index === idx || info.name === c.name);
+        
+        let finalText = "";
+        let finalSegments = [];
+        let finalStatus = "completed_no_speech";
+
+        if (dialogInfo?.speechSegments?.length) {
+          finalSegments = dialogInfo.speechSegments;
+          finalText = dialogInfo.transcript || c.transcript || "";
+          finalStatus = "completed_with_speech";
+        } else if (c.speechSegments?.length) {
+          finalSegments = c.speechSegments;
+          finalText = c.transcript || "";
+          finalStatus = "completed_with_speech";
+        }
+
         useEditorStore.getState().addClip({
           id: c.id, name: c.name, src: c.src, file: c.file,
           type: "video" as const, duration: c.duration, thumbnail: c.thumbnail,
-          speechSegments: dialogInfo?.speechSegments?.length ? dialogInfo.speechSegments : c.speechSegments,
-          transcript: dialogInfo?.transcript || c.transcript,
-          transcriptionStatus: dialogInfo?.transcriptionStatus || c.transcriptionStatus || (dialogInfo?.speechSegments?.length ? "completed_with_speech" : "completed_no_speech") as any
+          speechSegments: finalSegments,
+          transcript: finalText,
+          transcriptionStatus: finalStatus as any
         });
       });
 
