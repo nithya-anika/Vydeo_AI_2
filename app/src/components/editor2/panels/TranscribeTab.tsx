@@ -47,7 +47,7 @@ export default function TranscribeTab() {
                 clipTranscript: clip?.transcript,
                 clipStatus: clip?.transcriptionStatus
             });
-            alert("Debug data logged to browser console! Checking console...");
+            alert("Debug data logged to browser console! Checked clip: " + (clip ? clip.name : "NULL") + " Status: " + (clip ? clip.transcriptionStatus : "UNKNOWN"));
         }} style={{ fontSize: 10, background: 'red', color: 'white', padding: '2px 6px', borderRadius: 4 }}>DEBUG</button>
       </div>
       
@@ -111,7 +111,7 @@ export default function TranscribeTab() {
         </div>
       ) : (
         <div style={{ fontSize: 12, color: "var(--text-secondary)", textAlign: "center", marginTop: 20 }}>
-           No transcript available.
+           Loading transcription data...
         </div>
       )}
     </div>

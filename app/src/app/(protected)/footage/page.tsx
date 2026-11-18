@@ -704,22 +704,24 @@ export default function FootageEditorSetup() {
         const dialogInfo = clipInfosWithDialogue.find(info => info.index === idx || info.name === c.name);
         
         let finalText = "";
-        let finalSegments = [];
+        let finalSegments: any[] = [];
         let finalStatus = "completed_no_speech";
 
-        if (dialogInfo?.speechSegments?.length) {
+        if (dialogInfo?.speechSegments && dialogInfo.speechSegments.length > 0) {
           finalSegments = dialogInfo.speechSegments;
           finalText = dialogInfo.transcript || c.transcript || "";
           finalStatus = "completed_with_speech";
-        } else if (c.speechSegments?.length) {
+        } else if (c.speechSegments && c.speechSegments.length > 0) {
           finalSegments = c.speechSegments;
           finalText = c.transcript || "";
           finalStatus = "completed_with_speech";
         } else if (c.transcriptionStatus === "completed_no_speech" || dialogInfo?.transcriptionStatus === "completed_no_speech") {
           finalStatus = "completed_no_speech";
-        } else if (c.transcriptionStatus === "failed") {
+        } else if (c.transcriptionStatus === "failed" || dialogInfo?.transcriptionStatus === "failed") {
           finalStatus = "failed";
         }
+        
+        if (finalSegments.length > 0) finalStatus = "completed_with_speech";
 
         useEditorStore.getState().addClip({
           id: c.id, name: c.name, src: c.src, file: c.file,
