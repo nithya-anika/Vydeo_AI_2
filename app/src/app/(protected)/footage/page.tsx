@@ -715,6 +715,10 @@ export default function FootageEditorSetup() {
           finalSegments = c.speechSegments;
           finalText = c.transcript || "";
           finalStatus = "completed_with_speech";
+        } else if (c.transcriptionStatus === "completed_no_speech" || dialogInfo?.transcriptionStatus === "completed_no_speech") {
+          finalStatus = "completed_no_speech";
+        } else if (c.transcriptionStatus === "failed") {
+          finalStatus = "failed";
         }
 
         useEditorStore.getState().addClip({

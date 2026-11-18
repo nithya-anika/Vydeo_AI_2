@@ -13,8 +13,16 @@ export default function TranscribeTab() {
   
   // Extra fallback: Extract base name without extension for fuzzier matching
   if (!clip && activeScene) {
-    const activeLabelBase = activeScene.label ? activeScene.label.split('.')[0] : "";
-    clip = clips.find(c => c.name.split('.')[0] === activeLabelBase) || null;
+    const activeLabelBase = activeScene.label ? activeScene.label.split('.')[0].replace(/\s/g, '') : "";
+    clip = clips.find(c => c.name.split('.')[0].replace(/\s/g, '') === activeLabelBase) || null;
+  }
+  
+  // FINAL FALLBACK: If absolutely cannot find clip, but scenes and clips exist, fallback by index matching
+  if (!clip && activeScene && clips.length > 0) {
+     const sceneIdx = scenes.findIndex(s => s.id === activeScene.id);
+     if (sceneIdx !== -1 && sceneIdx < clips.length) {
+         clip = clips[sceneIdx % clips.length];
+     }
   }
 
   return (
