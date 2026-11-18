@@ -3850,12 +3850,14 @@ export default function EditorShell({
       try {
         const payload = JSON.parse(rawFootagePayload);
         if (payload.scenes?.length) {
-          useEditorStore.getState().loadTimeline({
-            scenes: payload.scenes,
-            audioTracks: payload.audioTracks ?? [],
-            totalDuration: payload.totalDuration ?? payload.scenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-            aspectRatio: payload.aspectRatio ?? "9:16",
-          });
+          if (useEditorStore.getState().scenes.length === 0) {
+            useEditorStore.getState().loadTimeline({
+              scenes: payload.scenes,
+              audioTracks: payload.audioTracks ?? [],
+              totalDuration: payload.totalDuration ?? payload.scenes.reduce((sum: number, s: any) => sum + s.duration, 0),
+              aspectRatio: payload.aspectRatio ?? "9:16",
+            });
+          }
           if (payload.clips?.length) {
             // ONLY add clips if the store is empty, to prevent overwriting the robust data populated by FootagePage
             if (useEditorStore.getState().clips.length === 0) {
