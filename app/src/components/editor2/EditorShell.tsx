@@ -3857,7 +3857,10 @@ export default function EditorShell({
             aspectRatio: payload.aspectRatio ?? "9:16",
           });
           if (payload.clips?.length) {
-            payload.clips.forEach((c: any) => useEditorStore.getState().addClip(c));
+            // ONLY add clips if the store is empty, to prevent overwriting the robust data populated by FootagePage
+            if (useEditorStore.getState().clips.length === 0) {
+              payload.clips.forEach((c: any) => useEditorStore.getState().addClip(c));
+            }
           }
           useEditorStore.getState().setActiveScene(payload.scenes[0].id);
         }

@@ -24,6 +24,14 @@ export default function TranscribeTab() {
          clip = clips[sceneIdx % clips.length];
      }
   }
+  
+  // OMEGA FALLBACK: If we still can't find it, and there is a clipId on the scene that looks like an index string
+  if (!clip && activeScene?.clipId && activeScene.clipId.match(/^\d+$/)) {
+      const idx = parseInt(activeScene.clipId);
+      if (idx >= 0 && idx < clips.length) {
+          clip = clips[idx];
+      }
+  }
 
   return (
     <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
