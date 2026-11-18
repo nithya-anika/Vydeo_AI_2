@@ -748,6 +748,7 @@ export default function FootageEditorSetup() {
             return {
               ...s,
               clipSrc: matchedClip?.src || s.clipSrc,
+              clipId: matchedClip?.id || s.clipId,
               clipTrimStart: trimStart,
               clipTrimEnd: trimEnd > trimStart ? trimEnd : (trimStart + sourceDur),
               duration: activeDuration,
