@@ -106,8 +106,9 @@ export default function TranscribeTab() {
           Transcription failed for this clip.
         </div>
       ) : clip.transcriptionStatus === "completed_no_speech" ? (
-        <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
-          No speech detected in this clip.
+        <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20, padding: "0 10px" }}>
+          No speech detected in this clip. <br/><br/>
+          <span style={{ fontSize: 10, opacity: 0.7 }}>The AI could not hear clear dialogue. If there is speech, the audio may be too quiet or distorted for the AI to recognize.</span>
         </div>
       ) : (
         <div style={{ fontSize: 12, color: "var(--text-secondary)", textAlign: "center", marginTop: 20 }}>
