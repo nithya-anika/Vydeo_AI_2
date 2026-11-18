@@ -4704,10 +4704,14 @@ export default function EditorShell({
         xhr.send(formData);
       });
 
-      scene.clipSrc = `local://${data.filepath}`;
+      const ec2Url = `local://${data.filepath}`;
       console.log(`[Export] Stream to EC2 successful for "${scene.label}" -> ${data.filepath}`);
       rawBinary = null;
       clipData = null;
+      
+      // Pass the generated URL down through a local variable instead of mutating the global UI state `scene`!
+      // This prevents the React UI from suddenly attempting to mount a local:// URL in the <video> player.
+      scene = { ...scene, clipSrc: ec2Url };
     } catch (err) {
       console.warn(`[Export] Direct stream to EC2 crashed for scene "${scene.label}".`, err);
       throw new Error(`Failed to upload scene "${scene.label}". Network dropped or file too large.`);
