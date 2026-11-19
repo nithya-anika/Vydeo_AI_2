@@ -4591,7 +4591,7 @@ export default function EditorShell({
       if (String(clipSrc).startsWith("/api/local-asset")) {
          try {
            const urlParam = new URLSearchParams(String(clipSrc).split("?")[1]).get("url");
-           if (urlParam) clipSrc = urlParam;
+           if (urlParam) payloadScenes[payloadScenes.length - 1].clipSrc = urlParam;
          } catch(e) {}
       }
       
