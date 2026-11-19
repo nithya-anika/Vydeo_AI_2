@@ -35,6 +35,17 @@ export default function TranscribeTab() {
 
   return (
     <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* INJECTED DIAGNOSTIC OVERLAY FOR THE USER */}
+      <div style={{ background: "red", color: "white", padding: "12px", borderRadius: "8px", fontSize: "11px", fontFamily: "monospace", overflowWrap: "break-word" }}>
+         <strong>DIAGNOSTICS (PLEASE READ THIS TO THE ASSISTANT):</strong><br/>
+         1. Is Clip Found? {clip ? "YES" : "NO"}<br/>
+         2. Found Clip Name: {clip?.name || "N/A"}<br/>
+         3. Active Scene ID: {activeScene?.id || "N/A"}<br/>
+         4. Clip Speech Length: {clip?.speechSegments?.length || "0"}<br/>
+         5. Clip Status: {clip?.transcriptionStatus || "UNDEFINED"}<br/>
+         6. Is Text Present? {clip?.transcript ? "YES" : "NO"}
+      </div>
+      
       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", display: 'flex', justifyContent: 'space-between' }}>
         <span>Clip Transcript</span>
         <button onClick={() => {
