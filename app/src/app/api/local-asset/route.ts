@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       return new NextResponse(webStream as any, {
         status: 206,
         headers: {
-          "Content-Range": \`bytes \${start}-\${end}/\${fileSize}\`,
+          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
           "Accept-Ranges": "bytes",
           "Content-Length": chunksize.toString(),
           "Content-Type": "video/mp4",

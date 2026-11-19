@@ -4578,7 +4578,7 @@ export default function EditorShell({
   // ---------------------------------------------------------
 
   if (!clipData && clipSrc) {
-    if (String(clipSrc).startsWith("http://") || String(clipSrc).startsWith("https://") || String(clipSrc).startsWith("gs://")) {
+    if (String(clipSrc).startsWith("http://") || String(clipSrc).startsWith("https://") || String(clipSrc).startsWith("gs://") || String(clipSrc).startsWith("/api/local-asset")) {
       console.log(
         "[Export] Remote media URL found — skipping browser download, server will fetch directly:",
         {
@@ -4586,6 +4586,15 @@ export default function EditorShell({
           src: String(clipSrc).slice(0, 100),
         }
       );
+      
+      // If it is our internal persistent proxy route, unpack it back to the raw local:// path for the backend worker
+      if (String(clipSrc).startsWith("/api/local-asset")) {
+         try {
+           const urlParam = new URLSearchParams(String(clipSrc).split("?")[1]).get("url");
+           if (urlParam) clipSrc = urlParam;
+         } catch(e) {}
+      }
+      
       // Keep clipData null so the payload stays light, server will fetch it!
     } else {
       console.log(
