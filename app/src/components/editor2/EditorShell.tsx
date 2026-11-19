@@ -3849,6 +3849,7 @@ export default function EditorShell({
       sessionStorage.removeItem("vydeoai_pending_footage_editor");
       try {
         const payload = JSON.parse(rawFootagePayload);
+        console.log("[HANDOFF] Received payload scenes:", payload.scenes?.length, "clips:", payload.clips?.length);
         if (payload.scenes?.length) {
           if (useEditorStore.getState().scenes.length === 0) {
             useEditorStore.getState().loadTimeline({
@@ -3961,6 +3962,7 @@ export default function EditorShell({
             useEditorStore.setState({ brandKit: draft.brandSettings });
           }
           if (draft.clipsData && Array.isArray(draft.clipsData)) {
+            console.log("[DRAFT LOAD] Loaded clipsData from MongoDB. Count:", draft.clipsData.length);
             useEditorStore.setState({ clips: draft.clipsData });
           }
         }
