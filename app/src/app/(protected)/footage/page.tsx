@@ -470,8 +470,9 @@ export default function FootageEditorSetup() {
       try {
         const src = URL.createObjectURL(file);
         const meta = await getVideoMeta(file, src);
+        const newId = uuidv4();
         newClips.push({
-          id: uuidv4(), file, src,
+          id: newId, file, src,
           name: file.name.replace(/\.[^.]+$/, ""),
           duration: meta.duration,
           thumbnail: meta.thumbnail,
@@ -479,6 +480,22 @@ export default function FootageEditorSetup() {
           width: meta.width,
           height: meta.height,
         });
+        
+        // Background upload to persistent EC2 storage to prevent blob: URL death on navigation
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("ext", file.name.split('.').pop() || "mp4");
+        fetch("/api/upload-binary", { method: "POST", body: formData })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.filepath) {
+              setClips(prev => prev.map(c => c.id === newId ? {
+                ...c,
+                src: `/api/local-asset?url=local://${data.filepath}`
+              } : c));
+            }
+          })
+          .catch(e => console.warn("Background upload failed:", e));
       } catch (err) {
         console.warn(`Failed to ingest ${file.name}:`, err);
       }
