@@ -17,6 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       transitionsData: draft.transitions_data ? JSON.parse(draft.transitions_data) : null,
       effectsData: draft.effects_data ? JSON.parse(draft.effects_data) : null,
       brandSettings: draft.brand_settings ? JSON.parse(draft.brand_settings) : null,
+      clipsData: draft.clips_data ? JSON.parse(draft.clips_data) : null,
     }
   });
 }
@@ -44,6 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       transitions_data: body.transitionsData ? JSON.stringify(body.transitionsData) : null,
       effects_data: body.effectsData ? JSON.stringify(body.effectsData) : null,
       brand_settings: body.brandSettings ? JSON.stringify(body.brandSettings) : null,
+      clips_data: body.clipsData ? JSON.stringify(body.clipsData) : null,
       aspect_ratio: body.aspectRatio ?? "9:16",
       current_playhead: body.currentPlayhead ?? 0,
       status: body.status ?? "draft",

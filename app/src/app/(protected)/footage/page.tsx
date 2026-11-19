@@ -815,10 +815,35 @@ export default function FootageEditorSetup() {
       // but do NOT serialize any clips or scenes here to prevent Chrome OOM crash.
       sessionStorage.setItem("vydeoai_pending_footage_flag", "true");
 
-      setProcessingStep("Opening editor...");
-      await new Promise(r => setTimeout(r, 150));
+      setProcessingStep("Creating project...");
+      
+      const st = useEditorStore.getState();
+      const draftId = uuidv4();
+      
+      try {
+        await fetch("/api/drafts/" + draftId, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "AI Generated Project",
+            aspectRatio: st.aspectRatio,
+            currentPlayhead: st.currentTime,
+            timelineData: {
+              scenes: st.scenes,
+              audioTracks: st.audioTracks.map(t => ({ ...t, file: undefined })),
+              totalDuration: st.totalDuration,
+            },
+            clipsData: st.clips.map(c => ({ ...c, file: undefined })),
+            status: "draft"
+          })
+        });
+        useEditorStore.setState({ projectId: draftId, projectName: "AI Generated Project" });
+        router.push("/editor/" + draftId);
+      } catch (e) {
+        console.error("Failed to create draft, falling back to RAM state:", e);
+        router.push("/editor/footage");
+      }
 
-      router.push("/editor/footage");
     } catch (err) {
       console.error("handleEdit error:", err);
       setError("Something went wrong — please try again.");

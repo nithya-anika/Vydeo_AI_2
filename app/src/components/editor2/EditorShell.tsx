@@ -3930,6 +3930,7 @@ export default function EditorShell({
             audioTracks: st.audioTracks.map((t) => ({ ...t, file: undefined })),
             totalDuration: st.totalDuration,
           },
+          clipsData: st.clips.map((c) => ({ ...c, file: undefined })),
           brandSettings: st.brandKit,
         }),
       });
@@ -3958,6 +3959,9 @@ export default function EditorShell({
           loadTimeline({ scenes: t.scenes, audioTracks: t.audioTracks ?? [], totalDuration: t.totalDuration ?? 0, aspectRatio: draft.aspect_ratio });
           if (draft.brandSettings) {
             useEditorStore.setState({ brandKit: draft.brandSettings });
+          }
+          if (draft.clipsData && Array.isArray(draft.clipsData)) {
+            useEditorStore.setState({ clips: draft.clipsData });
           }
         }
       } catch {

@@ -42,6 +42,7 @@ export interface DbDraft {
   transitions_data: string | null;
   effects_data: string | null;
   brand_settings: string | null;
+  clips_data: string | null;
   aspect_ratio: string;
   current_playhead: number;
   status: string;
@@ -246,6 +247,7 @@ export const draftQueries = {
       transitions_data: d.transitions_data ?? null,
       effects_data: d.effects_data ?? null,
       brand_settings: d.brand_settings ?? null,
+      clips_data: d.clips_data ?? null,
       version: 1,
       last_updated: now,
       created_at: now,
@@ -253,7 +255,7 @@ export const draftQueries = {
   },
 
   autosave: async (d: Pick<DbDraft, "id" | "user_id" | "name" | "prompt" | "timeline_data" | "captions_data" |
-    "transitions_data" | "effects_data" | "brand_settings" | "aspect_ratio" | "current_playhead" | "status">): Promise<void> => {
+    "transitions_data" | "effects_data" | "brand_settings" | "clips_data" | "aspect_ratio" | "current_playhead" | "status">): Promise<void> => {
     const db = await getDb();
     const now = new Date().toISOString();
     await db.collection("drafts").updateOne(
@@ -267,6 +269,7 @@ export const draftQueries = {
           transitions_data: d.transitions_data ?? null,
           effects_data: d.effects_data ?? null,
           brand_settings: d.brand_settings ?? null,
+          clips_data: d.clips_data ?? null,
           aspect_ratio: d.aspect_ratio,
           current_playhead: d.current_playhead,
           status: d.status,
