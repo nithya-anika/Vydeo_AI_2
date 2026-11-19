@@ -519,6 +519,7 @@ export default function FootageEditorSetup() {
             const transRes = await fetch("/api/transcribe-clip", { method: "POST", body: formData });
             if (transRes.ok) {
               const transData = await transRes.json();
+              console.log("[BACKGROUND] Transcription raw response:", JSON.stringify(transData).substring(0, 100));
               setClips(prev => prev.map(existing => existing.id === c.id ? {
                 ...existing,
                 speechSegments: transData.captions ?? [],
@@ -661,6 +662,7 @@ export default function FootageEditorSetup() {
           silenceWindows,
           transcriptionStatus: speechSegments.length > 0 ? "completed_with_speech" : "completed_no_speech"
         });
+        console.log("[INLINE] Pushed clipInfosWithDialogue:", i, c.name, "speechSegments length:", speechSegments.length);
       }
 
       let timelineData = null;
@@ -739,6 +741,7 @@ export default function FootageEditorSetup() {
         }
         
         if (finalSegments.length > 0) finalStatus = "completed_with_speech";
+        console.log("[MAPPING] addClip for", c.name, "Segments:", finalSegments.length, "Status:", finalStatus);
 
         useEditorStore.getState().addClip({
           id: c.id, name: c.name, src: c.src, file: c.file,

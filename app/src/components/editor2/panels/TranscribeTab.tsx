@@ -4,20 +4,13 @@ export default function TranscribeTab() {
   const { scenes, activeSceneId, clips } = useEditorStore();
   const activeScene = scenes.find(s => s.id === activeSceneId) || scenes[0];
   
-  // Try to find the clip.
-  // 1. By exact ID
-  // 2. By exact blob src URL
-  // 3. By filename (ignoring extensions if needed, but exact is fine first)
-  // Fallback: If scenes map straight to index, try to fallback roughly.
   let clip = activeScene ? clips.find(c => c.id === activeScene.clipId || c.src === activeScene.clipSrc || c.name === activeScene.label) : null;
   
-  // Extra fallback: Extract base name without extension for fuzzier matching
   if (!clip && activeScene) {
     const activeLabelBase = activeScene.label ? activeScene.label.split('.')[0].replace(/\s/g, '') : "";
     clip = clips.find(c => c.name.split('.')[0].replace(/\s/g, '') === activeLabelBase) || null;
   }
   
-  // FINAL FALLBACK: If absolutely cannot find clip, but scenes and clips exist, fallback by index matching
   if (!clip && activeScene && clips.length > 0) {
      const sceneIdx = scenes.findIndex(s => s.id === activeScene.id);
      if (sceneIdx !== -1 && sceneIdx < clips.length) {
@@ -25,7 +18,6 @@ export default function TranscribeTab() {
      }
   }
   
-  // OMEGA FALLBACK: If we still can't find it, and there is a clipId on the scene that looks like an index string
   if (!clip && activeScene?.clipId && activeScene.clipId.match(/^\d+$/)) {
       const idx = parseInt(activeScene.clipId);
       if (idx >= 0 && idx < clips.length) {
@@ -33,47 +25,12 @@ export default function TranscribeTab() {
       }
   }
 
+  const hasSegments = clip && clip.speechSegments && clip.speechSegments.length > 0;
+  const hasText = clip && !!clip.transcript;
+
   return (
     <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* INJECTED DIAGNOSTIC OVERLAY FOR THE USER */}
-      <div style={{ background: "red", color: "white", padding: "12px", borderRadius: "8px", fontSize: "11px", fontFamily: "monospace", overflowWrap: "break-word" }}>
-         <strong>DIAGNOSTICS (PLEASE COPY THIS TO ME!):</strong><br/>
-         1. Clip Found? {clip ? "YES" : "NO"}<br/>
-         2. Name: {clip?.name || "N/A"}<br/>
-         3. Segments: {clip?.speechSegments?.length || "0"}<br/>
-         4. Status: {clip?.transcriptionStatus || "UNDEFINED"}<br/>
-         5. Text: {clip?.transcript ? "YES" : "NO"}<br/>
-         6. Store Clips: {clips.length}
-      </div>
-      
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", display: 'flex', justifyContent: 'space-between' }}>
-        <span>Clip Transcript</span>
-        <button onClick={() => {
-            console.log("DEBUG TRANSCRIBE TAB:", {
-                activeScene,
-                clip,
-                allStoreClips: clips,
-                clipHasSpeechSegments: clip?.speechSegments ? true : false,
-                clipSpeechLen: clip?.speechSegments?.length,
-                clipTranscript: clip?.transcript,
-                clipStatus: clip?.transcriptionStatus
-            });
-            alert("Debug data logged to browser console! Checked clip: " + (clip ? clip.name : "NULL") + " Status: " + (clip ? clip.transcriptionStatus : "UNKNOWN"));
-        }} style={{ fontSize: 10, background: 'red', color: 'white', padding: '2px 6px', borderRadius: 4 }}>DEBUG</button>
-      </div>
-      
-      {/* VISUAL DEBUG TOOL: REMOVE BEFORE PROD */}
-      <div style={{ fontSize: 9, fontFamily: 'monospace', color: '#ffb86c', background: '#282a36', padding: 8, borderRadius: 4, whiteSpace: 'pre-wrap', maxHeight: 150, overflowY: 'auto' }}>
-        {JSON.stringify({
-           sceneId: activeScene?.id,
-           foundClip: !!clip,
-           clipName: clip?.name,
-           hasSegments: !!clip?.speechSegments,
-           segmentCount: clip?.speechSegments?.length,
-           hasText: !!clip?.transcript,
-           status: clip?.transcriptionStatus
-        }, null, 2)}
-      </div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Clip Transcript</div>
       
       {!activeScene ? (
         <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
@@ -83,9 +40,9 @@ export default function TranscribeTab() {
         <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
           No source clip found for this scene.
         </div>
-      ) : (clip.speechSegments && clip.speechSegments.length > 0) || clip.transcript ? (
+      ) : hasSegments || hasText ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {clip.speechSegments && clip.speechSegments.length > 0 ? (
+          {hasSegments ? (
             clip.speechSegments.map((seg, i) => (
               <div key={i} style={{ 
                 background: "var(--bg-elevated)", 
@@ -103,27 +60,15 @@ export default function TranscribeTab() {
               </div>
             ))
           ) : (
-             <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+             <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
                {clip.transcript}
              </div>
           )}
         </div>
-      ) : clip.transcriptionStatus === "pending" ? (
-        <div style={{ fontSize: 12, color: "var(--accent)", textAlign: "center", marginTop: 20 }}>
-          Transcribing audio...
-        </div>
-      ) : clip.transcriptionStatus === "failed" ? (
-        <div style={{ fontSize: 12, color: "var(--error)", textAlign: "center", marginTop: 20 }}>
-          Transcription failed for this clip.
-        </div>
-      ) : clip.transcriptionStatus === "completed_no_speech" ? (
+      ) : (
         <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20, padding: "0 10px" }}>
           No speech detected in this clip. <br/><br/>
           <span style={{ fontSize: 10, opacity: 0.7 }}>The AI could not hear clear dialogue. If there is speech, the audio may be too quiet or distorted for the AI to recognize.</span>
-        </div>
-      ) : (
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", textAlign: "center", marginTop: 20 }}>
-           Loading transcription data...
         </div>
       )}
     </div>
