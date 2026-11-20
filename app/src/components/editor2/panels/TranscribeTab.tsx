@@ -13,6 +13,36 @@ export default function TranscribeTab() {
   
   const [isTranscribing, setIsTranscribing] = useState(false);
 
+  async function forceTranscribeFallback(src: string, label: string, sceneId: string, duration: number) {
+    setIsTranscribing(true);
+    try {
+       const fetchRes = await fetch(src);
+       const blob = await fetchRes.blob();
+       const file = new File([blob], label + ".mp4", { type: blob.type || "video/mp4" });
+       
+       const formData = new FormData();
+       formData.append("file", file);
+       formData.append("duration", String(duration));
+       
+       const apiRes = await fetch("/api/transcribe-clip", { method: "POST", body: formData });
+       if (!apiRes.ok) throw new Error("Transcription failed");
+       
+       const data = await apiRes.json();
+       updateClip(sceneId, {
+          speechSegments: data.captions || [],
+          transcript: data.fullTranscript || "",
+          transcriptionStatus: data.captions?.length ? "completed_with_speech" : "completed_no_speech"
+       });
+       
+       toast.success("Transcription complete!");
+    } catch (e) {
+       console.error(e);
+       toast.error("Failed to transcribe video.");
+    } finally {
+       setIsTranscribing(false);
+    }
+  }
+
   async function forceTranscribe() {
     if (!clip || !clip.src) {
        toast.error("Cannot find source video file.");
@@ -82,7 +112,26 @@ export default function TranscribeTab() {
         </div>
       ) : !clip ? (
         <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
+          <Button onClick={() => {
+              if (!activeScene.clipSrc) { toast.error("No source URL attached to this scene."); return; }
+              // Force create a pseudo-clip and fetch it.
+              updateClip(activeScene.id, { 
+                  id: activeScene.id, name: activeScene.label, src: activeScene.clipSrc, type: "video", duration: activeScene.duration,
+                  speechSegments: [], transcript: "", transcriptionStatus: "pending" 
+              });
+              forceTranscribeFallback(activeScene.clipSrc, activeScene.label, activeScene.id, activeScene.duration);
+          }} disabled={isTranscribing} variant="secondary" size="sm" style={{ width: "100%", marginBottom: "16px" }}>
+             {isTranscribing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transcribing...</> : "Manually Transcribe Scene"}
+          </Button>
           No source clip found for this scene.
+          <br/><br/>
+          <div style={{ fontSize: 10, textAlign: "left", opacity: 0.8, wordBreak: "break-all" }}>
+             <strong>DEBUG INFO:</strong><br/>
+             Active Scene Label: {activeScene.label}<br/>
+             Active Scene Src: {activeScene.clipSrc}<br/>
+             Active Scene ID: {activeScene.clipId}<br/>
+             Total Store Clips: {clips.length}
+          </div>
         </div>
       ) : hasSegments || hasText ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
