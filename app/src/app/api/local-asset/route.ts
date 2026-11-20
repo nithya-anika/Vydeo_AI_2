@@ -1,6 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { statSync, createReadStream, existsSync } from "fs";
-import { Readable } from "stream";
+
+function streamFile(path: string, options?: { start: number; end: number }) {
+  const fileStream = createReadStream(path, options);
+  return new ReadableStream({
+    start(controller) {
+      fileStream.on("data", (chunk) => {
+        try {
+          controller.enqueue(new Uint8Array(chunk));
+        } catch {
+          fileStream.destroy();
+        }
+      });
+      fileStream.on("end", () => {
+        try {
+          controller.close();
+        } catch {}
+      });
+      fileStream.on("error", (err) => {
+        try {
+          controller.error(err);
+        } catch {}
+      });
+    },
+    cancel() {
+      fileStream.destroy();
+    },
+  });
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,8 +55,7 @@ export async function GET(req: NextRequest) {
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
       const chunksize = (end - start) + 1;
       
-      const fileStream = createReadStream(localPath, { start, end });
-      const webStream = Readable.toWeb(fileStream);
+      const webStream = streamFile(localPath, { start, end });
 
       return new NextResponse(webStream as any, {
         status: 206,
@@ -41,8 +67,7 @@ export async function GET(req: NextRequest) {
         },
       });
     } else {
-      const fileStream = createReadStream(localPath);
-      const webStream = Readable.toWeb(fileStream);
+      const webStream = streamFile(localPath);
       
       return new NextResponse(webStream as any, {
         status: 200,
