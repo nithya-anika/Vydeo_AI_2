@@ -3,27 +3,36 @@ import { statSync, createReadStream, existsSync } from "fs";
 
 function streamFile(path: string, options?: { start: number; end: number }) {
   const fileStream = createReadStream(path, options);
+  let isClosed = false;
+
   return new ReadableStream({
     start(controller) {
       fileStream.on("data", (chunk) => {
+        if (isClosed) return;
         try {
           controller.enqueue(new Uint8Array(chunk));
         } catch {
+          isClosed = true;
           fileStream.destroy();
         }
       });
       fileStream.on("end", () => {
+        if (isClosed) return;
+        isClosed = true;
         try {
           controller.close();
         } catch {}
       });
       fileStream.on("error", (err) => {
+        if (isClosed) return;
+        isClosed = true;
         try {
           controller.error(err);
         } catch {}
       });
     },
     cancel() {
+      isClosed = true;
       fileStream.destroy();
     },
   });
