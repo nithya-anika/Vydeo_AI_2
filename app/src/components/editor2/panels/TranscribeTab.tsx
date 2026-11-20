@@ -1,10 +1,54 @@
 import { useEditorStore } from "@/store/editorStore";
 
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+import { toast } from "react-hot-toast";
+
 export default function TranscribeTab() {
-  const { scenes, activeSceneId, clips } = useEditorStore();
+  const { scenes, activeSceneId, clips, updateClip } = useEditorStore();
   const activeScene = scenes.find(s => s.id === activeSceneId) || scenes[0];
   
   let clip = activeScene ? clips.find(c => c.id === activeScene.clipId || c.src === activeScene.clipSrc || c.name === activeScene.label) : null;
+  
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  async function forceTranscribe() {
+    if (!clip || !clip.src) {
+       toast.error("Cannot find source video file.");
+       return;
+    }
+    
+    setIsTranscribing(true);
+    try {
+       // Since the clip is already in the editor, we don't have the original 'File' object (it's dropped to save RAM).
+       // We must fetch it from the local server proxy stream first, turn it into a blob, then hit the API.
+       const fetchRes = await fetch(clip.src);
+       const blob = await fetchRes.blob();
+       const file = new File([blob], clip.name + ".mp4", { type: blob.type || "video/mp4" });
+       
+       const formData = new FormData();
+       formData.append("file", file);
+       formData.append("duration", String(clip.duration));
+       
+       const apiRes = await fetch("/api/transcribe-clip", { method: "POST", body: formData });
+       if (!apiRes.ok) throw new Error("Transcription failed");
+       
+       const data = await apiRes.json();
+       updateClip(clip.id, {
+          speechSegments: data.captions || [],
+          transcript: data.fullTranscript || "",
+          transcriptionStatus: data.captions?.length ? "completed_with_speech" : "completed_no_speech"
+       });
+       
+       toast.success("Transcription complete!");
+    } catch (e) {
+       console.error(e);
+       toast.error("Failed to transcribe video.");
+    } finally {
+       setIsTranscribing(false);
+    }
+  }
   
   if (!clip && activeScene) {
     const activeLabelBase = activeScene.label ? activeScene.label.split('.')[0].replace(/\s/g, '') : "";
@@ -67,8 +111,11 @@ export default function TranscribeTab() {
         </div>
       ) : (
         <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20, padding: "0 10px" }}>
-          No speech detected in this clip. <br/><br/>
-          <span style={{ fontSize: 10, opacity: 0.7 }}>The AI could not hear clear dialogue. If there is speech, the audio may be too quiet or distorted for the AI to recognize.</span>
+          <Button onClick={forceTranscribe} disabled={isTranscribing} variant="secondary" size="sm" style={{ width: "100%", marginBottom: "16px" }}>
+             {isTranscribing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transcribing...</> : "Manually Transcribe"}
+          </Button>
+          No speech detected in cache. <br/><br/>
+          <span style={{ fontSize: 10, opacity: 0.7 }}>If this clip has speech, click the button above to manually run the AI transcription agent.</span>
         </div>
       )}
     </div>
