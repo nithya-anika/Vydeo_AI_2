@@ -104,7 +104,16 @@ export default function TranscribeTab() {
 
   return (
     <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Clip Transcript</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Clip Transcript</span>
+        <Button onClick={() => {
+            if (!activeScene) { toast.error("Please click a clip on the timeline first!"); return; }
+            if (!clip) forceTranscribeFallback(activeScene.clipSrc, activeScene.label, activeScene.id, activeScene.duration);
+            else forceTranscribe();
+        }} disabled={isTranscribing} variant="secondary" size="sm" style={{ height: 24, fontSize: 10 }}>
+           {isTranscribing ? "Wait..." : "Force Transcribe"}
+        </Button>
+      </div>
       
       {!activeScene ? (
         <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
